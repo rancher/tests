@@ -19,8 +19,10 @@ const (
 	UserIDLabel                                       = "cattle.io/user-id"
 	ExtTokenStatusCurrentValue                        = false
 	ExtTokenStatusExpiredValue                        = false
+	ExtTokenAPIPath                                   = "/v1/ext.cattle.io.tokens"
 	TrueConditionStatus        metav1.ConditionStatus = "True"
 	FalseConditionStatus       metav1.ConditionStatus = "False"
+
 )
 
 // CreateExtToken creates an ext token with the TTL value provided using wrangler context and returns the created ext token object

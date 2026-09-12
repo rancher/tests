@@ -34,3 +34,67 @@
     custom_field:
       "14": Validation
       "18": Hostbusters
+
+  - description: Validates the local cluster images use the Rancher Prime registry
+    title: Prime_Local_Cluster_Rancher_Images
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Validates the local cluster images use the Rancher Prime registry
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+  - description: Validates the Prime branding is used in the UI and API
+    title: Prime_Brand
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Validates the Prime branding is used in the UI and API
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+  - description: Validates adding a Prime SCC registration key to the cluster
+    title: Prime_SCC_Registration
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Validates adding a Prime SCC registration key to the cluster
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+  - description: Validates the system default registry is set to the Prime registry
+    title: Prime_System_Default_Registry
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Validates the system default registry is set to the Prime registry
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters

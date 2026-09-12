@@ -2,7 +2,7 @@
   projects: [RRT, RM]
   cases:
   - description: Deletes an existing cluster
-    title: CAPIPnP_K3S_Delete_Cluster
+    title: CAPI_PnP_K3S_Delete_Cluster
     priority: 4
     type: 8
     is_flaky: 0
@@ -22,7 +22,7 @@
       "14": Validation
       "18": Hostbusters
   - description: Deletes the init machine on an existing cluster
-    title: CAPIPnP_K3S_Delete_Init_Machine
+    title: CAPI_PnP_K3S_Delete_Init_Machine
     priority: 4
     type: 8
     is_flaky: 0
@@ -42,7 +42,7 @@
       "14": Validation
       "18": Hostbusters
   - description: Deletes and replaces a control plane machine
-    title: CAPIPnP_K3S_Replace_Control_Plane
+    title: CAPI_PnP_K3S_Replace_Control_Plane
     priority: 4
     type: 8
     is_flaky: 0
@@ -62,7 +62,7 @@
       "14": Validation
       "18": Hostbusters
   - description: Deletes and replaces an ETCD machine
-    title: CAPIPnP_K3S_Replace_ETCD
+    title: CAPI_PnP_K3S_Replace_ETCD
     priority: 4
     type: 8
     is_flaky: 0
@@ -82,7 +82,7 @@
       "14": Validation
       "18": Hostbusters
   - description: Deletes and replaces a worker machine
-    title: CAPIPnP_K3S_Replace_Worker
+    title: CAPI_PnP_K3S_Replace_Worker
     priority: 4
     type: 8
     is_flaky: 0

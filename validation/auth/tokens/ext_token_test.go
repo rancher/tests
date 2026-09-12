@@ -595,6 +595,21 @@ func (ext *ExtTokenTestSuite) TestExtTokenHashAbsentFromReadResponse() {
 	ext.assertStatusHashEmptyInToken(adminUpdatedToken, "admin update")
 }
 
+func (ext *ExtTokenTestSuite) TestAuthenticateWithExtSessionToken() {
+	subSession := ext.session.NewSession()
+	defer subSession.Cleanup()
+
+	log.Info("Create ext session token as admin user")
+	adminExtSessionToken, err := tokenapi.CreateExtSessionToken(ext.client)
+	require.NoError(ext.T(), err)
+
+	log.Info("Create an R_SESS cookie containing the session token value and use it to authenticate a request")
+	tokenValue := adminExtSessionToken.Status.Value
+	baseURL := "https://" + ext.client.RancherConfig.Host
+	err = tokenapi.AuthenticateWithExtToken(baseURL, adminExtSessionToken.Name, tokenValue, tokenapi.ExtTokenAPIPath)
+	require.NoError(ext.T(), err)
+}
+
 func (ext *ExtTokenTestSuite) TestAuthenticateWithExtToken() {
 	subSession := ext.session.NewSession()
 	defer subSession.Cleanup()
@@ -608,8 +623,7 @@ func (ext *ExtTokenTestSuite) TestAuthenticateWithExtToken() {
 	log.Info("Create an R_SESS cookie containing the ext token value and use it to authenticate a request")
 	tokenValue := standardUserExtToken.Status.Value
 	baseURL := "https://" + standardUserClient.RancherConfig.Host
-	extTokenAPIPath := "/v1/ext.cattle.io.tokens"
-	err = tokenapi.AuthenticateWithExtToken(baseURL, standardUserExtToken.Name, tokenValue, extTokenAPIPath)
+	err = tokenapi.AuthenticateWithExtToken(baseURL, standardUserExtToken.Name, tokenValue, tokenapi.ExtTokenAPIPath)
 	require.NoError(ext.T(), err)
 }
 
@@ -632,8 +646,7 @@ func (ext *ExtTokenTestSuite) TestAuthenticateWithDisabledExtToken() {
 	log.Info("Create an R_SESS cookie containing the disabled ext token value and attempt to authenticate a request")
 	tokenValue := standardUserExtToken.Status.Value
 	baseURL := "https://" + standardUserClient.RancherConfig.Host
-	extTokenAPIPath := "/v1/ext.cattle.io.tokens"
-	err = tokenapi.AuthenticateWithExtToken(baseURL, disabledExtToken.Name, tokenValue, extTokenAPIPath)
+	err = tokenapi.AuthenticateWithExtToken(baseURL, disabledExtToken.Name, tokenValue, tokenapi.ExtTokenAPIPath)
 	require.Error(ext.T(), err, "Expected request to be rejected due to disabled ext token")
 }
 
@@ -727,6 +740,59 @@ func (ext *ExtTokenTestSuite) TestExtTokenDeleteCollectionScoping() {
 	victimList, err := exttokenapi.ListExtTokens(ext.client, metav1.ListOptions{LabelSelector: victimSelector})
 	require.NoError(ext.T(), err)
 	require.NotEmpty(ext.T(), victimList.Items, "standarduserA's tokens MUST NOT be deleted by standardUserB's DeleteCollection call")
+}
+
+func (ext *ExtTokenTestSuite) TestCreateExtSessionTokenAsAdmin() {
+	subSession := ext.session.NewSession()
+	defer subSession.Cleanup()
+
+	log.Info("Create ext session token as admin user")
+	adminExtSessionToken, err := tokenapi.CreateExtSessionToken(ext.client)
+	require.NoError(ext.T(), err)
+
+	log.Info("Verify ext session token data as admin user")
+	err = tokenapi.VerifyExtSessionTokenData(adminExtSessionToken, ext.client.UserID)
+	require.NoError(ext.T(), err)
+}
+
+func (ext *ExtTokenTestSuite) TestCreateExtSessionTokenAsNonAdmin() {
+	subSession := ext.session.NewSession()
+	defer subSession.Cleanup()
+
+	log.Info("Verify standard user can create ext session tokens")
+	_, standardUserClient, err := rbac.SetupUser(ext.client, rbac.StandardUser.String())
+	require.NoError(ext.T(), err)
+	_, err = tokenapi.CreateExtSessionToken(standardUserClient)
+	require.NoError(ext.T(), err, "standard user should be permitted to create ext session tokens")
+}
+
+func (ext *ExtTokenTestSuite) TestDeleteExtSessionTokenAsAdmin() {
+	subSession := ext.session.NewSession()
+	defer subSession.Cleanup()
+
+	log.Info("Create ext session token as admin user")
+	adminExtSessionToken, err := tokenapi.CreateExtSessionToken(ext.client)
+	require.NoError(ext.T(), err)
+
+	log.Info("Delete ext session token as admin user")
+	err = exttokenapi.DeleteExtToken(ext.client, adminExtSessionToken.Name, true)
+	require.NoError(ext.T(), err)
+}
+
+func (ext *ExtTokenTestSuite) TestDeleteExtSessionTokenAsNonAdmin() {
+	subSession := ext.session.NewSession()
+	defer subSession.Cleanup()
+
+	log.Info("Create ext session token as admin user")
+	adminExtSessionToken, err := tokenapi.CreateExtSessionToken(ext.client)
+	require.NoError(ext.T(), err)
+
+	log.Info("Verify standard user cannot delete admin ext session token")
+	_, standardUserClient, err := rbac.SetupUser(ext.client, rbac.StandardUser.String())
+	require.NoError(ext.T(), err)
+	err = exttokenapi.DeleteExtToken(standardUserClient, adminExtSessionToken.Name, false)
+	require.Error(ext.T(), err)
+	require.True(ext.T(), k8serrors.IsNotFound(err))
 }
 
 func TestExtTokenTestSuite(ext *testing.T) {

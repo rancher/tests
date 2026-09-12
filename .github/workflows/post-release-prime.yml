@@ -5,9 +5,11 @@ on:
   workflow_dispatch:
     inputs:
       rancher_version:
-        description: "Rancher version"
+        description: "Rancher tag version"
+        required: false
       rancher_chart_version:
         description: "Rancher chart version"
+        required: false
       reporting:
         description: "Enable reporting to Qase and Slack"
         required: false
@@ -25,11 +27,11 @@ on:
     inputs:
       rancher_version:
         description: "Rancher tag version provided from check-rancher-tag workflow"
-        required: true
+        required: false
         type: string
       rancher_chart_version:
         description: "Rancher chart version provided from check-rancher-tag workflow"
-        required: true
+        required: false
         type: string
 
 permissions:
@@ -43,16 +45,27 @@ env:
       (github.event_name == 'workflow_dispatch' && github.event.inputs.local_cluster_type) || 
       (github.event_name == 'schedule' && 'rke2') || 'rke2' 
     }}
+  PACKAGE: "postrelease"
+  TAG: "prime"
+  TEST_SUITE: "^TestPostReleasePrimeUITestSuite$"
+  TIMEOUT: "1h"
+  REPORTING_ENABLED: >-
+    ${{
+      github.event_name == 'workflow_call' ||
+      github.actor == 'github-actions[bot]' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
+    }}
 
 jobs:
   create-qase-run:
     if: |
+      (github.event_name == 'workflow_call' || github.actor == 'github-actions[bot]' || (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true')) && (
       ((github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.15') || startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13') || startsWith(github.event.inputs.rancher_version, 'v2.12'))) && !contains(github.event.inputs.rancher_version, '-alpha') &&
       (github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.15') || startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13') || startsWith(github.event.inputs.rancher_version, 'v2.12'))) && !contains(github.event.inputs.rancher_version, '-rc') &&
       (github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.15') || startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13') || startsWith(github.event.inputs.rancher_version, 'v2.12'))) && !contains(github.event.inputs.rancher_version, '-head')) ||
       ((github.event_name == 'workflow_call' && (startsWith(inputs.rancher_version, 'v2.15') || startsWith(inputs.rancher_version, 'v2.14') || startsWith(inputs.rancher_version, 'v2.13') || startsWith(inputs.rancher_version, 'v2.12'))) && !contains(inputs.rancher_version, '-alpha') &&
       (github.event_name == 'workflow_call' && (startsWith(inputs.rancher_version, 'v2.15') || startsWith(inputs.rancher_version, 'v2.14') || startsWith(inputs.rancher_version, 'v2.13') || startsWith(inputs.rancher_version, 'v2.12'))) && !contains(inputs.rancher_version, '-rc') &&
-      (github.event_name == 'workflow_call' && (startsWith(inputs.rancher_version, 'v2.15') || startsWith(inputs.rancher_version, 'v2.14') || startsWith(inputs.rancher_version, 'v2.13') || startsWith(inputs.rancher_version, 'v2.12'))) && !contains(inputs.rancher_version, '-head'))
+      (github.event_name == 'workflow_call' && (startsWith(inputs.rancher_version, 'v2.15') || startsWith(inputs.rancher_version, 'v2.14') || startsWith(inputs.rancher_version, 'v2.13') || startsWith(inputs.rancher_version, 'v2.12'))) && !contains(inputs.rancher_version, '-head')))
     runs-on: ubuntu-latest
     outputs:
       run_id: ${{ steps.create-qase-run.outputs.id }}
@@ -69,27 +82,23 @@ jobs:
           test_run_name: "[${{ github.event.inputs.rancher_version || inputs.rancher_version }}] Post Rancher Prime Release UI Validations"
           qase_project_id: ${{ secrets.HB_QASE_PROJECT_ID }}
           qase_token: ${{ secrets.QASE_AUTOMATION_TOKEN }}
+          qase_milestone: ${{ github.event.inputs.rancher_version || inputs.rancher_version }}
   
   v2-15:
     needs: [create-qase-run]
     if: |
+      !cancelled() && needs.create-qase-run.result != 'failure' && (
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.15')) && !contains(github.event.inputs.rancher_version, '-alpha') &&
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.15')) && !contains(github.event.inputs.rancher_version, '-rc') &&
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.15')) && !contains(github.event.inputs.rancher_version, '-head') ||
       (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.15')) && !contains(inputs.rancher_version, '-alpha') &&
       (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.15')) && !contains(inputs.rancher_version, '-rc') &&
-      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.15')) && !contains(inputs.rancher_version, '-head')
+      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.15')) && !contains(inputs.rancher_version, '-head'))
     name: ${{ github.event.inputs.rancher_version }}
     runs-on: ubuntu-latest
     environment: prime
     env:
       HOSTNAME_PREFIX: "gha-prime-215"
-      REPORTING_ENABLED: >-
-        ${{
-          github.event_name == 'workflow_call' ||
-          github.actor == 'github-actions[bot]' ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
-        }}
 
     steps:
       - name: Checkout repository
@@ -120,17 +129,19 @@ jobs:
             AWS_ACCESS_KEY, ${{ secrets.AWS_ACCESS_KEY_ID }}
             AWS_SECRET_KEY, ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
-      - name: "Fetch and Set DockerHub Credentials"
+      - name: Fetch and Set DockerHub Credentials
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 #v3
         with:
           secrets: |
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials username | DOCKERHUB_USERNAME ;
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials password | DOCKERHUB_PASSWORD
 
-      - name: Mask Dockerhub Credentials
-        run: |
-          echo "::add-mask::${{ env.DOCKERHUB_USERNAME }}"
-          echo "::add-mask::${{ env.DOCKERHUB_PASSWORD }}"
+      - name: Masking Secrets
+        uses: ./.github/actions/mask-secrets
+        with:
+          secrets: |
+            ${{ env.DOCKERHUB_USERNAME }}
+            ${{ env.DOCKERHUB_PASSWORD }}
 
       - name: Whitelist Runner IP
         uses: ./.github/actions/whitelist-runner-ip
@@ -177,12 +188,6 @@ jobs:
               github.event.inputs.rancher_chart_version || 
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version)
             }}
-
-      - name: Set Rancher repo
-        uses: ./.github/actions/set-rancher-repo
-        with:
-          rancher-version: ${{ env.RANCHER_VERSION }}
-          fallback-repo: ${{ secrets.RANCHER_REPO }}
 
       - name: Create config.yaml
         run: |
@@ -237,7 +242,7 @@ jobs:
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
-              repo: "${{ env.RANCHER_REPO }}"
+              repo: "${{ secrets.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_15 }}"
           terratest:
             pathToRepo: "${{ secrets.PATH_TO_REPO }}"
@@ -275,19 +280,20 @@ jobs:
           terraform_version: "${{ vars.TERRAFORM_VERSION }}"
           terraform_wrapper: false
 
-      - name: Creating Rancher server
-        run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/standard/main.go
-
-      - name: Run Prime UI Checks
+      - name: Run Post Release Test Suite
         env:
           QASE_TEST_RUN_ID: ${{ needs.create-qase-run.outputs.run_id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_SCHEMA_PREFIX: hostbusters
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
-        uses: ./.github/actions/run-hostbusters-prime-ui-checks
+        uses: ./.github/actions/run-test-suite
         with:
+          package: ${{ env.PACKAGE }}
           reporting: ${{ env.REPORTING_ENABLED }}
+          tag: ${{ env.TAG }}
+          test-suite: ${{ env.TEST_SUITE }}
+          timeout: ${{ env.TIMEOUT }}
 
       - name: Cleanup Infrastructure
         if: always()
@@ -331,23 +337,18 @@ jobs:
   v2-14:
     needs: [create-qase-run]
     if: |
+      !cancelled() && needs.create-qase-run.result != 'failure' && (
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.14')) && !contains(github.event.inputs.rancher_version, '-alpha') &&
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.14')) && !contains(github.event.inputs.rancher_version, '-rc') &&
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.14')) && !contains(github.event.inputs.rancher_version, '-head') ||
       (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.14')) && !contains(inputs.rancher_version, '-alpha') &&
       (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.14')) && !contains(inputs.rancher_version, '-rc') &&
-      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.14')) && !contains(inputs.rancher_version, '-head')
+      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.14')) && !contains(inputs.rancher_version, '-head'))
     name: ${{ github.event.inputs.rancher_version }}
     runs-on: ubuntu-latest
     environment: prime
     env:
       HOSTNAME_PREFIX: "gha-prime-214"
-      REPORTING_ENABLED: >-
-        ${{
-          github.event_name == 'workflow_call' ||
-          github.actor == 'github-actions[bot]' ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
-        }}
 
     steps:
       - name: Checkout repository
@@ -378,17 +379,19 @@ jobs:
             AWS_ACCESS_KEY, ${{ secrets.AWS_ACCESS_KEY_ID }}
             AWS_SECRET_KEY, ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
-      - name: "Fetch and Set DockerHub Credentials"
+      - name: Fetch and Set DockerHub Credentials
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 #v3
         with:
           secrets: |
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials username | DOCKERHUB_USERNAME ;
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials password | DOCKERHUB_PASSWORD
 
-      - name: Mask Dockerhub Credentials
-        run: |
-          echo "::add-mask::${{ env.DOCKERHUB_USERNAME }}"
-          echo "::add-mask::${{ env.DOCKERHUB_PASSWORD }}"
+      - name: Masking Secrets
+        uses: ./.github/actions/mask-secrets
+        with:
+          secrets: |
+            ${{ env.DOCKERHUB_USERNAME }}
+            ${{ env.DOCKERHUB_PASSWORD }}
 
       - name: Whitelist Runner IP
         uses: ./.github/actions/whitelist-runner-ip
@@ -435,12 +438,6 @@ jobs:
               github.event.inputs.rancher_chart_version || 
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version)
             }}
-
-      - name: Set Rancher repo
-        uses: ./.github/actions/set-rancher-repo
-        with:
-          rancher-version: ${{ env.RANCHER_VERSION }}
-          fallback-repo: ${{ secrets.RANCHER_REPO }}
 
       - name: Create config.yaml
         run: |
@@ -495,7 +492,7 @@ jobs:
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
-              repo: "${{ env.RANCHER_REPO }}"
+              repo: "${{ secrets.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_14 }}"
           terratest:
             pathToRepo: "${{ secrets.PATH_TO_REPO }}"
@@ -533,19 +530,20 @@ jobs:
           terraform_version: "${{ vars.TERRAFORM_VERSION }}"
           terraform_wrapper: false
 
-      - name: Creating Rancher server
-        run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/standard/main.go
-
-      - name: Run Prime UI Checks
+      - name: Run Post Release Test Suite
         env:
           QASE_TEST_RUN_ID: ${{ needs.create-qase-run.outputs.run_id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_SCHEMA_PREFIX: hostbusters
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
-        uses: ./.github/actions/run-hostbusters-prime-ui-checks
+        uses: ./.github/actions/run-test-suite
         with:
+          package: ${{ env.PACKAGE }}
           reporting: ${{ env.REPORTING_ENABLED }}
+          tag: ${{ env.TAG }}
+          test-suite: ${{ env.TEST_SUITE }}
+          timeout: ${{ env.TIMEOUT }}
 
       - name: Cleanup Infrastructure
         if: always()
@@ -589,23 +587,18 @@ jobs:
   v2-13:
     needs: [create-qase-run]
     if: |
+      !cancelled() && needs.create-qase-run.result != 'failure' && (
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.13')) && !contains(github.event.inputs.rancher_version, '-alpha') &&
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.13')) && !contains(github.event.inputs.rancher_version, '-rc') &&
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.13')) && !contains(github.event.inputs.rancher_version, '-head') ||
       (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.13')) && !contains(inputs.rancher_version, '-alpha') &&
       (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.13')) && !contains(inputs.rancher_version, '-rc') &&
-      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.13')) && !contains(inputs.rancher_version, '-head')
+      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.13')) && !contains(inputs.rancher_version, '-head'))
     name: ${{ github.event.inputs.rancher_version }}
     runs-on: ubuntu-latest
     environment: prime
     env:
       HOSTNAME_PREFIX: "gha-prime-213"
-      REPORTING_ENABLED: >-
-        ${{
-          github.event_name == 'workflow_call' ||
-          github.actor == 'github-actions[bot]' ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
-        }}
 
     steps:
       - name: Checkout repository
@@ -636,17 +629,19 @@ jobs:
             AWS_ACCESS_KEY, ${{ secrets.AWS_ACCESS_KEY_ID }}
             AWS_SECRET_KEY, ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
-      - name: "Fetch and Set DockerHub Credentials"
+      - name: Fetch and Set DockerHub Credentials
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 #v3
         with:
           secrets: |
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials username | DOCKERHUB_USERNAME ;
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials password | DOCKERHUB_PASSWORD
 
-      - name: Mask Dockerhub Credentials
-        run: |
-          echo "::add-mask::${{ env.DOCKERHUB_USERNAME }}"
-          echo "::add-mask::${{ env.DOCKERHUB_PASSWORD }}"
+      - name: Masking Secrets
+        uses: ./.github/actions/mask-secrets
+        with:
+          secrets: |
+            ${{ env.DOCKERHUB_USERNAME }}
+            ${{ env.DOCKERHUB_PASSWORD }}
 
       - name: Whitelist Runner IP
         uses: ./.github/actions/whitelist-runner-ip
@@ -693,12 +688,6 @@ jobs:
               github.event.inputs.rancher_chart_version || 
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version)
             }}
-
-      - name: Set Rancher repo
-        uses: ./.github/actions/set-rancher-repo
-        with:
-          rancher-version: ${{ env.RANCHER_VERSION }}
-          fallback-repo: ${{ secrets.RANCHER_REPO }}
 
       - name: Create config.yaml
         run: |
@@ -753,7 +742,7 @@ jobs:
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
-              repo: "${{ env.RANCHER_REPO }}"
+              repo: "${{ secrets.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_13 }}"
           terratest:
             pathToRepo: "${{ secrets.PATH_TO_REPO }}"
@@ -791,19 +780,20 @@ jobs:
           terraform_version: "${{ vars.TERRAFORM_VERSION }}"
           terraform_wrapper: false
 
-      - name: Creating Rancher server
-        run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/standard/main.go
-
-      - name: Run Prime UI Checks
+      - name: Run Post Release Test Suite
         env:
           QASE_TEST_RUN_ID: ${{ needs.create-qase-run.outputs.run_id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_SCHEMA_PREFIX: hostbusters
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
-        uses: ./.github/actions/run-hostbusters-prime-ui-checks
+        uses: ./.github/actions/run-test-suite
         with:
+          package: ${{ env.PACKAGE }}
           reporting: ${{ env.REPORTING_ENABLED }}
+          tag: ${{ env.TAG }}
+          test-suite: ${{ env.TEST_SUITE }}
+          timeout: ${{ env.TIMEOUT }}
 
       - name: Cleanup Infrastructure
         if: always()
@@ -847,23 +837,18 @@ jobs:
   v2-12:
     needs: [create-qase-run]
     if: |
+      !cancelled() && needs.create-qase-run.result != 'failure' && (
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.12')) && !contains(github.event.inputs.rancher_version, '-alpha') &&
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.12')) && !contains(github.event.inputs.rancher_version, '-rc') &&
       (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.12')) && !contains(github.event.inputs.rancher_version, '-head') ||
       (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.12')) && !contains(inputs.rancher_version, '-alpha') &&
       (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.12')) && !contains(inputs.rancher_version, '-rc') &&
-      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.12')) && !contains(inputs.rancher_version, '-head')
+      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.12')) && !contains(inputs.rancher_version, '-head'))
     name: ${{ github.event.inputs.rancher_version }}
     runs-on: ubuntu-latest
     environment: prime
     env:
       HOSTNAME_PREFIX: "gha-prime-212"
-      REPORTING_ENABLED: >-
-        ${{
-          github.event_name == 'workflow_call' ||
-          github.actor == 'github-actions[bot]' ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
-        }}
 
     steps:
       - name: Checkout repository
@@ -894,17 +879,19 @@ jobs:
             AWS_ACCESS_KEY, ${{ secrets.AWS_ACCESS_KEY_ID }}
             AWS_SECRET_KEY, ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
-      - name: "Fetch and Set DockerHub Credentials"
+      - name: Fetch and Set DockerHub Credentials
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 #v3
         with:
           secrets: |
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials username | DOCKERHUB_USERNAME ;
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials password | DOCKERHUB_PASSWORD
 
-      - name: Mask Dockerhub Credentials
-        run: |
-          echo "::add-mask::${{ env.DOCKERHUB_USERNAME }}"
-          echo "::add-mask::${{ env.DOCKERHUB_PASSWORD }}"
+      - name: Masking Secrets
+        uses: ./.github/actions/mask-secrets
+        with:
+          secrets: |
+            ${{ env.DOCKERHUB_USERNAME }}
+            ${{ env.DOCKERHUB_PASSWORD }}
 
       - name: Whitelist Runner IP
         uses: ./.github/actions/whitelist-runner-ip
@@ -951,12 +938,6 @@ jobs:
               github.event.inputs.rancher_chart_version || 
               (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version)
             }}
-
-      - name: Set Rancher repo
-        uses: ./.github/actions/set-rancher-repo
-        with:
-          rancher-version: ${{ env.RANCHER_VERSION }}
-          fallback-repo: ${{ secrets.RANCHER_REPO }}
 
       - name: Create config.yaml
         run: |
@@ -1012,7 +993,7 @@ jobs:
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
-              repo: "${{ env.RANCHER_REPO }}"
+              repo: "${{ secrets.RANCHER_REPO }}"
               rke2Version: "${{ vars.RKE2_VERSION_2_12 }}"
           terratest:
             pathToRepo: "${{ secrets.PATH_TO_REPO }}"
@@ -1050,19 +1031,20 @@ jobs:
           terraform_version: "${{ vars.TERRAFORM_VERSION }}"
           terraform_wrapper: false
 
-      - name: Creating Rancher server
-        run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/standard/main.go
-
-      - name: Run Prime UI Checks
+      - name: Run Post Release Test Suite
         env:
           QASE_TEST_RUN_ID: ${{ needs.create-qase-run.outputs.run_id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_SCHEMA_PREFIX: hostbusters
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
-        uses: ./.github/actions/run-hostbusters-prime-ui-checks
+        uses: ./.github/actions/run-test-suite
         with:
+          package: ${{ env.PACKAGE }}
           reporting: ${{ env.REPORTING_ENABLED }}
+          tag: ${{ env.TAG }}
+          test-suite: ${{ env.TEST_SUITE }}
+          timeout: ${{ env.TIMEOUT }}
 
       - name: Cleanup Infrastructure
         if: always()
@@ -1105,7 +1087,7 @@ jobs:
 
   close-qase-run:
     needs: [create-qase-run, v2-15, v2-14, v2-13, v2-12]
-    if: always() && (
+    if: always() && needs.create-qase-run.result == 'success' && (github.event_name == 'workflow_call' || github.actor == 'github-actions[bot]' || (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true')) && (
         ((github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.15') || startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13') || startsWith(github.event.inputs.rancher_version, 'v2.12'))) && !contains(github.event.inputs.rancher_version, '-alpha') &&
         (github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.15') || startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13') || startsWith(github.event.inputs.rancher_version, 'v2.12'))) && !contains(github.event.inputs.rancher_version, '-rc') &&
         (github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.15') || startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13') || startsWith(github.event.inputs.rancher_version, 'v2.12'))) && !contains(github.event.inputs.rancher_version, '-head')) ||

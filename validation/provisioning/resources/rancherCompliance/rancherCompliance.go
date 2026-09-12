@@ -8,6 +8,7 @@ import (
 	extensionscharts "github.com/rancher/shepherd/extensions/charts"
 	"github.com/rancher/shepherd/extensions/defaults"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
+	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/charts"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
@@ -87,7 +88,16 @@ func RunRancherComplianceScan(client *rancher.Client, projectClusterID, scanProf
 		},
 	}
 
-	steveclient, err := client.Steve.ProxyDownstream(projectClusterID)
+	// steve registers a delete for every object it creates; the scan's delete is
+	// discarded as the scan is removed along with the downstream cluster
+	scanClient, err := client.WithSession(client.Session)
+	if err != nil {
+		return err
+	}
+
+	scanClient.Steve.Ops.Session = session.NewSession()
+
+	steveclient, err := scanClient.Steve.ProxyDownstream(projectClusterID)
 	if err != nil {
 		return err
 	}

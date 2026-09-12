@@ -28,6 +28,49 @@
     custom_field:
       "14": Validation
       "18": Hostbusters
+- projects:
+  - RRT
+  - RM
+  suite: Go Automation/Provisioning/RKE2/Ingress
+  cases:
+  - description: Verifies an RKE2 cluster with the NGINX ingress controller
+    title: RKE2_Ingress_Nginx
+    priority: 4
+    type: 8
+    automation: 2
+    steps:
+    - action: Provision an RKE2 cluster with the selected ingress controller
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Verifies an RKE2 cluster with the Traefik ingress controller
+    title: RKE2_Traefik
+    priority: 4
+    type: 8
+    automation: 2
+    steps:
+    - action: Provision an RKE2 cluster with the selected ingress controller
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
   - description: Provisions a 2 node stacked roles node driver cluster
     title: RKE2_Node_Driver|etcd_cp|worker
     priority: 4
@@ -445,6 +488,44 @@
     custom_field:
       "14": Validation
       "18": Hostbusters
+  - description: Provisions an imported RKE2 cluster with Windows 2019 nodes
+    title: RKE2_Imported|etcd|cp|worker|windows_2019
+    priority: 4
+    type: 8
+    automation: 2
+    steps:
+    - action: Provision an RKE2 imported cluster with Windows nodes
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions an imported RKE2 cluster with Windows 2022 nodes
+    title: RKE2_Imported|etcd|cp|worker|windows_2022
+    priority: 4
+    type: 8
+    automation: 2
+    steps:
+    - action: Provision an RKE2 imported cluster with Windows nodes
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
   - description: Provisions a cluster with psact set to rancher restricted
     title: RKE2_Rancher_Restricted|3_etcd|2_cp|3_worker
     priority: 4
@@ -703,8 +784,8 @@
   - RM
   suite: Go Automation/Provisioning/RKE2/ACE
   cases:
-  - description: Provisions a 3etcd/2cp/2worker node driver cluster with ACE enabled
-    title: RKE2_ACE
+  - description: Verifies local access to an RKE2 cluster with ACE enabled
+    title: RKE2_Local_Available
     priority: 5
     type: 8
     is_flaky: 0
@@ -715,12 +796,37 @@
       data: ""
       position: 1
       attachments: []
-    - action: Provision a rke2 cluster
+    - action: Provision an RKE2 cluster with ACE enabled
       expectedresult: ""
       data: ""
       position: 2
       attachments: []
-    - action: Verify cluster state
+    - action: Verify local access to the cluster
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+  - description: Verifies cluster behavior when local access is unavailable
+    title: RKE2_Local_Unavailable
+    priority: 5
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Provision an RKE2 cluster with ACE enabled
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Verify cluster behavior when local access is unavailable
       expectedresult: ""
       data: ""
       position: 3
@@ -825,37 +931,6 @@
     custom_field:
       "14": Validation
       "18": Hostbusters
-  - description: Provisions a 3 node split roles cluster with custom data directories
-    title: RKE2_Grouped_Data_Directories
-    priority: 5
-    type: 8
-    is_flaky: 0
-    automation: 2
-    steps:
-    - action: Create rancher provider credentials
-      expectedresult: ""
-      data: ""
-      position: 1
-      attachments: []
-    - action: Provision a rke2 cluster
-      expectedresult: ""
-      data: ""
-      position: 2
-      attachments: []
-    - action: Verify cluster state
-      expectedresult: ""
-      data: ""
-      position: 3
-      attachments: []
-    - action: Verify data directories on each node
-      expectedresult: ""
-      data: ""
-      position: 3
-      attachments: []
-    custom_field:
-      "14": Validation
-      "18": Hostbusters
-
 - projects: [RRT, RM]
   suite: Go Automation/Provisioning/RKE2/HostnameTruncation
   cases:

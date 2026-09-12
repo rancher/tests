@@ -8,11 +8,13 @@ import (
 	provv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
+	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/extensions/defaults/namespaces"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/extensions/sshkeys"
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
 const (
@@ -50,9 +52,19 @@ func VerifyEncryptionKeyRotation(client *rancher.Client, clusterStatus *provv1.C
 
 		logrus.Debugf("Connecting to control plane node: %s", machine.Name)
 
-		output, err := sshNode.ExecuteCommand(fmt.Sprintf("sudo %s secrets-encrypt status", clusterType))
+		var output string
+		err = kwait.PollUntilContextTimeout(context.Background(), defaults.TenSecondTimeout, defaults.FiveMinuteTimeout, false, func(context.Context) (bool, error) {
+			output, err = sshNode.ExecuteCommand(fmt.Sprintf("sudo %s secrets-encrypt status", clusterType))
+			if err != nil {
+				logrus.Warningf("Failed to execute command on node %s: %v", machine.Name, err)
+				return false, nil
+			}
+
+			return true, nil
+		})
+
 		if err != nil {
-			return fmt.Errorf("failed to run secrets-encrypt status command on node %s: %w, output: %s", machine.Name, err, output)
+			return fmt.Errorf("failed to execute command on node %s: %w", machine.Name, err)
 		}
 
 		statusOutput := output

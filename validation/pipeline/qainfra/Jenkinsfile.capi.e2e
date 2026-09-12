@@ -95,17 +95,20 @@ node {
           }
           dir ("./") {
             stage('Configure and Build') {
+
+              def publicIp = infrastructure.detectPublicIp()
+
               terraformConfig = terraformConfig.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY)
               terraformConfig = terraformConfig.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID)
               terraformConfig = terraformConfig.replace('${AWS_REGION}', env.AWS_REGION)
               terraformConfig = terraformConfig.replace('${AWS_VPC}', env.AWS_VPC)
               terraformConfig = terraformConfig.replace('${AWS_SECURITY_GROUPS}', env.AWS_SECURITY_GROUPS)
+              terraformConfig = terraformConfig.replace('${RUNNER_PUBLIC_IP}', publicIp)
               ansibleConfig = ansibleConfig.replace('${ADMIN_PASSWORD}', env.ADMIN_PASSWORD)
               capiConfig = capiConfig.replace('${AWS_B64ENCODED_CREDENTIALS}', env.AWS_B64ENCODED_CREDENTIALS)
               capiConfig = capiConfig.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID)
               capiConfig = capiConfig.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY)
               capiClusterConfig = capiClusterConfig.replace('${JENKINS_CAPI_SSH_KEY_NAME}', env.JENKINS_CAPI_SSH_KEY_NAME)
-
 
               if (env.AWS_SSH_PEM_KEY && env.AWS_SSH_KEY_NAME) {
                 dir("./tests/.ssh") {

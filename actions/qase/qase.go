@@ -203,12 +203,12 @@ func (q *Service) getTestCases(project string, test upstream.TestCaseCreate) ([]
 	} else if resultLength > 1 {
 		var titleMatchingEntities []upstream.TestCase
 		for _, entity := range testCases.Result.Entities {
-			if entity.Title == &test.Title {
+			if entity.Title != nil && *entity.Title == test.Title {
 				titleMatchingEntities = append(titleMatchingEntities, entity)
 			}
 		}
 
-		return testCases.Result.Entities, nil
+		return titleMatchingEntities, nil
 	}
 
 	return nil, fmt.Errorf("test case \"%s\" not found in project %s", test.Title, project)

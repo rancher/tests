@@ -1,6 +1,6 @@
-//go:build validation || prime
+//go:build prime
 
-package prime
+package postrelease
 
 import (
 	"os"
@@ -9,14 +9,16 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/defaults/namespaces"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
-	"github.com/rancher/shepherd/pkg/config"
+	shepherdConfig "github.com/rancher/shepherd/pkg/config"
+	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/prime"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/qase"
 	"github.com/rancher/tests/actions/workloads/pods"
+	"github.com/rancher/tfp-automation/defaults/keypath"
+	setupstandard "github.com/rancher/tfp-automation/tests/infrastructure/ranchers/setup/standard"
 	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -29,34 +31,27 @@ const (
 	serverVersion  = "server-version"
 )
 
-type PrimeTestSuite struct {
+type PostReleasePrimeUITestSuite struct {
 	suite.Suite
-	session      *session.Session
-	cattleConfig map[string]any
-	client       *rancher.Client
-	primeConfig  *prime.Config
+	client             *rancher.Client
+	standardUserClient *rancher.Client
+	session            *session.Session
+	cattleConfig       map[string]any
+	primeConfig        *prime.Config
 }
 
-func (p *PrimeTestSuite) TearDownSuite() {
-	p.session.Cleanup()
-}
-
-func (p *PrimeTestSuite) SetupSuite() {
+func (p *PostReleasePrimeUITestSuite) SetupSuite() {
 	testSession := session.NewSession()
 	p.session = testSession
-
-	p.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
+	p.cattleConfig = shepherdConfig.LoadConfigFromFile(os.Getenv(shepherdConfig.ConfigEnvironmentKey))
 
 	p.primeConfig = new(prime.Config)
-	config.LoadConfig(prime.ConfigurationFileKey, p.primeConfig)
+	operations.LoadObjectFromMap(prime.ConfigurationFileKey, p.cattleConfig, p.primeConfig)
 
-	client, err := rancher.NewClient("", p.session)
-	assert.NoError(p.T(), err)
-
-	p.client = client
+	p.client, _, _, _, p.cattleConfig = setupstandard.SetupRancher(p.T(), p.session, keypath.SanityKeyPath, p.cattleConfig)
 }
 
-func (p *PrimeTestSuite) TestLocalClusterRancherImages() {
+func (p *PostReleasePrimeUITestSuite) TestLocalClusterRancherImages() {
 	tests := []struct {
 		name string
 	}{
@@ -80,7 +75,7 @@ func (p *PrimeTestSuite) TestLocalClusterRancherImages() {
 	}
 }
 
-func (p *PrimeTestSuite) TestPrimeBrand() {
+func (p *PostReleasePrimeUITestSuite) TestPrimeBrand() {
 	tests := []struct {
 		name string
 	}{
@@ -103,7 +98,7 @@ func (p *PrimeTestSuite) TestPrimeBrand() {
 	}
 }
 
-func (p *PrimeTestSuite) TestSCCRegistration() {
+func (p *PostReleasePrimeUITestSuite) TestSCCRegistration() {
 	tests := []struct {
 		name string
 	}{
@@ -141,7 +136,7 @@ func (p *PrimeTestSuite) TestSCCRegistration() {
 	}
 }
 
-func (p *PrimeTestSuite) TestSystemDefaultRegistry() {
+func (p *PostReleasePrimeUITestSuite) TestSystemDefaultRegistry() {
 	tests := []struct {
 		name string
 	}{
@@ -164,6 +159,6 @@ func (p *PrimeTestSuite) TestSystemDefaultRegistry() {
 	}
 }
 
-func TestPrimeTestSuite(t *testing.T) {
-	suite.Run(t, new(PrimeTestSuite))
+func TestPostReleasePrimeUITestSuite(t *testing.T) {
+	suite.Run(t, new(PostReleasePrimeUITestSuite))
 }
