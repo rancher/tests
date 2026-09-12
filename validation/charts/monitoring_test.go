@@ -259,7 +259,7 @@ func (m *MonitoringTestSuite) TestMonitoringChart() {
 	require.NoError(m.T(), err)
 
 	// Get URL and string versions of origin with the random node address
-	hostWithProtocol := fmt.Sprintf("http://%v:%v", randWorkerNodeIP, webhookReceiverServiceSpec.Ports[0].NodePort)
+	hostWithProtocol := "http://" + monitoring.JoinNodeAddressPort(randWorkerNodeIP, webhookReceiverServiceSpec.Ports[0].NodePort)
 	urlOfHost, err := url.Parse(hostWithProtocol)
 	require.NoError(m.T(), err)
 
@@ -304,7 +304,7 @@ func (m *MonitoringTestSuite) TestMonitoringChart() {
 
 	if monitoring.ProbeModeForAddressType(selectedAddressType) == monitoring.ProbeModeRunner {
 		m.T().Logf("Validating traefik is accessible externally")
-		host := fmt.Sprintf("%v:%v", randWorkerNodeIP, webhookReceiverServiceSpec.Ports[0].NodePort)
+		host := monitoring.JoinNodeAddressPort(randWorkerNodeIP, webhookReceiverServiceSpec.Ports[0].NodePort)
 		result, err := ingresses.IsIngressExternallyAccessible(client, host, "dashboard", false)
 		assert.NoError(m.T(), err)
 		assert.True(m.T(), result)

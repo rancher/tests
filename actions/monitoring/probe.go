@@ -1,7 +1,8 @@
 package monitoring
 
 import (
-	"fmt"
+	"net"
+	"strconv"
 	"strings"
 
 	"github.com/rancher/shepherd/clients/rancher"
@@ -31,10 +32,18 @@ func ProbeModeForAddressType(addressType corev1.NodeAddressType) ProbeMode {
 	return ProbeModeInCluster
 }
 
+// JoinNodeAddressPort combines a node address and a port for use in a URL or host:port
+// pair. IPv6 literal addresses are bracketed (net.JoinHostPort semantics), which plain
+// fmt.Sprintf("%s:%d", ...) interpolation does not do.
+func JoinNodeAddressPort(address string, port int32) string {
+	return net.JoinHostPort(address, strconv.Itoa(int(port)))
+}
+
 // WebhookReceiverProbeURL builds the http URL probed against the webhook receiver NodePort.
-// A leading '/' in path is stripped so the URL never contains a double slash.
+// IPv6 literal addresses are bracketed (JoinNodeAddressPort), and a leading '/' in path
+// is stripped so the URL never contains a double slash.
 func WebhookReceiverProbeURL(address string, port int32, path string) string {
-	return fmt.Sprintf("http://%s:%d/%s", address, port, strings.TrimPrefix(path, "/"))
+	return "http://" + JoinNodeAddressPort(address, port) + "/" + strings.TrimPrefix(path, "/")
 }
 
 // IsReachableHTTPStatus reports whether probe output counts as success. It mirrors shepherd
