@@ -652,10 +652,10 @@ enable_ui_plugin_mirror: true'''
                     // present, so version-gated suites match the Rancher under test (e.g.
                     // the alerting suite is excluded on 2.15 until a compatible
                     // rancher-alerting-drivers chart ships).
-                    def rancherMinor = (params.RANCHER_VERSION ?: '').replaceAll(/^v?(2\.\d+)([.-].*)?$/, '$1')
-                    if (rancherMinor != params.RANCHER_VERSION && rancherMinor && !goTags.split().toList().contains(rancherMinor)) {
-                        goTags += " ${rancherMinor}"
-                        echo "Derived Rancher version tag '${rancherMinor}'; effective GO_TAGS: ${goTags}"
+                    def versionTagMatcher = (params.RANCHER_VERSION ?: '') =~ /^v?(2\.\d+)([.-].*)?$/
+                    if (versionTagMatcher.matches() && !goTags.split().toList().contains(versionTagMatcher.group(1))) {
+                        goTags += " ${versionTagMatcher.group(1)}"
+                        echo "Derived Rancher version tag '${versionTagMatcher.group(1)}'; effective GO_TAGS: ${goTags}"
                     }
                     def goTimeout     = params.GO_TIMEOUT ?: '45m'
                     def testCases     = goTestCase ?: goTestPackage

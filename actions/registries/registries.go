@@ -48,6 +48,11 @@ func checkPodsForRegistryPrefix(client *rancher.Client, clusterID, namespace, re
 		return true, nil
 	}
 
+	// Normalize to exactly one trailing slash so the comparison ends at a registry or
+	// project boundary: prefix "registry.local/proxycache" must not match images under
+	// "registry.local/proxycache-foreign/...".
+	registryPrefix = strings.TrimSuffix(registryPrefix, "/") + "/"
+
 	downstreamClient, err := client.Steve.ProxyDownstream(clusterID)
 	if err != nil {
 		return false, err
@@ -87,9 +92,7 @@ func checkPodsForRegistryPrefix(client *rancher.Client, clusterID, namespace, re
 		}
 
 		for _, image := range images {
-			parts := strings.Split(image, "/")
-			hostless := len(parts) == 1 || !strings.Contains(parts[0], ".")
-			if hostless && !strict {
+			if !imageHasRegistryHost(image) && !strict {
 				// Lenient mode: hostless images resolve to Docker Hub and are served by
 				// containerd mirrors on airgap nodes, so their spec strings are not rewritten.
 				logrus.Debugf("pod/containerImage %s/%s is using the public registry", pod.Name, image)
@@ -103,6 +106,19 @@ func checkPodsForRegistryPrefix(client *rancher.Client, clusterID, namespace, re
 		}
 	}
 	return true, nil
+}
+
+// imageHasRegistryHost reports whether the image reference starts with an explicit
+// registry host, following the Docker convention: the first path component counts as
+// a host when it contains a "." or ":" (domain or port) or is "localhost". This is the
+// same rule as hasRegistryHost in actions/monitoring/images.go.
+func imageHasRegistryHost(image string) bool {
+	first, _, found := strings.Cut(image, "/")
+	if !found {
+		return false
+	}
+
+	return first == "localhost" || strings.ContainsAny(first, ".:")
 }
 
 // CheckPodStatusImageSource is an extension that will check if the pod images are pulled from the
