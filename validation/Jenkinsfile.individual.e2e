@@ -252,7 +252,7 @@ pipeline {
                 }
             }
             post {
-                skipped {
+                notBuilt {
                     echo "SG authorize skipped: VPC_ID/SECURITY_GROUP_NAME/AWS_REGION not all present in CONFIG"
                 }
             }
