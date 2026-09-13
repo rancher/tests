@@ -73,51 +73,105 @@ func LoadPackageDefaults(cattleConfig map[string]any, filePath string) (map[stri
 
 // DeepMerge merges two maps together with priority given to the first map provided.
 func DeepMerge(mergingMap map[string]any, baseMap map[string]any, OneToOneListMapping bool) (map[string]any, error) {
+	return deepMerge(mergingMap, baseMap, OneToOneListMapping, "")
+}
+
+func deepMerge(mergingMap map[string]any, baseMap map[string]any, oneToOneListMapping bool, path string) (map[string]any, error) {
 	output, err := operations.DeepCopyMap(baseMap)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to copy config at path %s: %w", displayPath(path), err)
 	}
 
 	for k, v := range mergingMap {
-		if _, ok := output[k].(map[string]any); ok {
-			output[k], err = DeepMerge(mergingMap[k].(map[string]any), output[k].(map[string]any), OneToOneListMapping)
+		fieldPath := joinPath(path, k)
+
+		// an unset value falls back to the base value rather than blanking it out
+		if v == nil {
+			if _, ok := output[k]; !ok {
+				output[k] = v
+			}
+
+			continue
+		}
+
+		if baseObject, ok := output[k].(map[string]any); ok {
+			mergingObject, ok := v.(map[string]any)
+			if !ok {
+				return nil, fmt.Errorf("config value at %s is of type %T, expected an object", fieldPath, v)
+			}
+
+			output[k], err = deepMerge(mergingObject, baseObject, oneToOneListMapping, fieldPath)
 			if err != nil {
 				return nil, err
 			}
-		} else if _, ok := output[k].([]any); ok {
-			outputList := output[k].([]any)
-			if _, ok := outputList[0].(map[string]any); ok && len(outputList) > 0 {
-				var mergedList []map[string]any
-				for i, mergingObject := range mergingMap[k].([]any) {
-					var mergedOutput map[string]any
-					if len(outputList) == len(mergingMap[k].([]any)) && OneToOneListMapping {
-						mergedOutput, err = DeepMerge(mergingObject.(map[string]any), outputList[i].(map[string]any), OneToOneListMapping)
-						if err != nil {
-							return nil, err
-						}
-					} else {
-						mergedOutput, err = DeepMerge(mergingObject.(map[string]any), outputList[0].(map[string]any), OneToOneListMapping)
-						if err != nil {
-							return nil, err
-						}
-					}
-					if err != nil {
-						return nil, err
-					}
+		} else if outputList, ok := output[k].([]any); ok && len(outputList) > 0 {
+			if _, ok := outputList[0].(map[string]any); !ok {
+				output[k] = v
 
-					mergedList = append(mergedList, mergedOutput)
+				continue
+			}
+
+			mergingList, ok := v.([]any)
+			if !ok {
+				return nil, fmt.Errorf("config value at %s is of type %T, expected a list", fieldPath, v)
+			}
+
+			var mergedList []map[string]any
+			for i, mergingItem := range mergingList {
+				itemPath := fmt.Sprintf("%s[%d]", fieldPath, i)
+
+				baseIndex := 0
+				if len(outputList) == len(mergingList) && oneToOneListMapping {
+					baseIndex = i
 				}
 
-				output[k] = mergedList
-			} else {
-				output[k] = v
+				baseObject, ok := outputList[baseIndex].(map[string]any)
+				if !ok {
+					return nil, fmt.Errorf("config value at %s[%d] is of type %T, expected an object", fieldPath, baseIndex, outputList[baseIndex])
+				}
+
+				if mergingItem == nil {
+					mergedList = append(mergedList, baseObject)
+
+					continue
+				}
+
+				mergingObject, ok := mergingItem.(map[string]any)
+				if !ok {
+					return nil, fmt.Errorf("config value at %s is of type %T, expected an object", itemPath, mergingItem)
+				}
+
+				mergedOutput, err := deepMerge(mergingObject, baseObject, oneToOneListMapping, itemPath)
+				if err != nil {
+					return nil, err
+				}
+
+				mergedList = append(mergedList, mergedOutput)
 			}
+
+			output[k] = mergedList
 		} else {
 			output[k] = v
 		}
 	}
 
 	return output, nil
+}
+
+func joinPath(path, key string) string {
+	if path == "" {
+		return key
+	}
+
+	return path + "." + key
+}
+
+func displayPath(path string) string {
+	if path == "" {
+		return "<root>"
+	}
+
+	return path
 }
 
 // VerifyCattleConfig checks for unresolved required and placeholder values.
