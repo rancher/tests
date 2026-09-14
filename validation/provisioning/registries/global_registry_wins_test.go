@@ -3,10 +3,12 @@
 package registries
 
 import (
+	"os"
 	"testing"
 
 	"github.com/rancher/shepherd/clients/ec2"
 	"github.com/rancher/shepherd/clients/rancher"
+	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
@@ -15,6 +17,7 @@ import (
 	"github.com/rancher/tests/actions/qase"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
+	infraConfig "github.com/rancher/tests/validation/recurring/infrastructure/config"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
@@ -22,6 +25,8 @@ import (
 func TestGlobalRegistryWindows(t *testing.T) {
 	var err error
 	r := registriesSetup(t)
+
+	infraConfig.WriteConfigToFile(os.Getenv(config.ConfigEnvironmentKey), r.cattleConfig)
 
 	r.cattleConfig, err = defaults.SetK8sDefault(r.client, defaults.RKE2, r.cattleConfig)
 	require.NoError(t, err)
