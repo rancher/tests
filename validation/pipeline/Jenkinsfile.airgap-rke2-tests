@@ -93,7 +93,7 @@ pipeline {
         )
         string(
             name: 'RANCHER_VERSION',
-            defaultValue: 'v2.13.2',
+            defaultValue: 'v2.15.0',
             description: 'Rancher version to deploy'
         )
 
@@ -290,7 +290,14 @@ rancher_bootstrap_password: "${RANCHER_BOOTSTRAP_PASSWORD}"
 rancher_admin_password: "${RANCHER_BOOTSTRAP_PASSWORD}"
 rancher_image_tag: ${RANCHER_VERSION}
 rancher_use_bundled_system_charts: true
-rancher_system_default_registry: "${PRIVATE_REGISTRY_URL}"'''
+rancher_system_default_registry: "${RANCHER_SYSTEM_DEFAULT_REGISTRY}"
+
+# Airgap bastion mirrors. The charts mirror serves a settled ref one publish
+# behind the branch head so catalog installs cannot race upstream chart
+# publishes, and the Rancher deploy repoints the rancher-charts ClusterRepo at
+# it; the ui-plugin mirror backs NeuVector UI extension installs.
+enable_charts_mirror: true
+enable_ui_plugin_mirror: true'''
         )
     }
 
@@ -424,9 +431,12 @@ rancher_system_default_registry: "${PRIVATE_REGISTRY_URL}"'''
                                         'HOSTNAME_PREFIX':           env.HOSTNAME_PREFIX,
                                         'PRIVATE_REGISTRY_URL':      env.PRIVATE_REGISTRY_URL ?: '',
                                         'PRIVATE_REGISTRY_USERNAME':  env.PRIVATE_REGISTRY_USERNAME ?: '',
-                                        'PRIVATE_REGISTRY_PASSWORD':  env.PRIVATE_REGISTRY_PASSWORD ?: '',
+                                        'PRIVATE_REGISTRY_PASSWORD': env.PRIVATE_REGISTRY_PASSWORD ?: '',
                                         'RANCHER_BOOTSTRAP_PASSWORD': env.RANCHER_BOOTSTRAP_PASSWORD ?: '',
                                         'ENABLE_PRIVATE_REGISTRY':    env.PRIVATE_REGISTRY_URL ? 'true' : 'false',
+                                        // Empty registry URL must yield an empty setting, not "/proxycache":
+                                        // Rancher would otherwise render chart images against an invalid registry.
+                                        'RANCHER_SYSTEM_DEFAULT_REGISTRY': env.PRIVATE_REGISTRY_URL?.trim() ? "${env.PRIVATE_REGISTRY_URL.trim()}/proxycache" : '',
                                         'DEPLOY_RANCHER_ANSIBLE':     'true'
                                     ]
                                 ],
@@ -639,6 +649,35 @@ rancher_system_default_registry: "${PRIVATE_REGISTRY_URL}"'''
                     def goTestPackage = params.GO_TEST_PACKAGE?.trim() ?: './validation/...'
                     def goTestCase    = params.GO_TEST_CASE?.trim() ?: ''
                     def goTags        = params.GO_TAGS ?: 'validation'
+
+                    // Derive the Rancher minor version tag (e.g. v2.15.0 -> 2.15) from
+                    // RANCHER_VERSION and append it to the go build tags when not already
+                    // present, so version-gated suites match the Rancher under test (e.g.
+                    // the alerting suite is excluded on 2.15 until a compatible
+                    // rancher-alerting-drivers chart ships).
+                    // Plain strings only: a java.util.regex.Matcher held in a local across a
+                    // later pipeline step (fileExists below) breaks CPS program-state
+                    // serialization with NotSerializableException. replaceAll returns the
+                    // input unchanged on no match, so validate the shape afterwards and
+                    // treat anything else (main, latest, empty) as "no derivable version".
+                    def derivedVersionTag = (params.RANCHER_VERSION ?: '').replaceAll(/^v?(2\.\d+)([.-].*)?$/, '$1')
+                    if (!(derivedVersionTag ==~ /\d+\.\d+/)) {
+                        derivedVersionTag = null
+                    }
+                    // GO_TAGS may arrive comma- or space-separated; tokenize on both so version-tag
+                    // detection sees real tags, and rejoin with commas (go test's -tags separator)
+                    // so an appended tag can never split into a bare package pattern downstream.
+                    def tagTokens = goTags.split(/[,\s]+/).findAll { it }
+                    def suppliedVersionTags = tagTokens.findAll { it ==~ /\d+\.\d+/ }
+                    if (derivedVersionTag && suppliedVersionTags.any { it != derivedVersionTag }) {
+                        error "GO_TAGS '${goTags}' carries Rancher version tag(s) ${suppliedVersionTags.join(', ')} that conflict with " +
+                            "RANCHER_VERSION ${params.RANCHER_VERSION} (derived '${derivedVersionTag}'); align them so exactly one " +
+                            "Rancher version tag is active — two active version tags would enable deprecated suites for the wrong release"
+                    }
+                    if (derivedVersionTag && !suppliedVersionTags.contains(derivedVersionTag)) {
+                        goTags = (tagTokens + derivedVersionTag).join(',')
+                        echo "Derived Rancher version tag '${derivedVersionTag}'; effective GO_TAGS: ${goTags}"
+                    }
                     def goTimeout     = params.GO_TIMEOUT ?: '45m'
                     def testCases     = goTestCase ?: goTestPackage
 
