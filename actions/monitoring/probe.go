@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"fmt"
 	"net"
 	"strconv"
 	"strings"
@@ -43,7 +44,7 @@ func JoinNodeAddressPort(address string, port int32) string {
 // IPv6 literal addresses are bracketed (JoinNodeAddressPort), and a leading '/' in path
 // is stripped so the URL never contains a double slash.
 func WebhookReceiverProbeURL(address string, port int32, path string) string {
-	return "http://" + JoinNodeAddressPort(address, port) + "/" + strings.TrimLeft(path, "/")
+	return fmt.Sprintf("http://%s/%s", JoinNodeAddressPort(address, port), strings.TrimLeft(path, "/"))
 }
 
 // IsReachableHTTPStatus reports whether probe output counts as success. It mirrors shepherd

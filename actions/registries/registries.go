@@ -96,7 +96,7 @@ func checkPodsForRegistryPrefix(client *rancher.Client, clusterID, namespace, re
 		}
 
 		for _, image := range images {
-			if !imageHasRegistryHost(image) && !strict {
+			if !HasRegistryHost(image) && !strict {
 				// Lenient mode: hostless images resolve to Docker Hub and are served by
 				// containerd mirrors on airgap nodes, so their spec strings are not rewritten.
 				logrus.Debugf("pod/containerImage %s/%s is using the public registry", pod.Name, image)
@@ -112,11 +112,12 @@ func checkPodsForRegistryPrefix(client *rancher.Client, clusterID, namespace, re
 	return true, nil
 }
 
-// imageHasRegistryHost reports whether the image reference starts with an explicit
-// registry host, following the Docker convention: the first path component counts as
-// a host when it contains a "." or ":" (domain or port) or is "localhost". This is the
-// same rule as hasRegistryHost in actions/monitoring/images.go.
-func imageHasRegistryHost(image string) bool {
+// HasRegistryHost reports whether the image reference starts with an explicit
+// registry host, following the Docker convention: the first path component counts
+// as a host when it contains a "." or ":" (domain or port) or is "localhost".
+// This is the canonical implementation; actions/monitoring and any other
+// consumer should import it instead of keeping private copies.
+func HasRegistryHost(image string) bool {
 	first, _, found := strings.Cut(image, "/")
 	if !found {
 		return false
