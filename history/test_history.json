@@ -11366,5 +11366,47 @@
     "workflow": "rancher-upgrade-proxy-cluster-provisioning",
     "job": "v2-16",
     "timestamp": "2026-09-11T18:03:14Z"
+  },
+  {
+    "date": "",
+    "status": "success",
+    "workflow": "dualstack-cluster-provisioning",
+    "job": "v2-15",
+    "timestamp": "2026-09-14T12:03:26Z"
+  },
+  {
+    "date": "",
+    "status": "failure",
+    "workflow": "dualstack-cluster-provisioning",
+    "job": "v2-16",
+    "timestamp": "2026-09-14T12:03:26Z"
+  },
+  {
+    "date": "",
+    "status": "success",
+    "workflow": "dualstack-rancher-ipv6-cluster-provisioning",
+    "job": "v2-15",
+    "timestamp": "2026-09-14T12:03:26Z"
+  },
+  {
+    "date": "",
+    "status": "failure",
+    "workflow": "dualstack-rancher-ipv6-cluster-provisioning",
+    "job": "v2-16",
+    "timestamp": "2026-09-14T12:03:26Z"
+  },
+  {
+    "date": "",
+    "status": "failure",
+    "workflow": "ipv6-cluster-provisioning",
+    "job": "v2-15",
+    "timestamp": "2026-09-14T12:03:26Z"
+  },
+  {
+    "date": "",
+    "status": "failure",
+    "workflow": "ipv6-cluster-provisioning",
+    "job": "v2-16",
+    "timestamp": "2026-09-14T12:03:26Z"
   }
 ]
