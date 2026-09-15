@@ -9,8 +9,8 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	v3 "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	extfeaturesapi "github.com/rancher/shepherd/extensions/kubeapi/features"
-	extuserapi "github.com/rancher/shepherd/extensions/kubeapi/users"
 	extrbacapi "github.com/rancher/shepherd/extensions/kubeapi/rbac"
+	extuserapi "github.com/rancher/shepherd/extensions/kubeapi/users"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/session"
 	authactions "github.com/rancher/tests/actions/auth"
@@ -172,7 +172,7 @@ func (s *HideLocalAuthTestSuite) TestUserWithoutManageUsersCannotEditExistingLoc
 	require.NoError(s.T(), err, "Failed to login user [%v]", user.Username)
 
 	log.Infof("Granting the OpenLDAP user %s permissions to update User CRDs, which does not include manage-users permissions", user.Username)
-	err = rbacactions.GrantUserCRDUpdatePermissions(s.client, s.client.RancherConfig.ClusterName, userClient.UserID)
+	err = rbacactions.GrantUserCRDUpdatePermissions(s.client, userClient.UserID)
 	require.NoError(s.T(), err, "Failed to grant user CRD update permissions")
 
 	log.Infof("Attempting to edit existing local user %s while 'hide-local-auth-provider' is enabled", testuser1.Username)
