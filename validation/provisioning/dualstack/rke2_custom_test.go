@@ -17,6 +17,7 @@ import (
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
+	infraConfig "github.com/rancher/tests/validation/recurring/infrastructure/config"
 	tfpConfig "github.com/rancher/tfp-automation/config"
 	"github.com/rancher/tfp-automation/framework/cleanup"
 	tfpCustom "github.com/rancher/tfp-automation/tests/infrastructure/downstream/custom"
@@ -46,6 +47,14 @@ func customRKE2DualstackSetup(t *testing.T) customRKE2DualstackTest {
 
 	r.cattleConfig, err = defaults.LoadPackageDefaults(r.cattleConfig, "")
 	require.NoError(t, err)
+
+	r.cattleConfig, err = defaults.LoadSecretsManagerDefaults(r.cattleConfig)
+	require.NoError(t, err)
+
+	err = defaults.VerifyCattleConfig(r.cattleConfig, nil)
+	require.NoError(t, err)
+
+	infraConfig.WriteConfigToFile(os.Getenv(config.ConfigEnvironmentKey), r.cattleConfig)
 
 	loggingConfig := new(logging.Logging)
 	operations.LoadObjectFromMap(logging.LoggingKey, r.cattleConfig, loggingConfig)
