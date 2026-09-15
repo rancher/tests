@@ -5,6 +5,7 @@ import (
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/rancher"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	extrbacapi "github.com/rancher/shepherd/extensions/kubeapi/rbac"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -243,59 +244,50 @@ func CreateGlobalRoleWithAllRules(client *rancher.Client, inheritedClusterRole [
 	return createdGlobalRole, nil
 }
 
-// GrantUserCRDUpdatePermissions creates a ClusterRole and ClusterRoleBinding
-// to grant a specific user Kubernetes API permissions to get, patch, and update User CRDs.
-// This allows the user's requests to bypass the Kubernetes API server's RBAC checks
-// so they can be evaluated directly by the admission webhook. Returns a cleanup function.
-func GrantUserCRDUpdatePermissions(client *rancher.Client, clusterID, username string) (error) {
-    testerRoleName := namegen.AppendRandomString("webhook-tester-role-")
-    testerRole := &rbacv1.ClusterRole{
-        TypeMeta: metav1.TypeMeta{
-            APIVersion: "rbac.authorization.k8s.io/v1",
-            Kind:       "ClusterRole",
-        },
-        ObjectMeta: metav1.ObjectMeta{
-            Name: testerRoleName,
-        },
-        Rules: []rbacv1.PolicyRule{
-            {
-                APIGroups: []string{"management.cattle.io"},
-                Resources: []string{"users"},
-                Verbs:     []string{"get", "patch", "update"},
-            },
-        },
-    }
-    _, err := extrbacapi.CreateClusterRole(client, clusterID, testerRole)
-    if err != nil {
-        return fmt.Errorf("failed to create webhook-tester-role: %w", err)
-    }
+// GrantUserCRDUpdatePermissions grants a user permission to update User CRDs so requests reach the admission webhook.
+func GrantUserCRDUpdatePermissions(client *rancher.Client, username string) error {
+	roleName := namegen.AppendRandomString("user-crd-update-role-")
+	role := &rbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: roleName,
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{"management.cattle.io"},
+				Resources: []string{"users"},
+				Verbs:     []string{"get", "patch", "update"},
+			},
+		},
+	}
 
-    testerBindingName := namegen.AppendRandomString("binding-")
-    testerBinding := &rbacv1.ClusterRoleBinding{
-        TypeMeta: metav1.TypeMeta{
-            APIVersion: "rbac.authorization.k8s.io/v1",
-            Kind:       "ClusterRoleBinding",
-        },
-        ObjectMeta: metav1.ObjectMeta{
-            Name: testerBindingName,
-        },
-        Subjects: []rbacv1.Subject{
-            {
-                Kind:     "User",
-                Name:     username,
-                APIGroup: "rbac.authorization.k8s.io",
-            },
-        },
-        RoleRef: rbacv1.RoleRef{
-            Kind:     "ClusterRole",
-            Name:     testerRoleName,
-            APIGroup: "rbac.authorization.k8s.io",
-        },
-    }
-    _, err = extrbacapi.CreateClusterRoleBinding(client, clusterID, testerBinding)
-    if err != nil {
-        return fmt.Errorf("failed to create webhook-tester-binding: %w", err)
-    }
+	_, err := extrbacapi.CreateClusterRole(client, extclusterapi.LocalCluster, role)
+	if err != nil {
+		return fmt.Errorf("failed to create user CRD update ClusterRole: %w", err)
+	}
 
-    return nil
+	bindingName := namegen.AppendRandomString("user-crd-update-binding-")
+	binding := &rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: bindingName,
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:     "User",
+				Name:     username,
+				APIGroup: rbacv1.GroupName,
+			},
+		},
+		RoleRef: rbacv1.RoleRef{
+			Kind:     "ClusterRole",
+			Name:     roleName,
+			APIGroup: rbacv1.GroupName,
+		},
+	}
+
+	_, err = extrbacapi.CreateClusterRoleBinding(client, extclusterapi.LocalCluster, binding)
+	if err != nil {
+		return fmt.Errorf("failed to create user CRD update ClusterRoleBinding: %w", err)
+	}
+
+	return nil
 }
