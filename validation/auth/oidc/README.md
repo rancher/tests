@@ -38,11 +38,22 @@ The generated `OIDCClient` and its secret are also removed by session cleanup on
 
 ## Running the Tests
 
-Your GO suite should be set to `-run ^TestOIDCProviderSuite$`
+Your GO suite should be set to `-run "^TestOIDCProviderSuite$|^TestOIDCNoClientsSuite$"` to run both suites.
 
 ```bash
 gotestsum --format standard-verbose \
   --packages=github.com/rancher/tests/validation/auth/oidc \
   --junitfile results.xml \
-  -- -timeout=30m -tags=validation -v -run ^TestOIDCProviderSuite$
+  -- -timeout=30m -tags=validation -v -run "^TestOIDCProviderSuite$|^TestOIDCNoClientsSuite$"
+```
+
+`TestOIDCProviderSuite` creates an `OIDCClient` in `SetupSuite` and exercises the provider with a client
+registered. `TestOIDCNoClientsSuite` covers the opposite precondition — a server with no `OIDCClient`
+objects — and gates every test on that state, so it must not run in parallel with the other suite.
+
+```bash
+gotestsum --format standard-verbose \
+  --packages=github.com/rancher/tests/validation/auth/oidc \
+  --junitfile results.xml \
+  -- -timeout=30m -tags=validation -v -run "^TestOIDCNoClientsSuite$"
 ```
