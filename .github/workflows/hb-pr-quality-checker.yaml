@@ -20,8 +20,7 @@ jobs:
         (
           github.event.pull_request.user.login == 'markusewalker' ||
           github.event.pull_request.user.login == 'susesgartner' ||
-          github.event.pull_request.user.login == 'navsalehi' ||
-          github.event.pull_request.head.repo.fork == false
+          github.event.pull_request.user.login == 'navsalehi'
         ) &&
         !(
           github.event.action == 'edited' &&
