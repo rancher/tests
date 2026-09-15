@@ -120,11 +120,11 @@ func TestImported(t *testing.T) {
 			operations.LoadObjectFromMap(workloads.WorkloadsConfigurationFileKey, r.cattleConfig, workloadConfigs)
 
 			logrus.Infof("Creating workloads (%s)", cluster.Name)
-			createdWorkloads, err := workloads.CreateWorkloads(tt.client, cluster.Name, *workloadConfigs)
+			createdWorkloads, err := workloads.CreateWorkloads(r.client, cluster.Name, *workloadConfigs)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying workloads (%s)", cluster.Name)
-			_, err = workloads.VerifyWorkloads(tt.client, cluster.Name, *createdWorkloads)
+			_, err = workloads.VerifyWorkloads(r.client, cluster.Name, *createdWorkloads)
 			require.NoError(t, err)
 		})
 
