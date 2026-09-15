@@ -3,6 +3,7 @@ package remotedialerproxy
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
@@ -18,18 +19,21 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/httpstream"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	"k8s.io/client-go/tools/portforward"
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/client-go/transport/spdy"
 )
 
 const (
-	apiServiceName = "v1.ext.cattle.io"
-	rdpNamespace   = "cattle-system"
+	apiServiceName  = "v1.ext.cattle.io"
+	rdpNamespace    = "cattle-system"
+	proxyPathMarker = "/k8s/clusters/"
 )
 
 func remotedialerProxyValidations(t *testing.T, client *rancher.Client, cluster *steveV1.SteveAPIObject) {
@@ -138,11 +142,22 @@ func remotedialerProxyValidations(t *testing.T, client *rancher.Client, cluster 
 		rawConfig, err := kubeConfig.RawConfig()
 		require.NoError(t, err)
 
-		restConfig, err = clientcmd.NewDefaultClientConfig(
-			rawConfig,
-			&clientcmd.ConfigOverrides{},
-		).ClientConfig()
+		overrides := &clientcmd.ConfigOverrides{}
+
+		if ctxName := proxiedContext(rawConfig); ctxName != "" {
+			logrus.Infof("Using proxied kubeconfig context: %s", ctxName)
+			overrides.CurrentContext = ctxName
+		} else {
+			logrus.Warnf("No context containing %q found; falling back to current-context %q",
+				proxyPathMarker, rawConfig.CurrentContext)
+		}
+
+		restConfig, err = clientcmd.NewDefaultClientConfig(rawConfig, overrides).ClientConfig()
 		require.NoError(t, err)
+
+		logrus.Infof("Downstream REST host: %s", restConfig.Host)
+		require.Contains(t, restConfig.Host, proxyPathMarker,
+			"REST config is not routed through the remotedialer proxy")
 
 		downstreamClient, err = kubernetes.NewForConfig(restConfig)
 		require.NoError(t, err)
@@ -158,8 +173,13 @@ func remotedialerProxyValidations(t *testing.T, client *rancher.Client, cluster 
 
 	// Validate exec through remotedialer proxy
 	t.Run("exec_validation", func(t *testing.T) {
-		pods, err := downstreamClient.CoreV1().Pods("cattle-system").List(
-			context.TODO(),
+		require.NotNil(t, downstreamClient, "downstream_kube_access must pass first")
+
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+
+		pods, err := downstreamClient.CoreV1().Pods(rdpNamespace).List(
+			ctx,
 			metav1.ListOptions{Limit: 10},
 		)
 		require.NoError(t, err)
@@ -178,7 +198,7 @@ func remotedialerProxyValidations(t *testing.T, client *rancher.Client, cluster 
 			Post().
 			Resource("pods").
 			Name(pod.Name).
-			Namespace("cattle-system").
+			Namespace(rdpNamespace).
 			SubResource("exec").
 			VersionedParams(&corev1.PodExecOptions{
 				Command: []string{"echo", "rdp-ok"},
@@ -186,25 +206,37 @@ func remotedialerProxyValidations(t *testing.T, client *rancher.Client, cluster 
 				Stderr:  true,
 			}, scheme.ParameterCodec)
 
-		executor, err := remotecommand.NewSPDYExecutor(restConfig, "POST", req.URL())
+		wsExecutor, err := remotecommand.NewWebSocketExecutor(restConfig, "GET", req.URL().String())
+		require.NoError(t, err)
+
+		spdyExecutor, err := remotecommand.NewSPDYExecutor(restConfig, "POST", req.URL())
+		require.NoError(t, err)
+
+		executor, err := remotecommand.NewFallbackExecutor(
+			wsExecutor,
+			spdyExecutor,
+			httpstream.IsUpgradeFailure,
+		)
 		require.NoError(t, err)
 
 		var stdout, stderr bytes.Buffer
-		err = executor.Stream(remotecommand.StreamOptions{
+		err = executor.StreamWithContext(ctx, remotecommand.StreamOptions{
 			Stdout: &stdout,
 			Stderr: &stderr,
 		})
-		require.NoError(t, err)
+		require.NoError(t, err, "stderr: %s", stderr.String())
 
 		require.Contains(t, stdout.String(), "rdp-ok")
 	})
 
 	// Validate watch through remotedialer proxy
 	t.Run("watch_validation", func(t *testing.T) {
+		require.NotNil(t, downstreamClient, "downstream_kube_access must pass first")
+
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		w, err := downstreamClient.CoreV1().Pods("cattle-system").Watch(
+		w, err := downstreamClient.CoreV1().Pods(rdpNamespace).Watch(
 			ctx,
 			metav1.ListOptions{},
 		)
@@ -221,19 +253,26 @@ func remotedialerProxyValidations(t *testing.T, client *rancher.Client, cluster 
 
 	// Validate port-forward through remotedialer proxy
 	t.Run("portforward_validation", func(t *testing.T) {
-		pods, err := downstreamClient.CoreV1().Pods("cattle-system").List(
-			context.TODO(),
-			metav1.ListOptions{Limit: 1},
+		require.NotNil(t, downstreamClient, "downstream_kube_access must pass first")
+
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+
+		pods, err := downstreamClient.CoreV1().Pods(rdpNamespace).List(
+			ctx,
+			metav1.ListOptions{},
 		)
 		require.NoError(t, err)
 		require.NotEmpty(t, pods.Items)
 
-		pod := pods.Items[0]
+		pod, targetPort := podWithContainerPort(pods.Items)
+		require.NotEmpty(t, pod.Name, "no running pod with a declared container port found in %s", rdpNamespace)
+		logrus.Infof("Port-forwarding to pod=%s port=%d", pod.Name, targetPort)
 
 		reqURL := downstreamClient.CoreV1().RESTClient().
 			Post().
 			Resource("pods").
-			Namespace("cattle-system").
+			Namespace(rdpNamespace).
 			Name(pod.Name).
 			SubResource("portforward").
 			URL()
@@ -241,14 +280,20 @@ func remotedialerProxyValidations(t *testing.T, client *rancher.Client, cluster 
 		transport, upgrader, err := spdy.RoundTripperFor(restConfig)
 		require.NoError(t, err)
 
-		dialer := spdy.NewDialer(upgrader, &http.Client{Transport: transport}, "POST", reqURL)
+		spdyDialer := spdy.NewDialer(upgrader, &http.Client{Transport: transport}, "POST", reqURL)
+
+		wsDialer, err := portforward.NewSPDYOverWebsocketDialer(reqURL, restConfig)
+		require.NoError(t, err)
+
+		dialer := portforward.NewFallbackDialer(wsDialer, spdyDialer, httpstream.IsUpgradeFailure)
 
 		stopChan := make(chan struct{}, 1)
 		readyChan := make(chan struct{})
+		errChan := make(chan error, 1)
 
 		fw, err := portforward.New(
 			dialer,
-			[]string{"8080:80"},
+			[]string{fmt.Sprintf("0:%d", targetPort)},
 			stopChan,
 			readyChan,
 			os.Stdout,
@@ -257,16 +302,56 @@ func remotedialerProxyValidations(t *testing.T, client *rancher.Client, cluster 
 		require.NoError(t, err)
 
 		go func() {
-			_ = fw.ForwardPorts()
+			errChan <- fw.ForwardPorts()
 		}()
 
 		select {
 		case <-readyChan:
-			logrus.Info("RDP port-forward ready")
-		case <-time.After(30 * time.Second):
+			ports, err := fw.GetPorts()
+			require.NoError(t, err)
+			logrus.Infof("RDP port-forward ready on localhost:%d -> %d", ports[0].Local, ports[0].Remote)
+		case err := <-errChan:
+			require.NoError(t, err, "port-forward failed before becoming ready")
+		case <-time.After(60 * time.Second):
 			require.Fail(t, "port-forward never became ready")
 		}
 
 		close(stopChan)
 	})
+}
+
+func proxiedContext(rawConfig clientcmdapi.Config) string {
+	if cur, ok := rawConfig.Contexts[rawConfig.CurrentContext]; ok {
+		if cluster, ok := rawConfig.Clusters[cur.Cluster]; ok &&
+			strings.Contains(cluster.Server, proxyPathMarker) {
+			return rawConfig.CurrentContext
+		}
+	}
+
+	for name, kubeContext := range rawConfig.Contexts {
+		cluster, ok := rawConfig.Clusters[kubeContext.Cluster]
+		if ok && strings.Contains(cluster.Server, proxyPathMarker) {
+			return name
+		}
+	}
+
+	return ""
+}
+
+func podWithContainerPort(items []corev1.Pod) (corev1.Pod, int32) {
+	for _, p := range items {
+		if p.Status.Phase != corev1.PodRunning {
+			continue
+		}
+
+		for _, c := range p.Spec.Containers {
+			for _, port := range c.Ports {
+				if port.ContainerPort > 0 {
+					return p, port.ContainerPort
+				}
+			}
+		}
+	}
+
+	return corev1.Pod{}, 0
 }
