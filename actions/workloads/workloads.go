@@ -1,10 +1,15 @@
 package workloads
 
 import (
+	"context"
 	"regexp"
+	"strings"
+	"time"
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/clusters"
+	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
+	"github.com/rancher/shepherd/pkg/session"
 	projectsapi "github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/workloads/cronjob"
 	"github.com/rancher/tests/actions/workloads/daemonset"
@@ -16,6 +21,7 @@ import (
 	appv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
 const (
@@ -48,18 +54,35 @@ func CreateWorkloads(client *rancher.Client, clusterName string, workloads Workl
 		}
 	}
 
-	logrus.Debugf("Creating a namespace on %s", clusterName)
-	_, namespace, err := projectsapi.CreateProjectAndNamespace(client, clusterID)
-	if err != nil {
-		return nil, err
-	}
-
 	client, err = client.ReLogin()
 	if err != nil {
 		return nil, err
 	}
 
-	downstreamClient, err := client.Steve.ProxyDownstream(clusterID)
+	logrus.Debugf("Creating a namespace on %s", clusterName)
+	// creator's cluster-owner RBAC binding can take a moment to propagate after cluster creation, so retry on forbidden errors
+	var namespace *corev1.Namespace
+	var pollErr error
+	err = kwait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
+		_, namespace, pollErr = projectsapi.CreateProjectAndNamespace(client, clusterID)
+		if pollErr != nil {
+			return false, nil
+		}
+
+		return true, nil
+	})
+	if err != nil {
+		return nil, pollErr
+	}
+
+	workloadSession := client.Session.NewSession()
+	provisioningClient, err := client.WithSession(workloadSession)
+	if err != nil {
+		return nil, err
+	}
+	provisioningClient.Steve.Ops.Session = session.NewSession()
+
+	downstreamClient, err := provisioningClient.Steve.ProxyDownstream(clusterID)
 	if err != nil {
 		return nil, err
 	}
@@ -71,6 +94,7 @@ func CreateWorkloads(client *rancher.Client, clusterName string, workloads Workl
 		if err != nil {
 			return nil, err
 		}
+		registerWorkloadCleanup(workloadSession, client, clusterID, "apps.deployment", workloads.Deployment.Namespace, workloads.Deployment.Name)
 	}
 
 	if workloads.DaemonSet != nil {
@@ -80,6 +104,7 @@ func CreateWorkloads(client *rancher.Client, clusterName string, workloads Workl
 		if err != nil {
 			return nil, err
 		}
+		registerWorkloadCleanup(workloadSession, client, clusterID, "apps.daemonset", workloads.DaemonSet.Namespace, workloads.DaemonSet.Name)
 	}
 
 	if workloads.CronJob != nil {
@@ -89,6 +114,7 @@ func CreateWorkloads(client *rancher.Client, clusterName string, workloads Workl
 		if err != nil {
 			return nil, err
 		}
+		registerWorkloadCleanup(workloadSession, client, clusterID, "batch.cronjob", workloads.CronJob.Namespace, workloads.CronJob.Name)
 	}
 
 	if workloads.Job != nil {
@@ -98,6 +124,7 @@ func CreateWorkloads(client *rancher.Client, clusterName string, workloads Workl
 		if err != nil {
 			return nil, err
 		}
+		registerWorkloadCleanup(workloadSession, client, clusterID, "batch.job", workloads.Job.Namespace, workloads.Job.Name)
 	}
 
 	if workloads.Pod != nil {
@@ -107,6 +134,7 @@ func CreateWorkloads(client *rancher.Client, clusterName string, workloads Workl
 		if err != nil {
 			return nil, err
 		}
+		registerWorkloadCleanup(workloadSession, client, clusterID, stevetypes.Pod, workloads.Pod.Namespace, workloads.Pod.Name)
 	}
 
 	if workloads.StatefulSet != nil {
@@ -116,7 +144,34 @@ func CreateWorkloads(client *rancher.Client, clusterName string, workloads Workl
 		if err != nil {
 			return nil, err
 		}
+		registerWorkloadCleanup(workloadSession, client, clusterID, "apps.statefulset", workloads.StatefulSet.Namespace, workloads.StatefulSet.Name)
 	}
 
 	return &workloads, nil
+}
+
+func registerWorkloadCleanup(cleanupSession *session.Session, client *rancher.Client, clusterID, resourceType, namespace, name string) {
+	cleanupSession.RegisterCleanupFunc(func() error {
+		adminClient, err := rancher.NewClient(client.RancherConfig.AdminToken, client.Session)
+		if err != nil {
+			return err
+		}
+
+		steveClient, err := adminClient.Steve.ProxyDownstream(clusterID)
+		if err != nil {
+			return err
+		}
+
+		workloadID := namespace + "/" + name
+		workload, err := steveClient.SteveType(resourceType).ByID(workloadID)
+		if err != nil {
+			if strings.Contains(err.Error(), "404 Not Found") {
+				return nil
+			}
+
+			return err
+		}
+
+		return steveClient.SteveType(resourceType).Delete(workload)
+	})
 }

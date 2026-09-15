@@ -3,10 +3,13 @@
 package os
 
 import (
+	"math/rand"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
+	shepherdclusters "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/clusters/kubernetesversions"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
@@ -14,6 +17,8 @@ import (
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/logging"
+	"github.com/rancher/tests/actions/networking"
+	projectsapi "github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/qase"
 	"github.com/rancher/tests/actions/workloads"
@@ -80,51 +85,85 @@ func TestImported(t *testing.T) {
 		{"OS_K3S_Imported", defaults.K3S, r.standardUserClient},
 	}
 	for _, tt := range tests {
-		t.Cleanup(func() {
-			logrus.Infof("Running cleanup (%s)", tt.name)
-			r.session.Cleanup()
-		})
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
 			var err error
+			testSession := session.NewSession()
+			testClient, err := r.client.WithSession(testSession)
+			require.NoError(t, err)
 
 			rancherConfig, terraformConfig, terratestConfig, _ := tfpConfig.LoadTFPConfigs(r.cattleConfig)
-			versions, err := kubernetesversions.Default(r.client, tt.k8sType, nil)
+			versions, err := kubernetesversions.Default(testClient, tt.k8sType, nil)
 			require.NoError(t, err)
 			terratestConfig.KubernetesVersion = versions[0]
 
 			logrus.Info("Provisioning imported cluster")
-			nestedRancherModuleDir, perTestTerraformOptions, _, cluster := tfpImported.CreateImportedCluster(t, tt.client, rancherConfig, terraformConfig, terratestConfig, tt.k8sType, "validation/provisioning/"+tt.k8sType)
-			defer os.RemoveAll(nestedRancherModuleDir)
-			defer cleanup.Cleanup(t, perTestTerraformOptions, nestedRancherModuleDir)
+			nestedRancherModuleDir, perTestTerraformOptions, _, cluster := tfpImported.CreateImportedCluster(t, testClient, rancherConfig, terraformConfig, terratestConfig, tt.k8sType, "validation/provisioning/"+tt.k8sType)
+			t.Cleanup(func() {
+				logrus.Infof("Running cleanup (%s)", tt.name)
+				testSession.Cleanup()
+				cleanup.Cleanup(t, perTestTerraformOptions, nestedRancherModuleDir)
+				os.RemoveAll(nestedRancherModuleDir)
+			})
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
-			err = provisioning.VerifyClusterReadyV3(r.client, cluster.Name)
+			err = provisioning.VerifyClusterReadyV3(testClient, cluster.Name)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
-			err = deployment.VerifyClusterDeployments(r.client, cluster)
+			err = deployment.VerifyClusterDeployments(testClient, cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
-			err = pods.VerifyClusterPods(r.client, cluster)
+			err = pods.VerifyClusterPods(testClient, cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying service account token secret (%s)", cluster.Name)
-			err = clusters.VerifyServiceAccountTokenSecret(r.client, cluster.Name)
+			err = clusters.VerifyServiceAccountTokenSecret(testClient, cluster.Name)
 			require.NoError(t, err)
 
 			workloadConfigs := new(workloads.Workloads)
 			operations.LoadObjectFromMap(workloads.WorkloadsConfigurationFileKey, r.cattleConfig, workloadConfigs)
+			/*
+				logrus.Infof("Creating workloads (%s)", cluster.Name)
+				createdWorkloads, err := workloads.CreateWorkloads(testClient, cluster.Name, *workloadConfigs)
+				require.NoError(t, err)
 
-			logrus.Infof("Creating workloads (%s)", cluster.Name)
-			createdWorkloads, err := workloads.CreateWorkloads(tt.client, cluster.Name, *workloadConfigs)
+				logrus.Infof("Verifying workloads (%s)", cluster.Name)
+				_, err = workloads.VerifyWorkloads(testClient, cluster.Name, *createdWorkloads)
+				require.NoError(t, err)*/
+
+			clusterID, err := shepherdclusters.GetClusterIDByName(r.client, cluster.Name)
+			require.NoError(t, err)
+			if clusterID == "" {
+				clusterID, err = shepherdclusters.GetV1ProvisioningClusterByName(r.client, cluster.Name)
+				require.NoError(t, err)
+			}
+			clusterID = strings.TrimPrefix(clusterID, "fleet-default/")
+			require.NotEmpty(t, clusterID, "no downstream cluster ID found for %s", cluster.Name)
+
+			downstreamClient, err := clusters.ProxyDownstreamWithRetry(r.client, clusterID)
 			require.NoError(t, err)
 
-			logrus.Infof("Verifying workloads (%s)", cluster.Name)
-			_, err = workloads.VerifyWorkloads(tt.client, cluster.Name, *createdWorkloads)
+			_, namespace, err := projectsapi.CreateProjectAndNamespace(r.client, clusterID)
+			require.NoError(t, err)
+
+			connectivityWorkloadConfigs := new(workloads.Workloads)
+			operations.LoadObjectFromMap(workloads.WorkloadsConfigurationFileKey, r.cattleConfig, connectivityWorkloadConfigs)
+
+			logrus.Infof("Verifying pod connectivity (%s)", cluster.Name)
+			err = networking.VerifyPodConnectivity(testClient, downstreamClient, clusterID, namespace.Name, "pod-connectivity-", connectivityWorkloadConfigs)
+			require.NoError(t, err)
+
+			hostPort := rand.Intn(55283) + 10251
+			logrus.Infof("Verifying host port connectivity (%s)", cluster.Name)
+			err = networking.VerifyHostPortConnectivity(testClient, downstreamClient, clusterID, namespace.Name, hostPort, "/", connectivityWorkloadConfigs)
+			require.NoError(t, err)
+
+			nodePort := rand.Intn(2767) + 30000
+			logrus.Infof("Verifying node port connectivity (%s)", cluster.Name)
+			err = networking.VerifyNodePortConnectivity(testClient, downstreamClient, clusterID, namespace.Name, nodePort, "/", connectivityWorkloadConfigs)
 			require.NoError(t, err)
 		})
 

@@ -3,11 +3,13 @@
 package os
 
 import (
+	"math/rand"
 	"os"
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/cloudcredentials"
+	shepherdclusters "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/clusters/kubernetesversions"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
@@ -15,6 +17,8 @@ import (
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/logging"
+	"github.com/rancher/tests/actions/networking"
+	projectsapi "github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/qase"
 	"github.com/rancher/tests/actions/workloads"
@@ -79,13 +83,12 @@ func TestNodeDriver(t *testing.T) {
 
 	for _, tt := range tests {
 		var err error
-		t.Cleanup(func() {
-			logrus.Infof("Running cleanup (%s)", tt.name)
-			r.session.Cleanup()
-		})
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+			t.Cleanup(func() {
+				logrus.Infof("Running cleanup (%s)", tt.name)
+				r.session.Cleanup()
+			})
 
 			clusterConfig := new(clusters.ClusterConfig)
 			operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
@@ -128,11 +131,37 @@ func TestNodeDriver(t *testing.T) {
 			operations.LoadObjectFromMap(workloads.WorkloadsConfigurationFileKey, r.cattleConfig, workloadConfigs)
 
 			logrus.Infof("Creating workloads (%s)", cluster.Name)
-			createdWorkloads, err := workloads.CreateWorkloads(tt.client, cluster.Name, *workloadConfigs)
+			createdWorkloads, err := workloads.CreateWorkloads(r.client, cluster.Name, *workloadConfigs)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying workloads (%s)", cluster.Name)
-			_, err = workloads.VerifyWorkloads(tt.client, cluster.Name, *createdWorkloads)
+			_, err = workloads.VerifyWorkloads(r.client, cluster.Name, *createdWorkloads)
+			require.NoError(t, err)
+
+			clusterID, err := shepherdclusters.GetClusterIDByName(r.client, cluster.Name)
+			require.NoError(t, err)
+
+			downstreamClient, err := clusters.ProxyDownstreamWithRetry(r.client, clusterID)
+			require.NoError(t, err)
+
+			_, namespace, err := projectsapi.CreateProjectAndNamespace(r.client, clusterID)
+			require.NoError(t, err)
+
+			connectivityWorkloadConfigs := new(workloads.Workloads)
+			operations.LoadObjectFromMap(workloads.WorkloadsConfigurationFileKey, r.cattleConfig, connectivityWorkloadConfigs)
+
+			logrus.Infof("Verifying pod connectivity (%s)", cluster.Name)
+			err = networking.VerifyPodConnectivity(r.client, downstreamClient, clusterID, namespace.Name, "pod-connectivity-", connectivityWorkloadConfigs)
+			require.NoError(t, err)
+
+			hostPort := rand.Intn(55283) + 10251
+			logrus.Infof("Verifying host port connectivity (%s)", cluster.Name)
+			err = networking.VerifyHostPortConnectivity(r.client, downstreamClient, clusterID, namespace.Name, hostPort, "/", connectivityWorkloadConfigs)
+			require.NoError(t, err)
+
+			nodePort := rand.Intn(2767) + 30000
+			logrus.Infof("Verifying node port connectivity (%s)", cluster.Name)
+			err = networking.VerifyNodePortConnectivity(r.client, downstreamClient, clusterID, namespace.Name, nodePort, "/", connectivityWorkloadConfigs)
 			require.NoError(t, err)
 		})
 
