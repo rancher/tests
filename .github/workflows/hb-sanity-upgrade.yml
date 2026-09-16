@@ -1961,6 +1961,7 @@ jobs:
             cni: "${{ vars.CNI }}"
             defaultClusterRoleForProjectMembers: "true"
             enableNetworkPolicy: false
+            generateV3Token: true
             localCluster: "${{ env.LOCAL_CLUSTER_TYPE }}"
             provider: "${{ vars.PROVIDER_AMAZON }}"
             downstreamClusterProvider: "${{ vars.PROVIDER_AMAZON }}"

@@ -1148,6 +1148,7 @@ jobs:
             defaultRegion: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
           terraform:
+            generateV3Token: true
             localCluster: "${{ env.LOCAL_CLUSTER_TYPE }}"
             privateKeyPath: "${{ steps.setup-ssh-keys.outputs.ssh-private-key-path }}"
             privateFullChainPath: "${{ steps.setup-certs.outputs.private-full-chain-tfp-path }}"
