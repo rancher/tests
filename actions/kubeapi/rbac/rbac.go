@@ -11,6 +11,7 @@ import (
 	"github.com/rancher/shepherd/extensions/defaults"
 	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	extrbacapi "github.com/rancher/shepherd/extensions/kubeapi/rbac"
+	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	rbacv1 "k8s.io/api/rbac/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -488,4 +489,36 @@ func NewProjectRoleTemplateBindingTemplate() v3.ProjectRoleTemplateBinding {
 		RoleTemplateName:  "",
 		UserPrincipalName: "",
 	}
+}
+
+// GrantResourceQuotaAndLimitRangeManagement grants the user full management access to ResourceQuotas and LimitRanges in the namespace.
+func GrantResourceQuotaAndLimitRangeManagement(client *rancher.Client, clusterID, userID, namespaceName string) error {
+	role := &rbacv1.Role{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      namegen.AppendRandomString("manage-quota-limitrange-"),
+			Namespace: namespaceName,
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{""},
+				Resources: []string{"resourcequotas", "limitranges"},
+				Verbs:     []string{"get", "list", "watch", "create", "update", "patch", "delete"},
+			},
+		},
+	}
+	createdRole, err := extrbacapi.CreateRole(client, clusterID, role)
+	if err != nil {
+		return fmt.Errorf("failed to create the Role granting ResourceQuota and LimitRange management: %w", err)
+	}
+
+	subject := rbacv1.Subject{
+		Kind:     rbacv1.UserKind,
+		Name:     userID,
+		APIGroup: rbacv1.SchemeGroupVersion.Group,
+	}
+	if _, err := CreateRoleBinding(client, clusterID, namespaceName, createdRole.Name, subject); err != nil {
+		return fmt.Errorf("failed to create the RoleBinding for ResourceQuota and LimitRange management: %w", err)
+	}
+
+	return nil
 }
