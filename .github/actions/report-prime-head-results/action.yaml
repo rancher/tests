@@ -58,7 +58,7 @@ runs:
         webhook-type: incoming-webhook
         payload: |
           {
-            "text": "*[rancher/tfp-automation]* :alert:\n`${{ env.NOTIFICATION_TAG }}` Release Testing Completed :white_check_mark:"
+            "text": "*[rancher/tests]* :alert:\n`${{ env.NOTIFICATION_TAG }}` Release Testing Completed :white_check_mark:"
           }
 
     - name: Write notification marker to S3
