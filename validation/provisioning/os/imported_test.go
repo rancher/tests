@@ -80,51 +80,53 @@ func TestImported(t *testing.T) {
 		{"OS_K3S_Imported", defaults.K3S, r.standardUserClient},
 	}
 	for _, tt := range tests {
-		t.Cleanup(func() {
-			logrus.Infof("Running cleanup (%s)", tt.name)
-			r.session.Cleanup()
-		})
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
 			var err error
+			testSession := session.NewSession()
+			testClient, err := r.client.WithSession(testSession)
+			require.NoError(t, err)
 
 			rancherConfig, terraformConfig, terratestConfig, _ := tfpConfig.LoadTFPConfigs(r.cattleConfig)
-			versions, err := kubernetesversions.Default(r.client, tt.k8sType, nil)
+			versions, err := kubernetesversions.Default(testClient, tt.k8sType, nil)
 			require.NoError(t, err)
 			terratestConfig.KubernetesVersion = versions[0]
 
 			logrus.Info("Provisioning imported cluster")
-			nestedRancherModuleDir, perTestTerraformOptions, _, cluster := tfpImported.CreateImportedCluster(t, tt.client, rancherConfig, terraformConfig, terratestConfig, tt.k8sType, "validation/provisioning/"+tt.k8sType)
-			defer os.RemoveAll(nestedRancherModuleDir)
-			defer cleanup.Cleanup(t, perTestTerraformOptions, nestedRancherModuleDir)
+			nestedRancherModuleDir, perTestTerraformOptions, _, cluster := tfpImported.CreateImportedCluster(t, testClient, rancherConfig, terraformConfig, terratestConfig, tt.k8sType, "validation/provisioning/"+tt.k8sType)
+			t.Cleanup(func() {
+				logrus.Infof("Running cleanup (%s)", tt.name)
+				testSession.Cleanup()
+				cleanup.Cleanup(t, perTestTerraformOptions, nestedRancherModuleDir)
+				os.RemoveAll(nestedRancherModuleDir)
+			})
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
-			err = provisioning.VerifyClusterReadyV3(r.client, cluster.Name)
+			err = provisioning.VerifyClusterReadyV3(testClient, cluster.Name)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
-			err = deployment.VerifyClusterDeployments(r.client, cluster)
+			err = deployment.VerifyClusterDeployments(testClient, cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
-			err = pods.VerifyClusterPods(r.client, cluster)
+			err = pods.VerifyClusterPods(testClient, cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying service account token secret (%s)", cluster.Name)
-			err = clusters.VerifyServiceAccountTokenSecret(r.client, cluster.Name)
+			err = clusters.VerifyServiceAccountTokenSecret(testClient, cluster.Name)
 			require.NoError(t, err)
 
 			workloadConfigs := new(workloads.Workloads)
 			operations.LoadObjectFromMap(workloads.WorkloadsConfigurationFileKey, r.cattleConfig, workloadConfigs)
 
 			logrus.Infof("Creating workloads (%s)", cluster.Name)
-			createdWorkloads, err := workloads.CreateWorkloads(r.client, cluster.Name, *workloadConfigs)
+			createdWorkloads, err := workloads.CreateWorkloads(testClient, cluster.Name, *workloadConfigs)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying workloads (%s)", cluster.Name)
-			_, err = workloads.VerifyWorkloads(r.client, cluster.Name, *createdWorkloads)
+			_, err = workloads.VerifyWorkloads(testClient, cluster.Name, *createdWorkloads)
 			require.NoError(t, err)
 		})
 

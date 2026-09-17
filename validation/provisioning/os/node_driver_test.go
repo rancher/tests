@@ -79,13 +79,12 @@ func TestNodeDriver(t *testing.T) {
 
 	for _, tt := range tests {
 		var err error
-		t.Cleanup(func() {
-			logrus.Infof("Running cleanup (%s)", tt.name)
-			r.session.Cleanup()
-		})
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+			t.Cleanup(func() {
+				logrus.Infof("Running cleanup (%s)", tt.name)
+				r.session.Cleanup()
+			})
 
 			clusterConfig := new(clusters.ClusterConfig)
 			operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)

@@ -13,6 +13,7 @@ import (
 	"github.com/rancher/shepherd/extensions/defaults/providers"
 	"github.com/rancher/shepherd/extensions/defaults/stevestates"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
+	extnodes "github.com/rancher/shepherd/extensions/nodes"
 	"github.com/rancher/shepherd/extensions/steve"
 	"github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/nodes"
@@ -382,23 +383,22 @@ func getSSHKeyName(sshKeyName string) string {
 	return stringSlice[0]
 }
 
-// RebootNode reboots a node and waits for the cluster to begin updating
-func RebootNode(client *rancher.Client, node nodes.Node, clusterID string) error {
-	logrus.Infof("Rebooting node %s", node.PublicIPAddress)
+// RebootNode reboots a node and waits for all cluster machines to become ready.
+func RebootNode(client *rancher.Client, node nodes.Node, provisioningClusterID, clusterID string) error {
 	output, err := node.ExecuteCommand(nodeRebootCommand)
 	if err != nil && !errors.Is(err, &ssh.ExitMissingError{}) {
 		return errors.New(err.Error() + output)
 	}
 
-	cluster, err := client.Steve.SteveType(stevetypes.Provisioning).ByID(clusterID)
+	cluster, err := client.Steve.SteveType(stevetypes.Provisioning).ByID(provisioningClusterID)
 	if err != nil {
 		return err
 	}
 
-	err = steve.WaitForResourceState(client.Steve, cluster, stevestates.Updating, defaults.FiveSecondTimeout, defaults.FiveMinuteTimeout)
+	err = steve.WaitForResourceState(client.Steve, cluster, stevestates.Updating, defaults.FiveSecondTimeout, defaults.TwoMinuteTimeout)
 	if err != nil {
-		return err
+		logrus.Debugf("Cluster did not report an updating state after node reboot: %v", err)
 	}
 
-	return nil
+	return extnodes.AllMachineReady(client, clusterID, defaults.TenMinuteTimeout)
 }

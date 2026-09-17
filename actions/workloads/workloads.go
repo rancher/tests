@@ -8,6 +8,7 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/clusters"
+	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/pkg/session"
 	projectsapi "github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/workloads/cronjob"
@@ -74,7 +75,8 @@ func CreateWorkloads(client *rancher.Client, clusterName string, workloads Workl
 		return nil, pollErr
 	}
 
-	provisioningClient, err := client.WithSession(client.Session)
+	workloadSession := client.Session.NewSession()
+	provisioningClient, err := client.WithSession(workloadSession)
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +94,7 @@ func CreateWorkloads(client *rancher.Client, clusterName string, workloads Workl
 		if err != nil {
 			return nil, err
 		}
-		registerWorkloadCleanup(client, clusterID, "apps.deployment", workloads.Deployment.Namespace, workloads.Deployment.Name)
+		registerWorkloadCleanup(workloadSession, client, clusterID, "apps.deployment", workloads.Deployment.Namespace, workloads.Deployment.Name)
 	}
 
 	if workloads.DaemonSet != nil {
@@ -102,7 +104,7 @@ func CreateWorkloads(client *rancher.Client, clusterName string, workloads Workl
 		if err != nil {
 			return nil, err
 		}
-		registerWorkloadCleanup(client, clusterID, "apps.daemonset", workloads.DaemonSet.Namespace, workloads.DaemonSet.Name)
+		registerWorkloadCleanup(workloadSession, client, clusterID, "apps.daemonset", workloads.DaemonSet.Namespace, workloads.DaemonSet.Name)
 	}
 
 	if workloads.CronJob != nil {
@@ -112,7 +114,7 @@ func CreateWorkloads(client *rancher.Client, clusterName string, workloads Workl
 		if err != nil {
 			return nil, err
 		}
-		registerWorkloadCleanup(client, clusterID, "batch.cronjob", workloads.CronJob.Namespace, workloads.CronJob.Name)
+		registerWorkloadCleanup(workloadSession, client, clusterID, "batch.cronjob", workloads.CronJob.Namespace, workloads.CronJob.Name)
 	}
 
 	if workloads.Job != nil {
@@ -122,7 +124,7 @@ func CreateWorkloads(client *rancher.Client, clusterName string, workloads Workl
 		if err != nil {
 			return nil, err
 		}
-		registerWorkloadCleanup(client, clusterID, "batch.job", workloads.Job.Namespace, workloads.Job.Name)
+		registerWorkloadCleanup(workloadSession, client, clusterID, "batch.job", workloads.Job.Namespace, workloads.Job.Name)
 	}
 
 	if workloads.Pod != nil {
@@ -132,7 +134,7 @@ func CreateWorkloads(client *rancher.Client, clusterName string, workloads Workl
 		if err != nil {
 			return nil, err
 		}
-		registerWorkloadCleanup(client, clusterID, "core.pod", workloads.Pod.Namespace, workloads.Pod.Name)
+		registerWorkloadCleanup(workloadSession, client, clusterID, stevetypes.Pod, workloads.Pod.Namespace, workloads.Pod.Name)
 	}
 
 	if workloads.StatefulSet != nil {
@@ -142,14 +144,14 @@ func CreateWorkloads(client *rancher.Client, clusterName string, workloads Workl
 		if err != nil {
 			return nil, err
 		}
-		registerWorkloadCleanup(client, clusterID, "apps.statefulset", workloads.StatefulSet.Namespace, workloads.StatefulSet.Name)
+		registerWorkloadCleanup(workloadSession, client, clusterID, "apps.statefulset", workloads.StatefulSet.Namespace, workloads.StatefulSet.Name)
 	}
 
 	return &workloads, nil
 }
 
-func registerWorkloadCleanup(client *rancher.Client, clusterID, resourceType, namespace, name string) {
-	client.Session.RegisterCleanupFunc(func() error {
+func registerWorkloadCleanup(cleanupSession *session.Session, client *rancher.Client, clusterID, resourceType, namespace, name string) {
+	cleanupSession.RegisterCleanupFunc(func() error {
 		adminClient, err := rancher.NewClient(client.RancherConfig.AdminToken, client.Session)
 		if err != nil {
 			return err

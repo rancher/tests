@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
+	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	"github.com/rancher/shepherd/extensions/clusters/kubernetesversions"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
@@ -16,32 +17,27 @@ import (
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/qase"
-	"github.com/rancher/tests/actions/workloads"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
-	tfpConfig "github.com/rancher/tfp-automation/config"
-	"github.com/rancher/tfp-automation/framework/cleanup"
-	tfpCustom "github.com/rancher/tfp-automation/tests/infrastructure/downstream/custom"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
 
-type customTest struct {
+type rebootTest struct {
 	client             *rancher.Client
 	session            *session.Session
 	standardUserClient *rancher.Client
 	cattleConfig       map[string]any
 }
 
-func customSetup(t *testing.T) customTest {
-	var r customTest
+func rebootSetup(t *testing.T) rebootTest {
+	var r rebootTest
 	testSession := session.NewSession()
 	r.session = testSession
 
 	client, err := rancher.NewClient("", testSession)
 	require.NoError(t, err)
-
 	r.client = client
 
 	r.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
@@ -67,43 +63,55 @@ func customSetup(t *testing.T) customTest {
 	return r
 }
 
-func TestCustom(t *testing.T) {
+func TestReboot(t *testing.T) {
 	t.Parallel()
-	r := customSetup(t)
+	r := rebootSetup(t)
 
 	tests := []struct {
 		name    string
 		k8sType string
 		client  *rancher.Client
 	}{
-		{"OS_RKE2_Custom", defaults.RKE2, r.standardUserClient},
-		{"OS_K3S_Custom", defaults.K3S, r.standardUserClient},
+		{"OS_RKE2_Reboot", defaults.RKE2, r.standardUserClient},
+		{"OS_K3S_Reboot", defaults.K3S, r.standardUserClient},
 	}
+
 	for _, tt := range tests {
+		var err error
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			var err error
-
-			rancherConfig, terraformConfig, terratestConfig, _ := tfpConfig.LoadTFPConfigs(r.cattleConfig)
-			versions, err := kubernetesversions.Default(r.client, tt.k8sType, nil)
-			require.NoError(t, err)
-			terratestConfig.KubernetesVersion = versions[0]
-
-			logrus.Info("Provisioning custom cluster")
-			nestedRancherModuleDir, perTestTerraformOptions, _, cluster := tfpCustom.CreateCustomCluster(t, tt.client, rancherConfig, terraformConfig, terratestConfig, tt.k8sType, "validation/provisioning/"+tt.k8sType, false)
 			t.Cleanup(func() {
 				logrus.Infof("Running cleanup (%s)", tt.name)
 				r.session.Cleanup()
-				cleanup.Cleanup(t, perTestTerraformOptions, nestedRancherModuleDir)
-				os.RemoveAll(nestedRancherModuleDir)
 			})
+
+			clusterConfig := new(clusters.ClusterConfig)
+			operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
+
+			versions, err := kubernetesversions.Default(r.client, tt.k8sType, nil)
+			require.NoError(t, err)
+			clusterConfig.KubernetesVersion = versions[0]
+
+			if clusterConfig.MixedArchitecture && len(clusterConfig.MachinePools) == 1 && clusterConfig.MachinePools[0].MachinePoolConfig.Worker && clusterConfig.MachinePools[0].MachinePoolConfig.Etcd {
+				t.Skip("skipping all-roles pool: mixed architecture requires a dedicated worker pool")
+			}
+
+			require.NotNil(t, clusterConfig.Provider)
+
+			provider := provisioning.CreateProvider(clusterConfig.Provider)
+			credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
+			machineConfigSpec := provider.LoadMachineConfigFunc(r.cattleConfig)
+
+			logrus.Info("Provisioning cluster")
+			cluster, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
+			require.NoError(t, err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
 			err = provisioning.VerifyClusterReady(r.client, cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
-			err = deployment.VerifyClusterDeployments(r.client, cluster)
+			err = deployment.VerifyClusterDeployments(tt.client, cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
@@ -114,20 +122,25 @@ func TestCustom(t *testing.T) {
 			err = clusters.VerifyServiceAccountTokenSecret(r.client, cluster.Name)
 			require.NoError(t, err)
 
-			workloadConfigs := new(workloads.Workloads)
-			operations.LoadObjectFromMap(workloads.WorkloadsConfigurationFileKey, r.cattleConfig, workloadConfigs)
-
-			logrus.Infof("Creating workloads (%s)", cluster.Name)
-			createdWorkloads, err := workloads.CreateWorkloads(r.client, cluster.Name, *workloadConfigs)
+			logrus.Infof("Rebooting one node of each role (%s)", cluster.Name)
+			err = rebootNodeRoles(r.client, cluster)
 			require.NoError(t, err)
 
-			logrus.Infof("Verifying workloads (%s)", cluster.Name)
-			_, err = workloads.VerifyWorkloads(r.client, cluster.Name, *createdWorkloads)
+			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
+			err = provisioning.VerifyClusterReady(r.client, cluster)
+			require.NoError(t, err)
+
+			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
+			err = deployment.VerifyClusterDeployments(tt.client, cluster)
+			require.NoError(t, err)
+
+			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
+			err = pods.VerifyClusterPods(r.client, cluster)
 			require.NoError(t, err)
 		})
 
-		params := provisioning.GetCustomSchemaParams(tt.client, r.cattleConfig)
-		err := qase.UpdateSchemaParameters(tt.name, params)
+		params := provisioning.GetProvisioningSchemaParams(tt.client, r.cattleConfig)
+		err = qase.UpdateSchemaParameters(tt.name, params)
 		if err != nil {
 			logrus.Warningf("Failed to upload schema parameters %s", err)
 		}
