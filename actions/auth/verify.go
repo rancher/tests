@@ -2,7 +2,9 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strings"
 
@@ -11,6 +13,7 @@ import (
 	shepherdauth "github.com/rancher/shepherd/clients/rancher/auth"
 	v3 "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/defaults"
+	"github.com/rancher/shepherd/pkg/clientbase"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
@@ -134,6 +137,44 @@ func VerifyPrincipalByID(client *rancher.Client, principalID, expectedProvider, 
 
 	if principal.Name == "" {
 		return fmt.Errorf("principal %q resolved with an empty display name", principalID)
+	}
+
+	return nil
+}
+
+// VerifyProviderSessionRejected polls until the given client's session stops being accepted
+func VerifyProviderSessionRejected(client *rancher.Client) error {
+	acceptedErr := fmt.Errorf("the session is still accepted, so the provider that issued it has not had its tokens deleted")
+
+	var lastErr error
+	pollErr := kwait.PollUntilContextTimeout(
+		context.Background(),
+		defaults.FiveSecondTimeout,
+		defaults.TwoMinuteTimeout,
+		true,
+		func(ctx context.Context) (bool, error) {
+			_, err := client.Management.Principal.List(&types.ListOpts{})
+			if err == nil {
+				lastErr = nil
+				return false, nil
+			}
+
+			var apiErr *clientbase.APIError
+			if errors.As(err, &apiErr) && (apiErr.StatusCode == http.StatusUnauthorized || apiErr.StatusCode == http.StatusForbidden) {
+				return true, nil
+			}
+
+			lastErr = err
+
+			return false, nil
+		},
+	)
+	if pollErr != nil {
+		if lastErr != nil {
+			return fmt.Errorf("the session was never rejected on authentication grounds, the last request failed with: %w", lastErr)
+		}
+
+		return fmt.Errorf("%w: %w", acceptedErr, pollErr)
 	}
 
 	return nil
