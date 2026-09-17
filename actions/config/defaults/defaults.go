@@ -86,7 +86,12 @@ func DeepMerge(mergingMap map[string]any, baseMap map[string]any, OneToOneListMa
 			}
 		} else if _, ok := output[k].([]any); ok {
 			outputList := output[k].([]any)
-			if _, ok := outputList[0].(map[string]any); ok && len(outputList) > 0 {
+			if len(outputList) > 0 {
+				if _, ok := outputList[0].(map[string]any); !ok {
+					output[k] = v
+					continue
+				}
+
 				var mergedList []map[string]any
 				for i, mergingObject := range mergingMap[k].([]any) {
 					var mergedOutput map[string]any

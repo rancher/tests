@@ -702,14 +702,9 @@ func CreateProvisioningAKSHostedCluster(client *rancher.Client, aksClusterConfig
 	}
 
 	clusterName := namegen.AppendRandomString("akshostcluster")
-
 	clusterResp, err := aks.CreateAKSHostedCluster(client, clusterName, cloudCredential.Namespace+":"+cloudCredential.Name, aksClusterConfig, false, false, false, false, nil)
 	if err != nil {
 		return nil, err
-	}
-
-	if client.Flags.GetValue(environmentflag.UpdateClusterName) {
-		pipeline.UpdateConfigClusterName(clusterName)
 	}
 
 	client, err = client.ReLogin()
@@ -734,10 +729,6 @@ func CreateProvisioningEKSHostedCluster(client *rancher.Client, eksClusterConfig
 		return nil, err
 	}
 
-	if client.Flags.GetValue(environmentflag.UpdateClusterName) {
-		pipeline.UpdateConfigClusterName(clusterName)
-	}
-
 	client, err = client.ReLogin()
 	if err != nil {
 		return nil, err
@@ -758,10 +749,6 @@ func CreateProvisioningGKEHostedCluster(client *rancher.Client, gkeClusterConfig
 	clusterResp, err := gke.CreateGKEHostedCluster(client, clusterName, cloudCredential.Namespace+":"+cloudCredential.Name, gkeClusterConfig, false, false, false, false, nil)
 	if err != nil {
 		return nil, err
-	}
-
-	if client.Flags.GetValue(environmentflag.UpdateClusterName) {
-		pipeline.UpdateConfigClusterName(clusterName)
 	}
 
 	client, err = client.ReLogin()

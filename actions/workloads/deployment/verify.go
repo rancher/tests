@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/rancher/shepherd/clients/rancher"
@@ -527,14 +528,19 @@ func VerifyClusterDeployments(client *rancher.Client, cluster *v1.SteveAPIObject
 
 	var downstreamClient *v1.Client
 	requiredDeployments := []string{ClusterAgent, Webhook, Fleet, SUC}
+
+	if strings.Contains(cluster.Annotations["provisioning.cattle.io/management-cluster-display-name"], "hostcluster") {
+		requiredDeployments = []string{ClusterAgent, Webhook}
+	}
+
 	if cluster.Name == "local" {
 		clusterID = "local"
 		requiredDeployments = []string{Rancher, Webhook, Fleet, CapiControllerManager}
 		if ok, err := actionClusters.IsRancherVersionAbove(client, "v2.13.0"); err == nil && ok {
-			logrus.Debugf("Version is above 2.13 verifying CapiControllerManager")
 			requiredDeployments = append(requiredDeployments, CapiControllerManager)
 		}
 	}
+
 	logrus.Debugf("Verifying all required deployments exist: %v", requiredDeployments)
 	err = kwait.PollUntilContextTimeout(context.TODO(), 10*time.Second, defaults.FifteenMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
 		if slices.Contains(requiredDeployments, ClusterAgent) || slices.Contains(requiredDeployments, Rancher) {

@@ -2,6 +2,12 @@
 name: Setup SSH Keys
 description: "Sets up SSH keys for Linux and Windows"
 inputs:
+  cloud-ssh-key:
+    description: "Cloud SSH Key"
+    required: false
+  cloud-ssh-key-name:
+    description: "Cloud SSH Key Name"
+    required: false
   ssh-private-key:
     description: "SSH Private Key"
     required: true
@@ -27,6 +33,9 @@ outputs:
   windows-ssh-private-key-path:
     description: "Path to Windows SSH private key in workspace .ssh"
     value: ${{ steps.write-keys.outputs.windows-ssh-private-key-path }}
+  cloud-ssh-key-path:
+    description: "Path to cloud SSH public key in workspace .ssh, if provided"
+    value: ${{ steps.write-keys.outputs.cloud-ssh-key-path }}
 runs:
   using: composite
   steps:
@@ -127,6 +136,13 @@ runs:
         printf '%s\n' "$windows_ssh_private_key" > "$windows_ssh_private_key_path"
         chmod 600 "$windows_ssh_private_key_path"
 
+        cloud_ssh_key_path=""
+        if [ -n "$CLOUD_SSH_KEY" ]; then
+          cloud_ssh_key_path="${ssh_dir}/${CLOUD_SSH_KEY_NAME}.pub"
+          printf '%s\n' "$CLOUD_SSH_KEY" > "$cloud_ssh_key_path"
+          chmod 600 "$cloud_ssh_key_path"
+        fi
+
         if ! ssh-keygen -yf "$ssh_private_key_path" >/dev/null 2>&1; then
           echo "Linux SSH private key could not be parsed after normalization"
           exit 1
@@ -141,9 +157,12 @@ runs:
         echo "windows-ssh-private-key-name=$windows_ssh_private_key_name" >> "$GITHUB_OUTPUT"
         echo "ssh-private-key-path=$ssh_private_key_path" >> "$GITHUB_OUTPUT"
         echo "windows-ssh-private-key-path=$windows_ssh_private_key_path" >> "$GITHUB_OUTPUT"
+        echo "cloud-ssh-key-path=$cloud_ssh_key_path" >> "$GITHUB_OUTPUT"
       env:
         SSH_PRIVATE_KEY: ${{ inputs.ssh-private-key }}
         SSH_PRIVATE_KEY_NAME: ${{ inputs.ssh-private-key-name }}
         WINDOWS_SSH_PRIVATE_KEY: ${{ inputs.windows-ssh-private-key }}
         WINDOWS_SSH_PRIVATE_KEY_NAME: ${{ inputs.windows-ssh-private-key-name }}
+        CLOUD_SSH_KEY: ${{ inputs.cloud-ssh-key }}
+        CLOUD_SSH_KEY_NAME: ${{ inputs.cloud-ssh-key-name }}
       shell: bash

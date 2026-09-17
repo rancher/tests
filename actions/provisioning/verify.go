@@ -811,7 +811,7 @@ func VerifyClusterReadyV3(client *rancher.Client, clusterID string) error {
 
 	var clusterObj *managementv3.Cluster
 
-	err := kwait.PollUntilContextTimeout(ctx, 10*time.Second, defaults.ThirtyMinuteTimeout, false,
+	err := kwait.PollUntilContextTimeout(ctx, 10*time.Second, 30*time.Minute, false,
 		func(ctx context.Context) (bool, error) {
 			var err error
 

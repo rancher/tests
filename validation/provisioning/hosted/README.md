@@ -1,18 +1,33 @@
 ## Hosted Provider Provisioning Configs
 
-For your config, you will need everything in the [Prerequisites](../README.md) section on the previous readme along with and at least one [Cloud Credential](#cloud-credentials) and [Hosted Provider Config](#hosted-provider-configs). 
-
-Your GO test_package should be set to `provisioning/hosted`.
-Your GO suite should be set to `-run ^TestHostedClusterProvisioningTestSuite$`.
-Please see below for more details for your config. Please see below for more details for your config. Please note that the config can be in either JSON or YAML (all examples are illustrated in YAML).
-
 ## Table of Contents
 1. [Prerequisites](../README.md)
-2. [Cloud Credential](#cloud-credentials)
-3. [Hosted Provider Config](#hosted-provider-configs)
-4. [Back to general provisioning](../README.md)
+2. [Tests Cases](#Test-Cases)
+3. [Cloud Credential](#cloud-credentials)
+4. [Hosted Provider Config](#hosted-provider-configs)
+5. [Back to general provisioning](../README.md)
 
-Below are example configs needed for the different hosted providers including GKE, AKS, and EKS. In order to run these tests, the [cloud credentials](#cloud-credentials) are also needed. GKE (googleCredentials), AKS(azureCredentials), and EKS(awsCredentials)
+## Test Cases
+All of the test cases in this package are listed below, keep in mind that all configuration for these tests have built in defaults [Configuration Defaults](#defaults)
+
+### Hosted Cluster Tests
+
+#### Description: 
+Provision downstream hosted clusters.
+
+#### Required Configurations: 
+1. [Cloud Credential](#cloud-credentials)
+2. [Hosted Provider Config](#hosted-provider-configs)
+
+#### Table Tests
+1. `AKS_Hosted_Cluster`
+2. `EKS_Hosted_Cluster`
+3. `GKE_Hosted_Cluster`
+
+#### Run Commands:
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/hosted --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestProvisioningAKS -timeout=1h -v`
+2. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/hosted --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestProvisioningEKS -timeout=1h -v`
+3. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/hosted --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestProvisioningGKE -timeout=1h -v`
 
 ## Cloud Credentials
 
@@ -23,6 +38,7 @@ awsCredentials:
   accessKey: "",
   defaultRegion: ""
 ```
+
 ### Azure
 ```yaml
 azureCredentials:
@@ -31,6 +47,7 @@ azureCredentials:
   subscriptionId: "",
   environment: "AzurePublicCloud"
 ```
+
 ### Google
 ```yaml
 googleCredentials:
@@ -91,12 +108,6 @@ eksClusterConfig:
   tags: {}
 ```
 
-These tests utilize Go build tags. Due to this, see the below example on how to run the test: 
-
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/hosted --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestHostedEKSClusterProvisioningTestSuite/TestProvisioningHostedEKS"`
-
-If the specified test passes immediately without warning, try adding the `-count=1` flag to get around this issue. This will avoid previous results from interfering with the new test run.
-
 ### AKS Cluster Config
 ```yaml
 aksClusterConfig:
@@ -125,12 +136,6 @@ aksClusterConfig:
   resourceLocation: ""
   tags: {}
 ```
-
-These tests utilize Go build tags. Due to this, see the below example on how to run the test: 
-
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/hosted --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestHostedAKSClusterProvisioningTestSuite/TestProvisioningHostedAKS"`
-
-If the specified test passes immediately without warning, try adding the `-count=1` flag to get around this issue. This will avoid previous results from interfering with the new test run.
 
 ### GKE Cluster Config
 Note that the following are required and should be updated:
@@ -212,9 +217,3 @@ gkeClusterConfig:
   subnetwork: default
   zone: us-central1-c
 ```
-
-These tests utilize Go build tags. Due to this, see the below example on how to run the test: 
-
-`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/hosted --junitfile results.xml -- -timeout=60m -tags=validation -v -run "TestHostedGKEClusterProvisioningTestSuite/TestProvisioningHostedGKE"`
-
-If the specified test passes immediately without warning, try adding the `-count=1` flag to get around this issue. This will avoid previous results from interfering with the new test run.
