@@ -205,7 +205,7 @@ Always update relevant documentation when making changes:
   * one of which will always be as static as possible, where no input is needed from the config
 * provide at least 1 full review of the code before submitting the PR
 * when creating helper functions, default to returning an error instead of accepting a testing.T parameter
-* log with logrus, not testing.T.log
+* helper functions should use Logrus for logging instead of testing.T.Log
 * return pointers to objects where possible in helper functions
 * if the case of ignoring errors arises, always justify via comment as to why it is ignored
 * strings should be a const wherever possible except for logs and error messages
