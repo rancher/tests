@@ -2,7 +2,9 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strings"
 
@@ -11,6 +13,7 @@ import (
 	shepherdauth "github.com/rancher/shepherd/clients/rancher/auth"
 	v3 "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/defaults"
+	"github.com/rancher/shepherd/pkg/clientbase"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
@@ -151,4 +154,46 @@ func VerifyPrincipalIsLocal(client *rancher.Client, name string) error {
 		}
 	}
 	return fmt.Errorf("principal search for %q returned no local principal; a local user must still surface as local", name)
+}
+
+// VerifyProviderDisabled waits for the auth config to report the provider disabled with its cleanup annotation locked
+func VerifyProviderDisabled(client *rancher.Client, providerName string) error {
+	authConfig, err := WaitForAuthProviderAnnotationUpdate(client, providerName, AuthProvCleanupAnnotationValLocked)
+	if err != nil {
+		return fmt.Errorf("timed out waiting for %s to report its cleanup annotation locked: %w", providerName, err)
+	}
+
+	if authConfig.Enabled {
+		return fmt.Errorf("auth config %s still reports enabled after being disabled", providerName)
+	}
+
+	return nil
+}
+
+// VerifyProviderSessionRejected waits until a client authenticated through the provider can no longer reach the Rancher API
+func VerifyProviderSessionRejected(authClient *rancher.Client) error {
+	var lastErr error
+
+	err := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.TwoMinuteTimeout, false, func(context.Context) (bool, error) {
+		_, listErr := authClient.Management.User.List(&types.ListOpts{})
+		if listErr == nil {
+			lastErr = fmt.Errorf("a session established through the provider still reaches the Rancher API after the provider was disabled")
+			return false, nil
+		}
+
+		var apiError *clientbase.APIError
+		if errors.As(listErr, &apiError) && (apiError.StatusCode == http.StatusUnauthorized || apiError.StatusCode == http.StatusForbidden) {
+			return true, nil
+		}
+
+		lastErr = fmt.Errorf("listing users through the provider session failed for an unrelated reason: %w", listErr)
+
+		return false, nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("timed out waiting for the provider session to be rejected: %w", lastErr)
+	}
+
+	return nil
 }

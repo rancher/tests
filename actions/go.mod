@@ -1,6 +1,6 @@
 module github.com/rancher/tests/actions
 
-go 1.26.0
+go 1.27.0
 
 replace (
 	github.com/containerd/containerd => github.com/containerd/containerd v1.6.27 // for compatibilty with docker 20.10.x
@@ -12,7 +12,7 @@ replace (
 
 	github.com/rancher/rancher/pkg/apis => github.com/rancher/rancher/pkg/apis v0.0.0-20260527150105-ae26ccbc3fed
 	github.com/rancher/rancher/pkg/client => github.com/rancher/rancher/pkg/client v0.0.0-20260527150105-ae26ccbc3fed
-	github.com/rancher/tfp-automation => github.com/rancher/tfp-automation v0.0.0-20260918005222-c5811888dd0f
+	github.com/rancher/tfp-automation => github.com/rancher/tfp-automation v0.0.0-20260922151001-6bafd3d62c5e
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc => go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.53.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp => go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.53.0
 	go.opentelemetry.io/otel => go.opentelemetry.io/otel v1.28.0
@@ -59,13 +59,6 @@ replace (
 )
 
 require (
-	github.com/qase-tms/qase-go/qase-api-client v1.2.13
-	github.com/rancher/rancher/pkg/apis v0.0.0
-	github.com/rancher/shepherd v0.0.0-20260824145520-00de4a01fb4d
-	github.com/rancher/tfp-automation v0.0.0-20260918005222-c5811888dd0f
-)
-
-require (
 	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/aws/aws-sdk-go v1.55.8
 	github.com/aws/aws-sdk-go-v2 v1.43.7
@@ -78,8 +71,12 @@ require (
 	github.com/longhorn/longhorn-manager v1.12.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.72.0
+	github.com/qase-tms/qase-go/qase-api-client v1.2.13
 	github.com/rancher/norman v0.10.0
 	github.com/rancher/rancher v0.0.0-20260527150105-ae26ccbc3fed
+	github.com/rancher/rancher/pkg/apis v0.0.0
+	github.com/rancher/shepherd v0.0.0-20260824145520-00de4a01fb4d
+	github.com/rancher/tfp-automation v0.0.0-20260922151001-6bafd3d62c5e
 	github.com/rancher/wrangler v1.1.2
 	github.com/sirupsen/logrus v1.10.2
 	github.com/stretchr/testify v1.12.1
@@ -91,15 +88,6 @@ require (
 	k8s.io/client-go v12.0.0+incompatible
 	sigs.k8s.io/cluster-api v1.12.2
 	sigs.k8s.io/yaml v1.6.0
-)
-
-require (
-	github.com/imdario/mergo v1.0.2 // indirect
-	github.com/rancher/ali-operator v1.14.0-rc.1 // indirect
-	gopkg.in/validator.v2 v2.0.1 // indirect
-	k8s.io/component-helpers v0.37.0 // indirect
-	sigs.k8s.io/randfill v1.0.0 // indirect
-	sigs.k8s.io/structured-merge-diff/v6 v6.4.2 // indirect
 )
 
 require (
@@ -168,6 +156,7 @@ require (
 	github.com/gorilla/handlers v1.5.2 // indirect
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674 // indirect
 	github.com/henrygd/beszel v0.18.7 // indirect
+	github.com/imdario/mergo v1.0.2 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
@@ -198,6 +187,7 @@ require (
 	github.com/prometheus/common v0.70.0 // indirect
 	github.com/prometheus/procfs v0.21.1 // indirect
 	github.com/rancher/aks-operator v1.15.0-rc.1 // indirect
+	github.com/rancher/ali-operator v1.14.0-rc.1 // indirect
 	github.com/rancher/apiserver v0.9.6 // indirect
 	github.com/rancher/eks-operator v1.15.0-rc.1 // indirect
 	github.com/rancher/fleet/pkg/apis v0.15.0 // indirect
@@ -232,11 +222,13 @@ require (
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
+	gopkg.in/validator.v2 v2.0.1 // indirect
 	howett.net/plist v1.0.1 // indirect
 	k8s.io/apiextensions-apiserver v0.36.3 // indirect
 	k8s.io/apiserver v0.37.0 // indirect
 	k8s.io/cli-runtime v0.37.0 // indirect
 	k8s.io/component-base v0.37.0 // indirect
+	k8s.io/component-helpers v0.37.0 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
 	k8s.io/kube-aggregator v0.36.1 // indirect
 	k8s.io/kube-openapi v0.31.5 // indirect
@@ -247,4 +239,8 @@ require (
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/kustomize/api v0.21.1 // indirect
 	sigs.k8s.io/kustomize/kyaml v0.21.1 // indirect
+	sigs.k8s.io/randfill v1.0.0 // indirect
+	sigs.k8s.io/structured-merge-diff/v6 v6.4.2 // indirect
 )
+
+replace sigs.k8s.io/cluster-api/api => sigs.k8s.io/cluster-api/api v1.14.2

@@ -422,8 +422,11 @@ func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPRestrictedAccessModeAuthorizedUs
 	require.NoError(a.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
 
+	subClient, err := a.client.WithSession(subSession)
+	require.NoError(a.T(), err, "Failed to scope an admin client to the test subsession")
+
 	principalIDs, err := authactions.SetupRequiredAccessModePrincipals(
-		authAdmin,
+		subClient,
 		a.cluster.ID,
 		a.authConfig,
 		authactions.OpenLdap,
@@ -448,6 +451,9 @@ func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPRequiredModeNestedGroupAccess() 
 	require.NoError(a.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
 
+	subClient, err := a.client.WithSession(subSession)
+	require.NoError(a.T(), err, "Failed to scope an admin client to the test subsession")
+
 	nestedGroupPrincipalID := authactions.GetGroupPrincipalID(
 		authactions.OpenLdap,
 		a.authConfig.NestedGroup,
@@ -456,7 +462,7 @@ func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPRequiredModeNestedGroupAccess() 
 	)
 
 	crtb, err := rbacapi.CreateGroupClusterRoleTemplateBinding(
-		authAdmin,
+		subClient,
 		a.cluster.ID,
 		nestedGroupPrincipalID,
 		rbac.ClusterMember.String(),
@@ -511,8 +517,11 @@ func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPRequiredModeUnauthorizedLoginDen
 	require.NoError(a.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
 
+	subClient, err := a.client.WithSession(subSession)
+	require.NoError(a.T(), err, "Failed to scope an admin client to the test subsession")
+
 	principalIDs, err := authactions.SetupRequiredAccessModePrincipals(
-		authAdmin,
+		subClient,
 		a.cluster.ID,
 		a.authConfig,
 		authactions.OpenLdap,
