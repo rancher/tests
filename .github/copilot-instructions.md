@@ -210,42 +210,22 @@ Always update relevant documentation when making changes:
 * if the case of ignoring errors arises, always justify via comment as to why it is ignored
 * strings should be a const wherever possible except for logs and error messages
 
+## Available Skills
+
+Copilot CLI skills for this repository live in [`.github/skills/`](./skills)
+(see [`.github/skills/README.md`](./skills/README.md) for the full list and
+usage details):
+
+* **`code-review`** — repository-specific review checklist for Go test files and
+  Jenkinsfiles (build tags, suite/test naming, session cleanup, Jenkinsfile shared
+  library/security/parameterization rules). Used automatically by `/review` and
+  invocable directly via `/skills`.
+* **`schema`** — creates/updates `schemas/pit_schemas.yaml` files for PIT test packages
+  from their `Test*` functions.
+
 ## Pull Request Review Guidelines
 
-When reviewing PRs, Copilot should check for the following patterns specific to this repository.
-
-### Jenkinsfile reviews (`validation/pipeline/Jenkinsfile.*`)
-
-**Security**
-- No hardcoded secrets in `defaultValue` blocks — use `${VARIABLE}` substitution and `password` parameter types
-- `password` type parameters for all credentials (registry passwords, Rancher passwords, API keys)
-- `useWithProperties` blocks must include every credential referenced in their scope's substitution maps
-
-**Jenkins pipeline correctness**
-- Use `env.X` not `params.X` for the `library` directive at the top of Jenkinsfiles — `params` is not resolved at library load time
-- `text` parameters use `defaultValue: '''...'''` (Groovy triple-quoted), never `default: |` (YAML pipe syntax)
-- Paths should use `env.*_DIR` variables (set by `airgap.standardCheckout`), not hardcoded directory names like `'qa-infra-automation'`
-- `archiveArtifacts` should not use `fingerprint: true` for transient build artifacts
-
-**Parameterization**
-- Ansible variable templates should reference pipeline parameters, not hardcode values (e.g., `${RANCHER_BOOTSTRAP_PASSWORD}` not `"rancherrocks"`)
-- Boolean-like Ansible variables (`enable_private_registry`, `deploy_rancher`) should reflect pipeline parameters, not be hardcoded to `true`
-
-### Go test reviews
-
-**Build tags**
-- Every test file must have a `//go:build` line with appropriate tags
-- Version tags must follow the existing patterns in the codebase (e.g., `2.13`, `!2.8`)
-- Do not add `pit` tags unless the test explicitly uses external non-Rancher APIs
-
-**Code organization**
-- Helper functions that return errors are preferred over helpers accepting `testing.T`
-- Use `logrus` for logging, never `testing.T.Log`
-- Shared helpers belong in `actions/`, not duplicated across test packages
-- Functions matching the extension criteria should target the [shepherd](https://github.com/rancher/shepherd) repo instead
-
-**Test quality**
-- At least 2 tests per suite when possible: one dynamic (config-driven) and one static
-- Feature name only in `SuiteName`, not in individual test names
-- Validate in a separate function, not inline in the test
-- Use `session.Cleanup()` in `TearDownSuite` for resource cleanup
+The full Go test and Jenkinsfile review checklists have moved to
+[`.github/skills/code-review/SKILL.md`](./skills/code-review/SKILL.md) to
+avoid keeping two copies in sync. Use that skill (or the built-in `code-review` task
+agent, which applies it automatically) when reviewing PRs or diffs in this repository.
