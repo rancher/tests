@@ -25,7 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type ActiveDirectoryAuthProviderSuite struct {
+type activeDirectorySuite struct {
 	suite.Suite
 	session    *session.Session
 	client     *rancher.Client
@@ -34,7 +34,11 @@ type ActiveDirectoryAuthProviderSuite struct {
 	authConfig *authactions.AuthConfig
 }
 
-func (a *ActiveDirectoryAuthProviderSuite) SetupSuite() {
+type ActiveDirectoryAuthProviderSuite struct {
+	activeDirectorySuite
+}
+
+func (a *activeDirectorySuite) SetupSuite() {
 	a.session = session.NewSession()
 
 	client, err := rancher.NewClient("", a.session)
@@ -63,7 +67,7 @@ func (a *ActiveDirectoryAuthProviderSuite) SetupSuite() {
 	}
 }
 
-func (a *ActiveDirectoryAuthProviderSuite) TearDownSuite() {
+func (a *activeDirectorySuite) TearDownSuite() {
 	if a.client != nil {
 		adConfig, err := a.client.Management.AuthConfig.ByID(authactions.ActiveDirectory)
 		if err == nil && adConfig.Enabled {
