@@ -24,11 +24,9 @@ in that folder based on the associated test file(s).
 ## Instructions
 
 1. Find the package directory of the changed/new `*_test.go` file(s).
-2. Check whether `<package>/schemas/pit_schemas.yaml` exists. If not, create the
-   `schemas` folder and the file.
-3. Read the test file(s) to enumerate every `Test*` function on the suite.
-4. For each `Test*` function, create or update one `cases` entry, following the
-   **Rules** and **Example YAML** below.
+2. Check whether `<package>/schemas/pit_schemas.yaml` exists. If not, create the `schemas` folder and the file.
+3. Read the PIT-tagged test file(s) for the package to enumerate each suite test method whose name starts with `Test`; exclude the package-level `Test...TestSuite` wrapper that only calls `suite.Run`.
+4. For each suite test method, create or update one `cases` entry, following the **Rules** and **Example YAML** below.
 5. Read through each test function body and map every high-level action (e.g. cluster
    setup, chart install, scan/verification step) to one sequential `steps` entry,
    numbered starting at 1 via `position`.

@@ -55,7 +55,7 @@ signal, not just this checklist:
 **Build tags**
 - Every test file has a `//go:build` line with appropriate feature/cluster/tier tags
 - Version tags follow existing patterns (e.g. `2.13`, `!2.8`) — see `TAG_GUIDE.md`
-- `pit` tags are only added when the test explicitly calls external, non-Rancher APIs
+- PIT tags identify the scheduled test tier; verify their schedule and airgap compatibility against `TAG_GUIDE.md` rather than requiring external API calls.
 
 **File and package structure**
 - Helper functions specific to a test package live in a separate file in the same
