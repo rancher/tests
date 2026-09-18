@@ -375,13 +375,9 @@ pipeline {
         stage('Report Results') {
             steps {
                 script {
-                    // JUnit results
-                    junit allowEmptyResults: true, testResults: '**/results.xml'
-
-                    // Archive test artifacts
-                    archiveArtifacts allowEmptyArchive: true, artifacts: "${env.TESTS_DIR}/validation/go-test.log, ${env.TESTS_DIR}/results.xml, ${env.TESTS_DIR}/results.json, ${env.TESTS_DIR}/validation/image-report/**"
-
-                    // Qase reporting
+                    // Junit + artifact archiving intentionally lives in post { always }
+                    // (see below) so aborted and hard-failed builds archive too;
+                    // this stage now only handles Qase reporting.
                     property.useWithProperties(['QASE_AUTOMATION_TOKEN']) {
                         if (env.QASE_AUTOMATION_TOKEN?.trim()) {
                             echo "Reporting results to Qase"
@@ -420,6 +416,24 @@ pipeline {
 
     post {
         always {
+            // Phase 1 of rancher/tests#918: archive evidence on EVERY outcome.
+            // Archiving previously lived in the 'Report Results' stage, which
+            // aborted and hard-failed builds never reached, leaving artifacts[]
+            // empty on exactly the runs that needed post-mortems
+            // (e.g. go-pit-validation-job/43). Files that were never written
+            // (results.xml/xml on a mid-test abort) are skipped via the
+            // allow-empty flags; go-test.log is tee'd progressively so a partial
+            // log survives an abort.
+            junit allowEmptyResults: true, testResults: '**/results.xml'
+            // Ant patterns must be workspace-relative without a leading './':
+            // Jenkins matches nothing otherwise (staging go-pit-validation-staging-job
+            // build 2 archived zero files with './tests/...' patterns).
+            script {
+                def artifactRoot = env.TESTS_DIR.replaceFirst('^\\./', '')
+                archiveArtifacts allowEmptyArchive: true, artifacts: "${artifactRoot}/validation/go-test.log, ${artifactRoot}/results.xml, ${artifactRoot}/results.json, ${artifactRoot}/validation/image-report/**"
+            }
+            echo "QASE_TEST_RUN_ID: ${params.QASE_TEST_RUN_ID?.trim() ?: 'not set'}"
+
             script {
                 // Revoke the runner IP rules added in 'Authorize Security Group',
                 // regardless of build outcome. SG_MODULE_DIR is only set if that stage ran
