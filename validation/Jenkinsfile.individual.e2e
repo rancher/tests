@@ -425,7 +425,11 @@ pipeline {
             // allow-empty flags; go-test.log is tee'd progressively so a partial
             // log survives an abort.
             junit allowEmptyResults: true, testResults: '**/results.xml'
-            archiveArtifacts allowEmptyArchive: true, artifacts: "${env.TESTS_DIR}/validation/go-test.log, ${env.TESTS_DIR}/results.xml, ${env.TESTS_DIR}/results.json, ${env.TESTS_DIR}/validation/image-report/**"
+            // Ant patterns must be workspace-relative without a leading './':
+            // Jenkins matches nothing otherwise (staging go-pit-validation-staging-job
+            // build 2 archived zero files with './tests/...' patterns).
+            def artifactRoot = env.TESTS_DIR.replaceFirst('^\\./', '')
+            archiveArtifacts allowEmptyArchive: true, artifacts: "${artifactRoot}/validation/go-test.log, ${artifactRoot}/results.xml, ${artifactRoot}/results.json, ${artifactRoot}/validation/image-report/**"
             echo "QASE_TEST_RUN_ID: ${params.QASE_TEST_RUN_ID?.trim() ?: 'not set'}"
 
             script {
