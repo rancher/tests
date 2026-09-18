@@ -248,3 +248,5 @@ require (
 	sigs.k8s.io/kustomize/api v0.21.1 // indirect
 	sigs.k8s.io/kustomize/kyaml v0.21.1 // indirect
 )
+
+replace sigs.k8s.io/cluster-api/api => sigs.k8s.io/cluster-api/api v1.14.2

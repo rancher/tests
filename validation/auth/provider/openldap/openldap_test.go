@@ -25,7 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type OpenLDAPAuthProviderSuite struct {
+type openLDAPSuite struct {
 	suite.Suite
 	session    *session.Session
 	client     *rancher.Client
@@ -34,7 +34,11 @@ type OpenLDAPAuthProviderSuite struct {
 	authConfig *authactions.AuthConfig
 }
 
-func (a *OpenLDAPAuthProviderSuite) SetupSuite() {
+type OpenLDAPAuthProviderSuite struct {
+	openLDAPSuite
+}
+
+func (a *openLDAPSuite) SetupSuite() {
 	a.session = session.NewSession()
 
 	client, err := rancher.NewClient("", a.session)
@@ -63,7 +67,7 @@ func (a *OpenLDAPAuthProviderSuite) SetupSuite() {
 	}
 }
 
-func (a *OpenLDAPAuthProviderSuite) TearDownSuite() {
+func (a *openLDAPSuite) TearDownSuite() {
 	if a.client != nil {
 		ldapConfig, err := a.client.Management.AuthConfig.ByID(authactions.OpenLdap)
 		if err == nil && ldapConfig.Enabled {
