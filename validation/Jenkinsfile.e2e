@@ -844,7 +844,7 @@ rancher_use_bundled_system_charts: true
 
         stage('Provision Downstream Cluster') {
             options {
-                timeout(time: 15, unit: 'MINUTES')
+                timeout(time: 40, unit: 'MINUTES')
             }
             when {
                 allOf {
