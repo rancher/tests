@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	upstream "github.com/qase-tms/qase-go/qase-api-client"
 	"github.com/sirupsen/logrus"
@@ -23,9 +25,14 @@ type Service struct {
 
 const (
 	schemas        = "schemas.yaml"
+	failStatus     = "failed"
 	requestLimit   = 100
 	runSourceID    = 16
 	recurringRunID = 1
+)
+
+var (
+	testCaseTitleCache = make(map[string]string)
 )
 
 // SetupQaseClient creates a new Qase client from the api token environment variable QASE_AUTOMATION_TOKEN
@@ -43,7 +50,7 @@ func (q *Service) GetTestSuite(project, suite string, parentID upstream.Nullable
 
 	var numOfSuites int32 = 1
 	var offSetCount int32 = 0
-	suiteRequest := q.Client.SuitesAPI.GetSuites(context.Background(), project)
+	suiteRequest := q.Client.SuitesAPI.GetSuites(context.TODO(), project)
 
 	for numOfSuites > 0 {
 		suiteRequest = suiteRequest.Offset(offSetCount)
@@ -83,7 +90,7 @@ func (q *Service) GetTestSuite(project, suite string, parentID upstream.Nullable
 // CreateTestSuite creates a new Test Suite within a specified Qase Project
 func (q *Service) CreateTestSuite(project string, suite upstream.SuiteCreate) (int64, error) {
 	logrus.Debugf("Creating test suite \"%s\" in project %s\n", suite.Title, project)
-	suiteRequest := q.Client.SuitesAPI.CreateSuite(context.Background(), project)
+	suiteRequest := q.Client.SuitesAPI.CreateSuite(context.TODO(), project)
 
 	suiteRequest = suiteRequest.SuiteCreate(suite)
 	id, _, err := suiteRequest.Execute()
@@ -95,7 +102,7 @@ func (q *Service) CreateTestSuite(project string, suite upstream.SuiteCreate) (i
 
 // createTestCase creates a new test in qase
 func (q *Service) createTestCase(project string, testCase upstream.TestCaseCreate) error {
-	testRequest := q.Client.CasesAPI.CreateCase(context.Background(), project)
+	testRequest := q.Client.CasesAPI.CreateCase(context.TODO(), project)
 
 	testRequest = testRequest.TestCaseCreate(testCase)
 	_, _, err := testRequest.Execute()
@@ -108,7 +115,7 @@ func (q *Service) createTestCase(project string, testCase upstream.TestCaseCreat
 
 // updateTestCase updates an existing test in qase
 func (q *Service) updateTestCase(project string, testCase upstream.TestCaseUpdate, id int32) error {
-	testRequest := q.Client.CasesAPI.UpdateCase(context.Background(), project, id)
+	testRequest := q.Client.CasesAPI.UpdateCase(context.TODO(), project, id)
 
 	testRequest = testRequest.TestCaseUpdate(testCase)
 	_, _, err := testRequest.Execute()
@@ -188,7 +195,7 @@ func (q *Service) UploadTests(project string, testCases []upstream.TestCaseCreat
 // getTestCases retrieves a Test Case by name within a specified Qase Project if it exists
 func (q *Service) getTestCases(project string, test upstream.TestCaseCreate) ([]upstream.TestCase, error) {
 	logrus.Debugf("Getting test case \"%s\" in project %s\n", test.Title, project)
-	testRequest := q.Client.CasesAPI.GetCases(context.Background(), project)
+	testRequest := q.Client.CasesAPI.GetCases(context.TODO(), project)
 
 	testRequest = testRequest.Search(test.Title)
 
@@ -232,7 +239,7 @@ func (q *Service) CreateTestRun(testRunName string, projectID string, runDescrip
 		runCreateBody.SetDescription(runDescription)
 	}
 
-	runRequest := q.Client.RunsAPI.CreateRun(context.Background(), projectID)
+	runRequest := q.Client.RunsAPI.CreateRun(context.TODO(), projectID)
 	runRequest = runRequest.RunCreate(runCreateBody)
 	resp, _, err := runRequest.Execute()
 	if err != nil {
@@ -244,11 +251,92 @@ func (q *Service) CreateTestRun(testRunName string, projectID string, runDescrip
 
 // CompleteTestRun complete the Qase test run
 func (q *Service) CompleteTestRun(projectIDEnvVar string, testRunID int32) error {
-	runRequest := q.Client.RunsAPI.CompleteRun(context.Background(), projectIDEnvVar, testRunID)
+	runRequest := q.Client.RunsAPI.CompleteRun(context.TODO(), projectIDEnvVar, testRunID)
 	_, _, err := runRequest.Execute()
 	if err != nil {
 		return err
 	}
 
 	return nil
+}
+
+// GetLatestTestRuns returns a number of the most recently started Test Runs whose title matches the
+// provided title, within a specified Qase Project and from a provided start time.
+// If limit is negative, all the found runs will be returned.
+func (q *Service) GetLatestTestRuns(project string, title string, from time.Time, limit int) ([]upstream.Run, error) {
+	if limit == 0 {
+		return []upstream.Run{}, nil
+	}
+
+	logrus.Debugf("Getting up to %d runs named \"%s\" in project %s from %s\n", limit, title, project, from)
+
+	runRequest := q.Client.RunsAPI.GetRuns(context.Background(), project)
+	runRequest = runRequest.Search(title)
+	runRequest = runRequest.FromStartTime(from.Unix())
+
+	runResponse, _, err := runRequest.Execute()
+	if err != nil {
+		return nil, err
+	}
+
+	runs := runResponse.Result.Entities
+
+	if limit < 0 || len(runs) <= limit {
+		return runs, nil
+	}
+
+	return runs[len(runs)-int(limit):], nil // Older runs appear first, so this cuts the previous.
+}
+
+// GetFailedTestsForRun fetches the failed test titles results for a given Test Run.
+// Returns two identically lengthed slices, the first containing the case titles and the second containing qase-api-client.Result.
+// This has a limit of 100 failed tests in a single run.
+func (q *Service) GetFailedTestsForRun(project string, runID int32) ([]string, []upstream.Result, error) {
+	logrus.Debugf("Getting failed results for run %d in project %s\n", runID, project)
+
+	resultRequest := q.Client.ResultsAPI.GetResults(context.Background(), project)
+	resultRequest = resultRequest.Status(failStatus)
+	resultRequest = resultRequest.Limit(100)
+	resultRequest = resultRequest.Run(fmt.Sprintf("%d", runID))
+
+	resultResponse, _, err := resultRequest.Execute()
+	if err != nil {
+		return nil, nil, err
+	}
+	results := resultResponse.Result.Entities
+
+	caseTitles := make([]string, len(results))
+	for i, result := range results {
+		caseTitles[i], err = q.getCaseTitle(project, *result.CaseId)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	return caseTitles, results, nil
+}
+
+// getCaseTitle returns the title of a Test Case by its id within a specified Qase Project.
+func (q *Service) getCaseTitle(project string, caseID int64) (string, error) {
+	logrus.Debugf("Getting case titles for test case %d in project %s\n", caseID, project)
+
+	idString := project + strconv.Itoa(int(caseID))
+	title, ok := testCaseTitleCache[idString]
+	if ok {
+		return title, nil
+	}
+
+	caseRequest := q.Client.CasesAPI.GetCase(context.Background(), project, int32(caseID))
+	resp, _, err := caseRequest.Execute()
+	if err != nil {
+		return "", err
+	}
+
+	if resp.Result == nil || resp.Result.Title == nil {
+		return "", fmt.Errorf("test case %d has no title in project %s", caseID, project)
+	}
+
+	testCaseTitleCache[idString] = *resp.Result.Title
+
+	return *resp.Result.Title, nil
 }
