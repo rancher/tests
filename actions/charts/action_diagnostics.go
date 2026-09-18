@@ -29,7 +29,7 @@ const (
 
 	appsSteveType        = "catalog.cattle.io.app"
 	operationsSteveType  = "catalog.cattle.io.operation"
-	clusterReposResource = "catalog.cattle.io.clusterrepos"
+	clusterReposResource = "catalog.cattle.io.clusterrepo"
 	chartRepoURLPath     = "v1/catalog.cattle.io.clusterrepos/"
 	chartAppsURLPath     = "v1/catalog.cattle.io.apps/"
 	operationLabelFilter = "operation.cattle.io/"
@@ -128,37 +128,34 @@ func LogChartActionFailure(ctx context.Context, client *rancher.Client, verb, re
 		logrus.Warnf("chart action probe: verb=%s status=%d body=%s", verb, status, responseBody)
 	}
 
-	logClusterRepoDiagnostics(client)
 	logDownstreamCatalogDiagnostics(client, clusterID, namespace, chartName)
 }
 
-// logClusterRepoDiagnostics dumps the rancher-charts ClusterRepo status through the management
-// steve API; the wrangler context on the pinned shepherd has no typed ClusterRepo controller.
-func logClusterRepoDiagnostics(client *rancher.Client) {
-	repo, err := client.Steve.SteveType(clusterReposResource).ByID(catalog.RancherChartRepo)
-	if err != nil {
-		// Swallowed: diagnostics must not alter failure propagation.
-		logrus.Warnf("chart action diagnostics: clusterrepo %s get: %v", catalog.RancherChartRepo, err)
-		return
-	}
-
-	repoStatus, err := json.Marshal(repo.Status)
-	if err != nil {
-		// Swallowed: diagnostics only.
-		logrus.Warnf("chart action diagnostics: clusterrepo %s status marshal: %v", catalog.RancherChartRepo, err)
-		return
-	}
-	logrus.Warnf("chart action diagnostics: clusterrepo %s status: %s", catalog.RancherChartRepo, repoStatus)
-}
-
-// logDownstreamCatalogDiagnostics dumps the target app status and the catalog operations in
-// the chart's namespace through the downstream steve proxy.
+// logDownstreamCatalogDiagnostics dumps the rancher-charts ClusterRepo status, the target app
+// status, and the catalog operations in the chart's namespace through the downstream steve
+// proxy. The ClusterRepo is read via the proxy with the singular steve type (the same proven
+// pattern as neuvector's waitForRancherChartsRepo); the management steve client rejects the
+// clusterrepo schema type with "Unknown schema type".
 func logDownstreamCatalogDiagnostics(client *rancher.Client, clusterID, namespace, chartName string) {
 	proxyClient, err := client.Steve.ProxyDownstream(clusterID)
 	if err != nil {
 		// Swallowed: diagnostics must not alter failure propagation.
 		logrus.Warnf("chart action diagnostics: downstream proxy: %v", err)
 		return
+	}
+
+	repo, err := proxyClient.SteveType(clusterReposResource).ByID(catalog.RancherChartRepo)
+	if err != nil {
+		// Swallowed: diagnostics must not alter failure propagation.
+		logrus.Warnf("chart action diagnostics: clusterrepo %s get: %v", catalog.RancherChartRepo, err)
+	} else {
+		repoStatus, err := json.Marshal(repo.Status)
+		if err != nil {
+			// Swallowed: diagnostics only.
+			logrus.Warnf("chart action diagnostics: clusterrepo %s status marshal: %v", catalog.RancherChartRepo, err)
+		} else {
+			logrus.Warnf("chart action diagnostics: clusterrepo %s status: %s", catalog.RancherChartRepo, repoStatus)
+		}
 	}
 
 	app, err := proxyClient.SteveType(appsSteveType).NamespacedSteveClient(namespace).ByID(chartName)
