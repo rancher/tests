@@ -428,8 +428,10 @@ pipeline {
             // Ant patterns must be workspace-relative without a leading './':
             // Jenkins matches nothing otherwise (staging go-pit-validation-staging-job
             // build 2 archived zero files with './tests/...' patterns).
-            def artifactRoot = env.TESTS_DIR.replaceFirst('^\\./', '')
-            archiveArtifacts allowEmptyArchive: true, artifacts: "${artifactRoot}/validation/go-test.log, ${artifactRoot}/results.xml, ${artifactRoot}/results.json, ${artifactRoot}/validation/image-report/**"
+            script {
+                def artifactRoot = env.TESTS_DIR.replaceFirst('^\\./', '')
+                archiveArtifacts allowEmptyArchive: true, artifacts: "${artifactRoot}/validation/go-test.log, ${artifactRoot}/results.xml, ${artifactRoot}/results.json, ${artifactRoot}/validation/image-report/**"
+            }
             echo "QASE_TEST_RUN_ID: ${params.QASE_TEST_RUN_ID?.trim() ?: 'not set'}"
 
             script {
