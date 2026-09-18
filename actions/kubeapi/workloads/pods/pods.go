@@ -23,6 +23,26 @@ const (
 	NginxImageName = "nginx"
 )
 
+// NewResourcePodTemplate builds a pod template with the given container resource requests and limits.
+func NewResourcePodTemplate(requests, limits corev1.ResourceList) corev1.PodTemplateSpec {
+	return corev1.PodTemplateSpec{
+		Spec: corev1.PodSpec{
+			RestartPolicy: corev1.RestartPolicyAlways,
+			Containers: []corev1.Container{
+				{
+					Name:            namegen.AppendRandomString("testcontainer-"),
+					Image:           PauseImage,
+					ImagePullPolicy: corev1.PullIfNotPresent,
+					Resources: corev1.ResourceRequirements{
+						Requests: requests,
+						Limits:   limits,
+					},
+				},
+			},
+		},
+	}
+}
+
 // CreateContainerAndPodTemplate creates both the container and pod templates
 func CreateContainerAndPodTemplate(imageName string) corev1.PodTemplateSpec {
 	if imageName == "" {

@@ -58,6 +58,22 @@ func CreateProjectWithTemplateAndNamespace(client *rancher.Client, clusterID str
 	return createdProject, createdNamespace, nil
 }
 
+// CreateProjectWithTemplateAndNamespaceContainerLimit creates a project from template and a namespace in the project
+// with the given container default resource limit set on the namespace at creation.
+func CreateProjectWithTemplateAndNamespaceContainerLimit(client *rancher.Client, clusterID string, projectTemplate *v3.Project, containerDefaultResourceLimit string) (*v3.Project, *corev1.Namespace, error) {
+	createdProject, err := CreateProjectWithTemplate(client, clusterID, projectTemplate)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	createdNamespace, err := namespaceapi.CreateNamespace(client, clusterID, createdProject.Name, namegen.AppendRandomString("testns"), containerDefaultResourceLimit, nil, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return createdProject, createdNamespace, nil
+}
+
 func CreateProjectWithQuotasAndNamespace(client *rancher.Client, clusterID string, namespacePodLimit, projectPodLimit string) (*v3.Project, *corev1.Namespace, error) {
 	projectTemplate := NewProjectTemplate(clusterID)
 	projectTemplate.Spec.NamespaceDefaultResourceQuota.Limit.Pods = namespacePodLimit
