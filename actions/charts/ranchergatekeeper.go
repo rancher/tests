@@ -58,7 +58,8 @@ func InstallRancherGatekeeperChart(client *rancher.Client, installOptions *Insta
 		// UninstallAction for when uninstalling the rancher-gatekeeper chart
 		defaultChartUninstallAction := NewChartUninstallAction()
 
-		err := catalogClient.UninstallChart(RancherGatekeeperName, RancherGatekeeperNamespace, defaultChartUninstallAction)
+		bodyBytes := marshalChartAction(defaultChartUninstallAction)
+		err := ChartActionWithRetry(context.TODO(), client, verbUninstall, gatekeeperChartInstallActionPayload, RancherGatekeeperName, buildAppUninstallRequest(catalogClient, RancherGatekeeperNamespace, RancherGatekeeperName, bodyBytes), bodyBytes)
 		if err != nil {
 			return err
 		}
@@ -86,7 +87,8 @@ func InstallRancherGatekeeperChart(client *rancher.Client, installOptions *Insta
 			return err
 		}
 
-		err = catalogClient.UninstallChart(RancherGatekeeperCRDName, RancherGatekeeperNamespace, defaultChartUninstallAction)
+		bodyBytes = marshalChartAction(defaultChartUninstallAction)
+		err = ChartActionWithRetry(context.TODO(), client, verbUninstall, gatekeeperChartInstallActionPayload, RancherGatekeeperCRDName, buildAppUninstallRequest(catalogClient, RancherGatekeeperNamespace, RancherGatekeeperCRDName, bodyBytes), bodyBytes)
 		if err != nil {
 			return err
 		}
@@ -157,7 +159,8 @@ func InstallRancherGatekeeperChart(client *rancher.Client, installOptions *Insta
 		})
 	})
 
-	err = catalogClient.InstallChart(chartInstallAction, catalog.RancherChartRepo)
+	bodyBytes := marshalChartAction(chartInstallAction)
+	err = ChartActionWithRetry(context.TODO(), client, verbInstall, gatekeeperChartInstallActionPayload, catalog.RancherChartRepo, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbInstall, bodyBytes), bodyBytes)
 	if err != nil {
 		return err
 	}
@@ -225,7 +228,8 @@ func UpgradeRancherGatekeeperChart(client *rancher.Client, installOptions *Insta
 		return err
 	}
 
-	err = catalogClient.UpgradeChart(chartUpgradeAction, catalog.RancherChartRepo)
+	bodyBytes := marshalChartAction(chartUpgradeAction)
+	err = ChartActionWithRetry(context.TODO(), client, verbUpgrade, gatekeeperChartUpgradeActionPayload, catalog.RancherChartRepo, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbUpgrade, bodyBytes), bodyBytes)
 	if err != nil {
 		return err
 	}

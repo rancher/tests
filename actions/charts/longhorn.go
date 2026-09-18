@@ -8,6 +8,7 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/clients/rancher/catalog"
 	shepherdCharts "github.com/rancher/shepherd/extensions/charts"
+	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/pkg/api/steve/catalog/types"
 	"github.com/rancher/shepherd/pkg/wait"
@@ -67,7 +68,8 @@ func InstallLonghornChart(client *rancher.Client, payload PayloadOpts, values ma
 
 	chartInstallAction := NewChartInstallAction(payload.Namespace, payload.ProjectID, chartInstalls)
 
-	err = catalogClient.InstallChart(chartInstallAction, catalog.RancherChartRepo)
+	bodyBytes := marshalChartAction(chartInstallAction)
+	err = ChartActionWithRetry(context.TODO(), client, verbInstall, &payload, catalog.RancherChartRepo, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbInstall, bodyBytes), bodyBytes)
 	if err != nil {
 		return err
 	}
@@ -97,7 +99,15 @@ func UninstallLonghornChart(client *rancher.Client, namespace string, clusterID 
 		return err
 	}
 
-	err = catalogClient.UninstallChart(LonghornChartName, namespace, NewChartUninstallAction())
+	uninstallPayload := &PayloadOpts{
+		InstallOptions: InstallOptions{Cluster: &clusters.ClusterMeta{ID: clusterID}},
+		Name:           LonghornChartName,
+		Namespace:      namespace,
+		Host:           rancherHostname,
+	}
+
+	bodyBytes := marshalChartAction(NewChartUninstallAction())
+	err = ChartActionWithRetry(context.TODO(), client, verbUninstall, uninstallPayload, LonghornChartName, buildAppUninstallRequest(catalogClient, namespace, LonghornChartName, bodyBytes), bodyBytes)
 	if err != nil {
 		return err
 	}
@@ -108,7 +118,8 @@ func UninstallLonghornChart(client *rancher.Client, namespace string, clusterID 
 	}
 
 	// Uninstall CRDs last so we still have them in case uninstalling longhorn fails as they help debugging.
-	err = catalogClient.UninstallChart(LonghornChartName+"-crd", namespace, NewChartUninstallAction())
+	crdBodyBytes := marshalChartAction(NewChartUninstallAction())
+	err = ChartActionWithRetry(context.TODO(), client, verbUninstall, uninstallPayload, LonghornChartName+"-crd", buildAppUninstallRequest(catalogClient, namespace, LonghornChartName+"-crd", crdBodyBytes), crdBodyBytes)
 	if err != nil {
 		return err
 	}

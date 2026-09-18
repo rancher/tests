@@ -1,6 +1,7 @@
 package charts
 
 import (
+	"context"
 	"time"
 
 	"github.com/rancher/shepherd/pkg/api/steve/catalog/types"
@@ -50,7 +51,8 @@ func InstallAWSOutOfTreeChart(client *rancher.Client, installOptions *InstallOpt
 		return err
 	}
 
-	err = catalogClient.InstallChart(chartInstallAction, repoName)
+	bodyBytes := marshalChartAction(chartInstallAction)
+	err = ChartActionWithRetry(context.TODO(), client, verbInstall, awsChartInstallActionPayload, repoName, buildRepoActionRequest(catalogClient, repoName, verbInstall, bodyBytes), bodyBytes)
 	if err != nil {
 		return err
 	}

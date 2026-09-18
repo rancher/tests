@@ -55,7 +55,8 @@ func InstallRancherIstioChart(client *rancher.Client, installOptions *InstallOpt
 		// UninstallAction for when uninstalling the rancher-istio chart
 		defaultChartUninstallAction := NewChartUninstallAction()
 
-		err := catalogClient.UninstallChart(RancherIstioName, RancherIstioNamespace, defaultChartUninstallAction)
+		bodyBytes := marshalChartAction(defaultChartUninstallAction)
+		err := ChartActionWithRetry(context.TODO(), client, verbUninstall, istioChartInstallActionPayload, RancherIstioName, buildAppUninstallRequest(catalogClient, RancherIstioNamespace, RancherIstioName, bodyBytes), bodyBytes)
 		if err != nil {
 			return err
 		}
@@ -80,7 +81,8 @@ func InstallRancherIstioChart(client *rancher.Client, installOptions *InstallOpt
 		return err
 	})
 
-	err = catalogClient.InstallChart(chartInstallAction, catalog.RancherChartRepo)
+	bodyBytes := marshalChartAction(chartInstallAction)
+	err = ChartActionWithRetry(context.TODO(), client, verbInstall, istioChartInstallActionPayload, catalog.RancherChartRepo, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbInstall, bodyBytes), bodyBytes)
 	if err != nil {
 		return err
 	}
@@ -169,7 +171,8 @@ func UpgradeRancherIstioChart(client *rancher.Client, installOptions *InstallOpt
 		return err
 	}
 
-	err = catalogClient.UpgradeChart(chartUpgradeAction, catalog.RancherChartRepo)
+	bodyBytes := marshalChartAction(chartUpgradeAction)
+	err = ChartActionWithRetry(context.TODO(), client, verbUpgrade, istioChartUpgradeActionPayload, catalog.RancherChartRepo, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbUpgrade, bodyBytes), bodyBytes)
 	if err != nil {
 		return err
 	}

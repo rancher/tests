@@ -35,7 +35,8 @@ func InstallHardenedChart(client *rancher.Client, ChartInstallActionPayload *Pay
 	client.Session.RegisterCleanupFunc(func() error {
 		defaultChartUninstallAction := NewChartUninstallAction()
 
-		err = catalogClient.UninstallChart(ChartInstallActionPayload.Name, ChartInstallActionPayload.Namespace, defaultChartUninstallAction)
+		bodyBytes := marshalChartAction(defaultChartUninstallAction)
+		err = ChartActionWithRetry(context.TODO(), client, verbUninstall, ChartInstallActionPayload, ChartInstallActionPayload.Name, buildAppUninstallRequest(catalogClient, ChartInstallActionPayload.Namespace, ChartInstallActionPayload.Name, bodyBytes), bodyBytes)
 		if err != nil {
 			return err
 		}
@@ -62,7 +63,12 @@ func InstallHardenedChart(client *rancher.Client, ChartInstallActionPayload *Pay
 			return err
 		}
 
-		err = catalogClient.UninstallChart(ChartInstallActionPayload.Name+"-crd", ChartInstallActionPayload.Name, defaultChartUninstallAction)
+		// Preserve the pre-existing namespace argument (chart name, not payload namespace) so
+		// the retry wrapper probes the identical request this cleanup actually makes.
+		crdUninstallPayload := *ChartInstallActionPayload
+		crdUninstallPayload.Namespace = ChartInstallActionPayload.Name
+		bodyBytes = marshalChartAction(defaultChartUninstallAction)
+		err = ChartActionWithRetry(context.TODO(), client, verbUninstall, &crdUninstallPayload, ChartInstallActionPayload.Name+"-crd", buildAppUninstallRequest(catalogClient, ChartInstallActionPayload.Name, ChartInstallActionPayload.Name+"-crd", bodyBytes), bodyBytes)
 		if err != nil {
 			return err
 		}
@@ -137,7 +143,8 @@ func InstallHardenedChart(client *rancher.Client, ChartInstallActionPayload *Pay
 		})
 	})
 
-	err = catalogClient.InstallChart(chartInstallAction, catalog.RancherChartRepo)
+	bodyBytes := marshalChartAction(chartInstallAction)
+	err = ChartActionWithRetry(context.TODO(), client, verbInstall, ChartInstallActionPayload, catalog.RancherChartRepo, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbInstall, bodyBytes), bodyBytes)
 	if err != nil {
 		return err
 	}
@@ -205,7 +212,8 @@ func UpgradeCISBenchmarkChart(client *rancher.Client, installOptions *InstallOpt
 		return err
 	}
 
-	err = catalogClient.UpgradeChart(chartUpgradeAction, catalog.RancherChartRepo)
+	bodyBytes := marshalChartAction(chartUpgradeAction)
+	err = ChartActionWithRetry(context.TODO(), client, verbUpgrade, benchmarkChartUpgradeActionPayload, catalog.RancherChartRepo, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbUpgrade, bodyBytes), bodyBytes)
 	if err != nil {
 		return err
 	}

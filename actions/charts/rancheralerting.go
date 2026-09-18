@@ -56,7 +56,8 @@ func InstallRancherAlertingChart(client *rancher.Client, installOptions *Install
 		// UninstallAction for when uninstalling the rancher-alerting-drivers chart
 		defaultChartUninstallAction := NewChartUninstallAction()
 
-		err = catalogClient.UninstallChart(RancherAlertingName, RancherAlertingNamespace, defaultChartUninstallAction)
+		bodyBytes := marshalChartAction(defaultChartUninstallAction)
+		err = ChartActionWithRetry(context.TODO(), client, verbUninstall, alertingChartInstallActionPayload, RancherAlertingName, buildAppUninstallRequest(catalogClient, RancherAlertingNamespace, RancherAlertingName, bodyBytes), bodyBytes)
 		if err != nil {
 			return err
 		}
@@ -84,7 +85,8 @@ func InstallRancherAlertingChart(client *rancher.Client, installOptions *Install
 		return nil
 	})
 
-	err = catalogClient.InstallChart(chartInstallAction, catalog.RancherChartRepo)
+	bodyBytes := marshalChartAction(chartInstallAction)
+	err = ChartActionWithRetry(context.TODO(), client, verbInstall, alertingChartInstallActionPayload, catalog.RancherChartRepo, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbInstall, bodyBytes), bodyBytes)
 	if err != nil {
 		return err
 	}

@@ -35,7 +35,8 @@ func InstallComplianceChart(client *rancher.Client, ChartInstallActionPayload *P
 	client.Session.RegisterCleanupFunc(func() error {
 		defaultChartUninstallAction := NewChartUninstallAction()
 
-		err = catalogClient.UninstallChart(ChartInstallActionPayload.Name, ChartInstallActionPayload.Namespace, defaultChartUninstallAction)
+		bodyBytes := marshalChartAction(defaultChartUninstallAction)
+		err = ChartActionWithRetry(context.TODO(), client, verbUninstall, ChartInstallActionPayload, ChartInstallActionPayload.Name, buildAppUninstallRequest(catalogClient, ChartInstallActionPayload.Namespace, ChartInstallActionPayload.Name, bodyBytes), bodyBytes)
 		if err != nil {
 			return err
 		}
@@ -62,7 +63,8 @@ func InstallComplianceChart(client *rancher.Client, ChartInstallActionPayload *P
 			return err
 		}
 
-		err = catalogClient.UninstallChart(ChartInstallActionPayload.Name+"-crd", ChartInstallActionPayload.Namespace, defaultChartUninstallAction)
+		bodyBytes = marshalChartAction(defaultChartUninstallAction)
+		err = ChartActionWithRetry(context.TODO(), client, verbUninstall, ChartInstallActionPayload, ChartInstallActionPayload.Name+"-crd", buildAppUninstallRequest(catalogClient, ChartInstallActionPayload.Namespace, ChartInstallActionPayload.Name+"-crd", bodyBytes), bodyBytes)
 		if err != nil {
 			return err
 		}
@@ -137,7 +139,8 @@ func InstallComplianceChart(client *rancher.Client, ChartInstallActionPayload *P
 		})
 	})
 
-	err = catalogClient.InstallChart(chartInstallAction, catalog.RancherChartRepo)
+	bodyBytes := marshalChartAction(chartInstallAction)
+	err = ChartActionWithRetry(context.TODO(), client, verbInstall, ChartInstallActionPayload, catalog.RancherChartRepo, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbInstall, bodyBytes), bodyBytes)
 	if err != nil {
 		return err
 	}
@@ -206,7 +209,8 @@ func UpgradeRancherComplianceChart(client *rancher.Client, installOptions *Insta
 		return err
 	}
 
-	err = catalogClient.UpgradeChart(chartUpgradeAction, catalog.RancherChartRepo)
+	bodyBytes := marshalChartAction(chartUpgradeAction)
+	err = ChartActionWithRetry(context.TODO(), client, verbUpgrade, benchmarkChartUpgradeActionPayload, catalog.RancherChartRepo, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbUpgrade, bodyBytes), bodyBytes)
 	if err != nil {
 		return err
 	}
