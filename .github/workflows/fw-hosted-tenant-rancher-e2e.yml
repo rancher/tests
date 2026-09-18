@@ -1,0 +1,349 @@
+name: Hosted/Tenant Rancher E2E
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      rancher_version:
+        description: Host Rancher version to install (no leading "v")
+        required: true
+        default: "2.15.2-d0bc0d0-head"
+      cleanup:
+        description: Destroy AWS infra when the job finishes
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  RUNWAY_REF: main
+  RUNWAY_SETUP_TEST_FUNC: "TestHaSetup"
+  RUNWAY_CLEANUP_TEST_FUNC: "TestHACleanup"
+
+jobs:
+  hosted-tenant-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    environment: fw-hosted-tenant
+
+    steps:
+      - name: Checkout rancher/tests
+        uses: actions/checkout@v4
+
+      - name: Checkout rancher-runway
+        uses: actions/checkout@v4
+        with:
+          repository: brudnak/rancher-runway
+          ref: ${{ env.RUNWAY_REF }}
+          path: runway
+
+      - name: Setup Go (rancher-runway)
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: runway/go.mod
+          cache-dependency-path: runway/go.sum
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'v3.22.0'
+
+      - name: Verify Helm
+        run: helm version
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@15650b3ad78fff148532a140b8a4c821796b2d7b #v5
+        with:
+          version: "latest"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
+        with:
+          role-to-assume: ${{ secrets.IAM_ROLE }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Get AWS credentials from Secrets Manager
+        uses: aws-actions/aws-secretsmanager-get-secrets@3a411b6ec5cace3d626412dd917e7bfeac242cfa #v3
+        with:
+          secret-ids: |
+            AWS_ACCESS_KEY, ${{ secrets.AWS_ACCESS_KEY_ID }}
+            AWS_SECRET_KEY, ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Write tool-config.yml
+        working-directory: runway
+        env:
+          # HOST_VERSION: ${{ inputs.rancher_version }}
+          # TENANT_VERSION: ${{ inputs.rancher_version }}
+          HOST_VERSION: "2.15.2-d0bc0d0-head"
+          TENANT_VERSION: "2.15.2-d0bc0d0-head"
+          BOOTSTRAP_PASSWORD: ${{ secrets.RANCHER_BOOTSTRAP_PASSWORD }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          AWS_PREFIX: ${{ secrets.AWS_PREFIX }}
+          AWS_VPC: ${{ secrets.AWS_VPC }}
+          AWS_SUBNET_A: ${{ secrets.AWS_SUBNET_A }}
+          AWS_SUBNET_B: ${{ secrets.AWS_SUBNET_B }}
+          AWS_SUBNET_C: ${{ secrets.AWS_SUBNET_C }}
+          AWS_AMI: ${{ secrets.AWS_AMI }}
+          AWS_SUBNET_ID: ${{ secrets.AWS_SUBNET_A }}
+          AWS_SECURITY_GROUP_ID: ${{ secrets.AWS_SECURITY_GROUP_ID }}
+          AWS_PEM_KEY_NAME: ${{ secrets.AWS_PEM_KEY_NAME }}
+          AWS_ROUTE53_FQDN: ${{ secrets.AWS_ROUTE53_FQDN }}
+          AWS_RDS_PASSWORD: ${{ secrets.AWS_RDS_PASSWORD }}
+          AWS_EC2_INSTANCE_TYPE: ${{ secrets.AWS_EC2_INSTANCE_TYPE }}
+        run: |
+          set -euo pipefail
+          cat > tool-config.yml <<EOF
+          rancher:
+            mode: "auto"
+            versions:
+              - "${HOST_VERSION}"
+              - "${TENANT_VERSION}"
+            distro: "auto"
+            webhook_image: ""
+            bootstrap_password: "${BOOTSTRAP_PASSWORD}"
+            auto_approve: true
+
+          deployment:
+            type: "hosted-tenant-k3s"
+
+          k3s:
+            preload_images: true
+
+          total_rancher_instances: 2
+
+          user:
+            first_name: "automation"
+            last_name: "services"
+
+          tf_vars:
+            aws_region: "${AWS_REGION}"
+            aws_prefix: "${AWS_PREFIX}"
+            aws_vpc: "${AWS_VPC}"
+            aws_subnet_a: "${AWS_SUBNET_A}"
+            aws_subnet_b: "${AWS_SUBNET_B}"
+            aws_subnet_c: "${AWS_SUBNET_C}"
+            aws_ami: "${AWS_AMI}"
+            aws_subnet_id: "${AWS_SUBNET_ID}"
+            aws_security_group_id: "${AWS_SECURITY_GROUP_ID}"
+            aws_pem_key_name: "${AWS_PEM_KEY_NAME}"
+            aws_route53_fqdn: "${AWS_ROUTE53_FQDN}"
+            aws_rds_password: "${AWS_RDS_PASSWORD}"
+            aws_ec2_instance_type: "${AWS_EC2_INSTANCE_TYPE}"
+          EOF
+
+          yq eval '.' tool-config.yml > /dev/null
+          echo "tool-config.yml written and parsed OK"
+
+      - name: Provision hosted/tenant Rancher
+        working-directory: runway
+        env:
+          TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+          TF_STATE_LOCK_TABLE: ${{ secrets.TF_STATE_LOCK_TABLE }}
+          TF_STATE_REGION: ${{ secrets.AWS_REGION }}
+          TF_STATE_KEY: "rancher-runway-${{ github.run_id }}.tfstate"
+        run: |
+          set -euo pipefail
+          .github/scripts/run-with-cancel-cleanup.sh \
+            go test -v -run "^${RUNWAY_SETUP_TEST_FUNC}\$" -timeout 90m ./terratest \
+            | tee provision.log \
+            | sed -E 's#(https://)[a-zA-Z0-9.-]+#\1[REDACTED]#g'
+
+      - name: Extract Rancher URLs from provisioning log
+        id: urls
+        working-directory: runway
+        run: |
+          set -euo pipefail
+
+          host_url="$(grep -oE 'Host Rancher[[:space:]]+https://[a-zA-Z0-9.-]+' provision.log \
+            | tail -n1 | grep -oE 'https://[a-zA-Z0-9.-]+' || true)"
+          tenant_url="$(grep -oE 'Tenant Rancher 1[[:space:]]+https://[a-zA-Z0-9.-]+' provision.log \
+            | tail -n1 | grep -oE 'https://[a-zA-Z0-9.-]+' || true)"
+
+          if [ -z "$host_url" ] || [ -z "$tenant_url" ]; then
+            echo "::error::Could not find 'Host Rancher' / 'Tenant Rancher 1' lines in provision.log -- confirm the real log wording and fix the grep patterns above."
+            exit 1
+          fi
+
+          host_url="${host_url#https://}"
+          tenant_url="${tenant_url#https://}"
+
+          echo "::add-mask::$host_url"
+          echo "::add-mask::$tenant_url"
+
+          {
+            echo "host_url=${host_url}"
+            echo "tenant_url=${tenant_url}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create admin tokens
+        id: tokens
+        env:
+          BOOTSTRAP_PASSWORD: ${{ secrets.RANCHER_BOOTSTRAP_PASSWORD }}
+          HOST_URL: ${{ steps.urls.outputs.host_url }}
+          TENANT_URL: ${{ steps.urls.outputs.tenant_url }}
+        run: |
+          set -euo pipefail
+
+          create_token() {
+            local url="$1"
+            local login_token
+            login_token="$(curl -sk -X POST "https://${url}/v3-public/localProviders/local?action=login" \
+              -H 'Content-Type: application/json' \
+              -d "{\"username\":\"admin\",\"password\":\"${BOOTSTRAP_PASSWORD}\",\"responseType\":\"json\"}" \
+              | jq -r '.token')
+            curl -sk -X POST "https://${url}/v3/token" \
+              -H "Authorization: Bearer ${login_token}" \
+              -H 'Content-Type: application/json' \
+              -d '{"type":"token","description":"gha-hosted-tenant-rbac"}' \
+              | jq -r '.token'
+          }
+
+          host_token="$(create_token "$HOST_URL")"
+          tenant_token="$(create_token "$TENANT_URL")"
+
+          echo "::add-mask::$host_token"
+          echo "::add-mask::$tenant_token"
+
+          {
+            echo "host_token<<TOKEN_EOF"
+            echo "$host_token"
+            echo "TOKEN_EOF"
+            echo "tenant_token<<TOKEN_EOF"
+            echo "$tenant_token"
+            echo "TOKEN_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Write cattle-config.yaml
+        id: cattle_config
+        env:
+          HOST_URL: ${{ steps.urls.outputs.host_url }}
+          TENANT_URL: ${{ steps.urls.outputs.tenant_url }}
+          HOST_TOKEN: ${{ steps.tokens.outputs.host_token }}
+          TENANT_TOKEN: ${{ steps.tokens.outputs.tenant_token }}
+        run: |
+          set -euo pipefail
+          cat > cattle-config.yaml <<EOF
+          rancher:
+            host: "${HOST_URL}"
+            adminToken: "${HOST_TOKEN}"
+            cleanup: true
+            insecure: true
+            clusterName: "imported-tenant-1"
+
+          tenantRanchers:
+            clients:
+              - host: "${TENANT_URL}"
+                adminToken: "${TENANT_TOKEN}"
+                cleanup: true
+                insecure: true
+                clusterName: "local"
+          EOF
+
+          yq eval '.' cattle-config.yaml > /dev/null
+          echo "cattle-config.yaml written and parsed OK"
+          echo "path=$GITHUB_WORKSPACE/cattle-config.yaml" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Go (rancher/tests)
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Format Qase milestone
+        id: qase_milestone
+        run: |
+          set -euo pipefail
+          version="${{ inputs.rancher_version }}"
+          base="${version%%-*}"
+          echo "version=v${base}" >> "$GITHUB_OUTPUT"
+
+      - name: Create Qase test run
+        id: create-qase-run
+        uses: ./.github/actions/create-qase-test-run
+        with:
+          test_run_name: "Hosted/Tenant - ${{ steps.qase_milestone.outputs.version }}"
+          qase_project_id: ${{ secrets.HB_QASE_PROJECT_ID }}
+          qase_token: ${{ secrets.QASE_AUTOMATION_TOKEN }}
+          qase_milestone: ${{ steps.qase_milestone.outputs.version }}
+
+      - name: Run hosted-tenant RBAC suite and report to Qase
+        id: run_suite
+        env:
+          CATTLE_TEST_CONFIG: ${{ steps.cattle_config.outputs.path }}
+          QASE_RUN_ID: ${{ steps.create-qase-run.outputs.run_id }}
+          QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
+          QASE_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
+        run: |
+          set -uo pipefail
+
+          go test -tags=validation -v -count=1 \
+            -run "^TestHostedRancherTestSuite\$" \
+            -timeout 30m \
+            ./validation/hostedtenant/rbac/...
+          test_exit=$?
+
+          ./validation/pipeline/scripts/build_qase_reporter_v2.sh
+          build_exit=$?
+
+          ./validation/reporter
+          reporter_exit=$?
+
+          if [ "$test_exit" -eq 0 ]; then
+            echo "tests_passed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "tests_passed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if [ "$build_exit" -eq 0 ] && [ "$reporter_exit" -eq 0 ]; then
+            echo "reported_ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "reported_ok=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "test_exit=$test_exit build_exit=$build_exit reporter_exit=$reporter_exit"
+          [ "$test_exit" -eq 0 ] && [ "$build_exit" -eq 0 ] && [ "$reporter_exit" -eq 0 ]
+
+      - name: Close Qase test run
+        if: always() && steps.run_suite.outputs.tests_passed == 'true' && steps.run_suite.outputs.reported_ok == 'true'
+        uses: ./.github/actions/close-qase-test-run
+        with:
+          qase_run_id: ${{ steps.create-qase-run.outputs.run_id }}
+          qase_project_id: ${{ secrets.HB_QASE_PROJECT_ID }}
+          qase_token: ${{ secrets.QASE_AUTOMATION_TOKEN }}
+
+      - name: Warn if Qase test run left open
+        if: always() && (steps.run_suite.outputs.tests_passed != 'true' || steps.run_suite.outputs.reported_ok != 'true')
+        run: |
+          echo "::warning::Qase run ${{ steps.create-qase-run.outputs.run_id }} left open -- tests_passed=${{ steps.run_suite.outputs.tests_passed }}, reported_ok=${{ steps.run_suite.outputs.reported_ok }}."
+
+      - name: Refetch AWS credentials for cleanup
+        if: always() && inputs.cleanup
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
+        with:
+          role-to-assume: ${{ secrets.IAM_ROLE }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Cleanup infrastructure
+        if: always() && inputs.cleanup
+        working-directory: runway
+        env:
+          TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+          TF_STATE_LOCK_TABLE: ${{ secrets.TF_STATE_LOCK_TABLE }}
+          TF_STATE_REGION: ${{ secrets.AWS_REGION }}
+          TF_STATE_KEY: "rancher-runway-${{ github.run_id }}.tfstate"
+        run: |
+          set -euo pipefail
+          go test -v -run "^${RUNWAY_CLEANUP_TEST_FUNC}\$" -timeout 30m ./terratest
+
+      - name: Warn if cleanup disabled
+        if: always() && !inputs.cleanup
+        run: echo "::warning::cleanup=false -- AWS resources are still running. Destroy them manually when done."

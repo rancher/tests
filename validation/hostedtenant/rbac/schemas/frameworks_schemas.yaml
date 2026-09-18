@@ -1,0 +1,25 @@
+- projects:
+  - RRT
+  - RM
+  suite: Go Automation/HostedTenantRancher
+  cases:
+  - description: Hosted/Tenant Rancher Validations
+    title: HostedTenantRancher_Validations
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create Infrastructure
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Run Hosted/Tenant Rancher Validations
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Frameworks
