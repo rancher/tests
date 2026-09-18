@@ -1,0 +1,21 @@
+---
+name: PIT Daily Slack Report
+
+on:
+  schedule:
+    # Run daily 6 AM UTC
+    - cron: "0 6 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  pit-daily-slack-report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Send PIT daily report to Slack
+        uses: ./.github/actions/pit-daily-slack-report
+        with:
+          qase-automation-token: ${{ secrets.QASE_AUTOMATION_TOKEN }}
+          slack-webhook-url: ${{ secrets.PIT_SLACK_WEBHOOK_URL }}
