@@ -1,0 +1,20 @@
+- projects:
+  - RRT
+  - RM
+  suite: Go Automation/TestHostedRancherTestSuite
+  cases:
+  - description: Hosted/Tenant Rancher Validations
+    title: TestGlobalRoleInheritedClusterRoles
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Run Hosted/Tenant Rancher Validations
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Frameworks
