@@ -60,7 +60,7 @@ func InstallRancherIstioChart(client *rancher.Client, installOptions *InstallOpt
 		if err != nil {
 			return err
 		}
-		err = ChartActionWithRetry(context.TODO(), client, verbUninstall, istioChartInstallActionPayload, "", RancherIstioName, buildAppUninstallRequest(catalogClient, RancherIstioNamespace, RancherIstioName, bodyBytes))
+		err = ChartActionWithRetry(context.TODO(), client, verbUninstall, istioChartInstallActionPayload, "", []string{RancherIstioName}, buildAppUninstallRequest(catalogClient, RancherIstioNamespace, RancherIstioName, bodyBytes))
 		if err != nil {
 			return err
 		}
@@ -89,7 +89,7 @@ func InstallRancherIstioChart(client *rancher.Client, installOptions *InstallOpt
 	if err != nil {
 		return err
 	}
-	err = ChartActionWithRetry(context.TODO(), client, verbInstall, istioChartInstallActionPayload, catalog.RancherChartRepo, istioChartInstallActionPayload.Name, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbInstall, bodyBytes))
+	err = ChartActionWithRetry(context.TODO(), client, verbInstall, istioChartInstallActionPayload, catalog.RancherChartRepo, []string{istioChartInstallActionPayload.Name}, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbInstall, bodyBytes))
 	if err != nil {
 		return err
 	}
@@ -182,7 +182,7 @@ func UpgradeRancherIstioChart(client *rancher.Client, installOptions *InstallOpt
 	if err != nil {
 		return err
 	}
-	err = ChartActionWithRetry(context.TODO(), client, verbUpgrade, istioChartUpgradeActionPayload, catalog.RancherChartRepo, istioChartUpgradeActionPayload.Name, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbUpgrade, bodyBytes))
+	err = ChartActionWithRetry(context.TODO(), client, verbUpgrade, istioChartUpgradeActionPayload, catalog.RancherChartRepo, []string{istioChartUpgradeActionPayload.Name}, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbUpgrade, bodyBytes))
 	if err != nil {
 		return err
 	}

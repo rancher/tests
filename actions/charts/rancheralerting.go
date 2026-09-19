@@ -61,7 +61,7 @@ func InstallRancherAlertingChart(client *rancher.Client, installOptions *Install
 		if err != nil {
 			return err
 		}
-		err = ChartActionWithRetry(context.TODO(), client, verbUninstall, alertingChartInstallActionPayload, "", RancherAlertingName, buildAppUninstallRequest(catalogClient, RancherAlertingNamespace, RancherAlertingName, bodyBytes))
+		err = ChartActionWithRetry(context.TODO(), client, verbUninstall, alertingChartInstallActionPayload, "", []string{RancherAlertingName}, buildAppUninstallRequest(catalogClient, RancherAlertingNamespace, RancherAlertingName, bodyBytes))
 		if err != nil {
 			return err
 		}
@@ -93,7 +93,7 @@ func InstallRancherAlertingChart(client *rancher.Client, installOptions *Install
 	if err != nil {
 		return err
 	}
-	err = ChartActionWithRetry(context.TODO(), client, verbInstall, alertingChartInstallActionPayload, catalog.RancherChartRepo, alertingChartInstallActionPayload.Name, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbInstall, bodyBytes))
+	err = ChartActionWithRetry(context.TODO(), client, verbInstall, alertingChartInstallActionPayload, catalog.RancherChartRepo, []string{alertingChartInstallActionPayload.Name}, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbInstall, bodyBytes))
 	if err != nil {
 		return err
 	}

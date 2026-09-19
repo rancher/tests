@@ -61,7 +61,7 @@ func InstallRancherLoggingChart(client *rancher.Client, installOptions *InstallO
 		if err != nil {
 			return err
 		}
-		err = ChartActionWithRetry(context.TODO(), client, verbUninstall, loggingChartInstallActionPayload, "", RancherLoggingName, buildAppUninstallRequest(catalogClient, RancherLoggingNamespace, RancherLoggingName, bodyBytes))
+		err = ChartActionWithRetry(context.TODO(), client, verbUninstall, loggingChartInstallActionPayload, "", []string{RancherLoggingName}, buildAppUninstallRequest(catalogClient, RancherLoggingNamespace, RancherLoggingName, bodyBytes))
 		if err != nil {
 			return err
 		}
@@ -90,7 +90,7 @@ func InstallRancherLoggingChart(client *rancher.Client, installOptions *InstallO
 		if err != nil {
 			return err
 		}
-		err = ChartActionWithRetry(context.TODO(), client, verbUninstall, loggingChartInstallActionPayload, "", RancherLoggingCRDName, buildAppUninstallRequest(catalogClient, RancherLoggingNamespace, RancherLoggingCRDName, bodyBytes))
+		err = ChartActionWithRetry(context.TODO(), client, verbUninstall, loggingChartInstallActionPayload, "", []string{RancherLoggingCRDName}, buildAppUninstallRequest(catalogClient, RancherLoggingNamespace, RancherLoggingCRDName, bodyBytes))
 		if err != nil {
 			return err
 		}
@@ -165,7 +165,7 @@ func InstallRancherLoggingChart(client *rancher.Client, installOptions *InstallO
 	if err != nil {
 		return err
 	}
-	err = ChartActionWithRetry(context.TODO(), client, verbInstall, loggingChartInstallActionPayload, catalog.RancherChartRepo, loggingChartInstallActionPayload.Name, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbInstall, bodyBytes))
+	err = ChartActionWithRetry(context.TODO(), client, verbInstall, loggingChartInstallActionPayload, catalog.RancherChartRepo, []string{loggingChartInstallActionPayload.Name, RancherLoggingCRDName}, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbInstall, bodyBytes))
 	if err != nil {
 		return err
 	}

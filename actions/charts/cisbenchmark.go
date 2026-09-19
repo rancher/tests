@@ -40,7 +40,7 @@ func InstallHardenedChart(client *rancher.Client, ChartInstallActionPayload *Pay
 		if err != nil {
 			return err
 		}
-		err = ChartActionWithRetry(context.TODO(), client, verbUninstall, ChartInstallActionPayload, "", ChartInstallActionPayload.Name, buildAppUninstallRequest(catalogClient, ChartInstallActionPayload.Namespace, ChartInstallActionPayload.Name, bodyBytes))
+		err = ChartActionWithRetry(context.TODO(), client, verbUninstall, ChartInstallActionPayload, "", []string{ChartInstallActionPayload.Name}, buildAppUninstallRequest(catalogClient, ChartInstallActionPayload.Namespace, ChartInstallActionPayload.Name, bodyBytes))
 		if err != nil {
 			return err
 		}
@@ -75,7 +75,7 @@ func InstallHardenedChart(client *rancher.Client, ChartInstallActionPayload *Pay
 		if err != nil {
 			return err
 		}
-		err = ChartActionWithRetry(context.TODO(), client, verbUninstall, &crdUninstallPayload, "", ChartInstallActionPayload.Name+"-crd", buildAppUninstallRequest(catalogClient, ChartInstallActionPayload.Name, ChartInstallActionPayload.Name+"-crd", bodyBytes))
+		err = ChartActionWithRetry(context.TODO(), client, verbUninstall, &crdUninstallPayload, "", []string{ChartInstallActionPayload.Name + "-crd"}, buildAppUninstallRequest(catalogClient, ChartInstallActionPayload.Name, ChartInstallActionPayload.Name+"-crd", bodyBytes))
 		if err != nil {
 			return err
 		}
@@ -154,7 +154,7 @@ func InstallHardenedChart(client *rancher.Client, ChartInstallActionPayload *Pay
 	if err != nil {
 		return err
 	}
-	err = ChartActionWithRetry(context.TODO(), client, verbInstall, ChartInstallActionPayload, catalog.RancherChartRepo, ChartInstallActionPayload.Name, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbInstall, bodyBytes))
+	err = ChartActionWithRetry(context.TODO(), client, verbInstall, ChartInstallActionPayload, catalog.RancherChartRepo, []string{ChartInstallActionPayload.Name, ChartInstallActionPayload.Name + "-crd"}, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbInstall, bodyBytes))
 	if err != nil {
 		return err
 	}
@@ -226,7 +226,7 @@ func UpgradeCISBenchmarkChart(client *rancher.Client, installOptions *InstallOpt
 	if err != nil {
 		return err
 	}
-	err = ChartActionWithRetry(context.TODO(), client, verbUpgrade, benchmarkChartUpgradeActionPayload, catalog.RancherChartRepo, benchmarkChartUpgradeActionPayload.Name, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbUpgrade, bodyBytes))
+	err = ChartActionWithRetry(context.TODO(), client, verbUpgrade, benchmarkChartUpgradeActionPayload, catalog.RancherChartRepo, []string{benchmarkChartUpgradeActionPayload.Name, benchmarkChartUpgradeActionPayload.Name + "-crd"}, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbUpgrade, bodyBytes))
 	if err != nil {
 		return err
 	}

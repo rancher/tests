@@ -56,7 +56,7 @@ func InstallAWSOutOfTreeChart(client *rancher.Client, installOptions *InstallOpt
 	if err != nil {
 		return err
 	}
-	err = ChartActionWithRetry(context.TODO(), client, verbInstall, awsChartInstallActionPayload, repoName, AwsUpstreamChartName, buildRepoActionRequest(catalogClient, repoName, verbInstall, bodyBytes))
+	err = ChartActionWithRetry(context.TODO(), client, verbInstall, awsChartInstallActionPayload, repoName, []string{AwsUpstreamChartName}, buildRepoActionRequest(catalogClient, repoName, verbInstall, bodyBytes))
 	if err != nil {
 		return err
 	}

@@ -49,7 +49,7 @@ func uninstallChartIfPresent(client *rancher.Client, catalogClient *catalog.Clie
 	if err != nil {
 		return err
 	}
-	if err := ChartActionWithRetry(context.TODO(), client, verbUninstall, &chartOpts, "", chartName, buildAppUninstallRequest(catalogClient, namespace, chartName, bodyBytes)); err != nil {
+	if err := ChartActionWithRetry(context.TODO(), client, verbUninstall, &chartOpts, "", []string{chartName}, buildAppUninstallRequest(catalogClient, namespace, chartName, bodyBytes)); err != nil {
 		if k8sErrors.IsNotFound(err) {
 			// Chart was removed between the Get and the uninstall call — treat as success.
 			return nil
@@ -81,6 +81,10 @@ func waitForRancherChartsRepo(client *rancher.Client, clusterID string) error {
 
 // InstallLatestNeuVectorChart installs the latest NeuVector chart (and its CRD chart) on the target cluster using the provided payload options.
 func InstallNeuVectorChart(client *rancher.Client, payload PayloadOpts) error {
+	// Callers pass a payload without Name; populate it so chart-action lifecycle and
+	// failure logs carry the chart name.
+	payload.Name = NeuVectorChartName
+
 	if err := waitForRancherChartsRepo(client, payload.Cluster.ID); err != nil {
 		return err
 	}
@@ -162,7 +166,7 @@ func InstallNeuVectorChart(client *rancher.Client, payload PayloadOpts) error {
 	if err != nil {
 		return err
 	}
-	err = ChartActionWithRetry(context.TODO(), client, verbInstall, &payload, catalog.RancherChartRepo, NeuVectorChartName, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbInstall, bodyBytes))
+	err = ChartActionWithRetry(context.TODO(), client, verbInstall, &payload, catalog.RancherChartRepo, []string{NeuVectorChartName, NeuVectorChartName + "-crd"}, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbInstall, bodyBytes))
 	if err != nil {
 		return err
 	}

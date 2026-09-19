@@ -63,7 +63,7 @@ func InstallRancherGatekeeperChart(client *rancher.Client, installOptions *Insta
 		if err != nil {
 			return err
 		}
-		err = ChartActionWithRetry(context.TODO(), client, verbUninstall, gatekeeperChartInstallActionPayload, "", RancherGatekeeperName, buildAppUninstallRequest(catalogClient, RancherGatekeeperNamespace, RancherGatekeeperName, bodyBytes))
+		err = ChartActionWithRetry(context.TODO(), client, verbUninstall, gatekeeperChartInstallActionPayload, "", []string{RancherGatekeeperName}, buildAppUninstallRequest(catalogClient, RancherGatekeeperNamespace, RancherGatekeeperName, bodyBytes))
 		if err != nil {
 			return err
 		}
@@ -95,7 +95,7 @@ func InstallRancherGatekeeperChart(client *rancher.Client, installOptions *Insta
 		if err != nil {
 			return err
 		}
-		err = ChartActionWithRetry(context.TODO(), client, verbUninstall, gatekeeperChartInstallActionPayload, "", RancherGatekeeperCRDName, buildAppUninstallRequest(catalogClient, RancherGatekeeperNamespace, RancherGatekeeperCRDName, bodyBytes))
+		err = ChartActionWithRetry(context.TODO(), client, verbUninstall, gatekeeperChartInstallActionPayload, "", []string{RancherGatekeeperCRDName}, buildAppUninstallRequest(catalogClient, RancherGatekeeperNamespace, RancherGatekeeperCRDName, bodyBytes))
 		if err != nil {
 			return err
 		}
@@ -170,7 +170,7 @@ func InstallRancherGatekeeperChart(client *rancher.Client, installOptions *Insta
 	if err != nil {
 		return err
 	}
-	err = ChartActionWithRetry(context.TODO(), client, verbInstall, gatekeeperChartInstallActionPayload, catalog.RancherChartRepo, gatekeeperChartInstallActionPayload.Name, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbInstall, bodyBytes))
+	err = ChartActionWithRetry(context.TODO(), client, verbInstall, gatekeeperChartInstallActionPayload, catalog.RancherChartRepo, []string{gatekeeperChartInstallActionPayload.Name, RancherGatekeeperCRDName}, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbInstall, bodyBytes))
 	if err != nil {
 		return err
 	}
@@ -242,7 +242,7 @@ func UpgradeRancherGatekeeperChart(client *rancher.Client, installOptions *Insta
 	if err != nil {
 		return err
 	}
-	err = ChartActionWithRetry(context.TODO(), client, verbUpgrade, gatekeeperChartUpgradeActionPayload, catalog.RancherChartRepo, gatekeeperChartUpgradeActionPayload.Name, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbUpgrade, bodyBytes))
+	err = ChartActionWithRetry(context.TODO(), client, verbUpgrade, gatekeeperChartUpgradeActionPayload, catalog.RancherChartRepo, []string{gatekeeperChartUpgradeActionPayload.Name, RancherGatekeeperCRDName}, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbUpgrade, bodyBytes))
 	if err != nil {
 		return err
 	}

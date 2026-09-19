@@ -4,6 +4,7 @@ package charts
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/clusters"
 	scheme "github.com/rancher/shepherd/pkg/generated/clientset/versioned/scheme"
 	"github.com/sirupsen/logrus"
@@ -55,14 +57,18 @@ func chartActionTestOpts() *PayloadOpts {
 }
 
 // stubChartActionTiming swaps the package timing knobs for the duration of one test and
-// restores them afterwards.
-func stubChartActionTiming(t *testing.T, spacing, maxElapsed time.Duration) {
+// restores them afterwards. The attempt cap is timeout+slack per attempt; maxElapsed is
+// the budget that gates whether another attempt may start.
+func stubChartActionTiming(t *testing.T, spacing, maxElapsed, timeout, slack time.Duration) {
 	t.Helper()
 
 	origSpacing, origElapsed := chartActionRetrySpacing, chartActionMaxElapsed
+	origTimeout, origSlack := chartActionTimeout, chartActionAttemptSlack
 	chartActionRetrySpacing, chartActionMaxElapsed = spacing, maxElapsed
+	chartActionTimeout, chartActionAttemptSlack = timeout, slack
 	t.Cleanup(func() {
 		chartActionRetrySpacing, chartActionMaxElapsed = origSpacing, origElapsed
+		chartActionTimeout, chartActionAttemptSlack = origTimeout, origSlack
 	})
 }
 
@@ -82,7 +88,7 @@ func captureChartActionLogs(t *testing.T) *strings.Builder {
 
 func TestChartActionWithRetryCapturesStatusAndBody(t *testing.T) {
 	logs := captureChartActionLogs(t)
-	stubChartActionTiming(t, time.Millisecond, time.Second)
+	stubChartActionTiming(t, time.Millisecond, time.Second, time.Second, 0)
 
 	doer, _ := newChartActionTestDoer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -90,7 +96,7 @@ func TestChartActionWithRetryCapturesStatusAndBody(t *testing.T) {
 		_, _ = w.Write([]byte(`{"kind":"Status","reason":"InternalError","message":"helm upgrade failed"}`))
 	}))
 
-	err := ChartActionWithRetry(context.Background(), nil, verbInstall, chartActionTestOpts(), "rancher-charts", "rancher-monitoring", doer)
+	err := ChartActionWithRetry(context.Background(), nil, verbInstall, chartActionTestOpts(), "rancher-charts", []string{"rancher-monitoring"}, doer)
 	if err == nil {
 		t.Fatal("expected failure, got nil")
 	}
@@ -107,7 +113,7 @@ func TestChartActionWithRetryCapturesStatusAndBody(t *testing.T) {
 }
 
 func TestChartActionWithRetryRecoversAfterTransientFailures(t *testing.T) {
-	stubChartActionTiming(t, time.Millisecond, time.Second)
+	stubChartActionTiming(t, time.Millisecond, time.Second, time.Second, 0)
 
 	var requests atomic.Int32
 	doer, _ := newChartActionTestDoer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -120,7 +126,7 @@ func TestChartActionWithRetryRecoversAfterTransientFailures(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	err := ChartActionWithRetry(context.Background(), nil, verbInstall, chartActionTestOpts(), "rancher-charts", "rancher-monitoring", doer)
+	err := ChartActionWithRetry(context.Background(), nil, verbInstall, chartActionTestOpts(), "rancher-charts", []string{"rancher-monitoring", "rancher-monitoring-crd"}, doer)
 	if err != nil {
 		t.Fatalf("expected recovery on third attempt, got: %v", err)
 	}
@@ -129,12 +135,13 @@ func TestChartActionWithRetryRecoversAfterTransientFailures(t *testing.T) {
 	}
 }
 
-func TestChartActionWithRetryStopsAtElapsedDeadline(t *testing.T) {
-	stubChartActionTiming(t, 10*time.Millisecond, 100*time.Millisecond)
+func TestChartActionWithRetryBoundsHungAttempts(t *testing.T) {
+	// A hung transport is cut off by the per-attempt cap (timeout+slack = 100ms) long
+	// before the server-side action timeout would answer; the failure is terminal
+	// (no HTTP status) so no replay happens either.
+	stubChartActionTiming(t, 10*time.Millisecond, time.Hour, 80*time.Millisecond, 20*time.Millisecond)
 
 	var requests atomic.Int32
-	// Each handler call blocks well past the 100ms loop deadline, so only the first
-	// attempt may start; its per-attempt context must cut the hung request off.
 	doer, _ := newChartActionTestDoer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		requests.Add(1)
 		select {
@@ -144,25 +151,66 @@ func TestChartActionWithRetryStopsAtElapsedDeadline(t *testing.T) {
 	}))
 
 	start := time.Now()
-	err := ChartActionWithRetry(context.Background(), nil, verbInstall, chartActionTestOpts(), "rancher-charts", "rancher-monitoring", doer)
+	err := ChartActionWithRetry(context.Background(), nil, verbInstall, chartActionTestOpts(), "rancher-charts", []string{"rancher-monitoring"}, doer)
 	elapsed := time.Since(start)
 
 	if err == nil {
 		t.Fatal("expected failure, got nil")
 	}
 	if got := requests.Load(); got != 1 {
-		t.Errorf("expected exactly 1 attempt once the elapsed budget was spent, got %d", got)
+		t.Errorf("expected exactly 1 attempt once the attempt cap fired, got %d", got)
 	}
 	if elapsed > 300*time.Millisecond {
-		t.Errorf("wrapper ran %s past the 100ms deadline bound", elapsed)
+		t.Errorf("wrapper ran %s past the 100ms attempt cap", elapsed)
 	}
 	if !strings.Contains(err.Error(), "failed after 1 attempts") {
 		t.Errorf("error does not report bounded attempts, got: %v", err)
 	}
 }
 
+func TestChartActionWithRetrySlowAttemptWithinActionTimeoutSucceeds(t *testing.T) {
+	// Wait:true actions legitimately block for the server-side action timeout; a
+	// response arriving just under the attempt cap must not be cancelled.
+	stubChartActionTiming(t, time.Millisecond, 10*time.Millisecond, 500*time.Millisecond, 100*time.Millisecond)
+
+	doer, _ := newChartActionTestDoer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		select {
+		case <-time.After(150 * time.Millisecond):
+			w.WriteHeader(http.StatusOK)
+		}
+	}))
+
+	// The 10ms retry budget only gates retries; the single slow attempt itself is
+	// bounded by the 600ms attempt cap and succeeds.
+	err := ChartActionWithRetry(context.Background(), nil, verbInstall, chartActionTestOpts(), "rancher-charts", []string{"rancher-monitoring"}, doer)
+	if err != nil {
+		t.Fatalf("slow-but-legitimate attempt was cut off or failed: %v", err)
+	}
+}
+
+func TestChartActionWithRetryStopsStartingAttemptsPastBudget(t *testing.T) {
+	stubChartActionTiming(t, 200*time.Millisecond, 250*time.Millisecond, time.Second, 0)
+
+	var requests atomic.Int32
+	doer, _ := newChartActionTestDoer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+
+	err := ChartActionWithRetry(context.Background(), nil, verbInstall, chartActionTestOpts(), "rancher-charts", []string{"rancher-monitoring"}, doer)
+	if err == nil {
+		t.Fatal("expected failure, got nil")
+	}
+	if got := requests.Load(); got != 2 {
+		t.Errorf("budget must stop attempts once it cannot fit the spacing, got %d requests", got)
+	}
+	if !strings.Contains(err.Error(), "failed after 2 attempts") {
+		t.Errorf("error does not report budget-bounded attempts, got: %v", err)
+	}
+}
+
 func TestChartActionWithRetryHonorsContextCancellationBetweenAttempts(t *testing.T) {
-	stubChartActionTiming(t, 10*time.Second, time.Hour)
+	stubChartActionTiming(t, 10*time.Second, time.Hour, time.Second, 0)
 
 	var requests atomic.Int32
 	doer, _ := newChartActionTestDoer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -173,18 +221,21 @@ func TestChartActionWithRetryHonorsContextCancellationBetweenAttempts(t *testing
 	ctx, cancel := context.WithCancel(context.Background())
 	time.AfterFunc(50*time.Millisecond, cancel)
 
-	err := ChartActionWithRetry(ctx, nil, verbInstall, chartActionTestOpts(), "rancher-charts", "rancher-monitoring", doer)
+	err := ChartActionWithRetry(ctx, nil, verbInstall, chartActionTestOpts(), "rancher-charts", []string{"rancher-monitoring"}, doer)
 	if err == nil {
 		t.Fatal("expected failure, got nil")
 	}
 	if got := requests.Load(); got != 1 {
 		t.Errorf("expected exactly 1 attempt after mid-sleep cancellation, got %d", got)
 	}
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("cancellation must be the propagated cause, got: %v", err)
+	}
 }
 
 func TestChartActionWithRetryUninstallNamesTargetNotRepo(t *testing.T) {
 	logs := captureChartActionLogs(t)
-	stubChartActionTiming(t, time.Millisecond, time.Second)
+	stubChartActionTiming(t, time.Millisecond, time.Second, time.Second, 0)
 
 	doer, _ := newChartActionTestDoer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -192,7 +243,7 @@ func TestChartActionWithRetryUninstallNamesTargetNotRepo(t *testing.T) {
 		_, _ = w.Write([]byte(`{"kind":"Status","reason":"NotFound","message":"apps.catalog.cattle.io not found"}`))
 	}))
 
-	err := ChartActionWithRetry(context.Background(), nil, verbUninstall, chartActionTestOpts(), "", "rancher-monitoring-crd", doer)
+	err := ChartActionWithRetry(context.Background(), nil, verbUninstall, chartActionTestOpts(), "", []string{"rancher-monitoring-crd"}, doer)
 	if err == nil {
 		t.Fatal("expected failure, got nil")
 	}
@@ -206,7 +257,7 @@ func TestChartActionWithRetryUninstallNamesTargetNotRepo(t *testing.T) {
 
 func TestChartActionWithRetryDoesNotRetryClientErrors(t *testing.T) {
 	logs := captureChartActionLogs(t)
-	stubChartActionTiming(t, time.Millisecond, time.Second)
+	stubChartActionTiming(t, time.Millisecond, time.Second, time.Second, 0)
 
 	var requests atomic.Int32
 	doer, _ := newChartActionTestDoer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -216,7 +267,7 @@ func TestChartActionWithRetryDoesNotRetryClientErrors(t *testing.T) {
 		_, _ = w.Write([]byte(`{"kind":"Status","code":400,"reason":"BadRequest","message":"invalid chart values"}`))
 	}))
 
-	err := ChartActionWithRetry(context.Background(), nil, verbInstall, chartActionTestOpts(), "rancher-charts", "rancher-monitoring", doer)
+	err := ChartActionWithRetry(context.Background(), nil, verbInstall, chartActionTestOpts(), "rancher-charts", []string{"rancher-monitoring"}, doer)
 	if err == nil {
 		t.Fatal("expected failure, got nil")
 	}
@@ -232,7 +283,7 @@ func TestChartActionWithRetryDoesNotRetryClientErrors(t *testing.T) {
 }
 
 func TestChartActionWithRetryDoesNotRetryTransportErrors(t *testing.T) {
-	stubChartActionTiming(t, time.Millisecond, time.Second)
+	stubChartActionTiming(t, time.Millisecond, time.Second, time.Second, 0)
 
 	// A closed server means the request never gets an HTTP answer: the server may have
 	// processed an attempt without the client seeing a response, so the wrapper must
@@ -243,7 +294,7 @@ func TestChartActionWithRetryDoesNotRetryTransportErrors(t *testing.T) {
 	}))
 	server.Close()
 
-	err := ChartActionWithRetry(context.Background(), nil, verbInstall, chartActionTestOpts(), "rancher-charts", "rancher-monitoring", doer)
+	err := ChartActionWithRetry(context.Background(), nil, verbInstall, chartActionTestOpts(), "rancher-charts", []string{"rancher-monitoring"}, doer)
 	if err == nil {
 		t.Fatal("expected failure, got nil")
 	}
@@ -257,7 +308,50 @@ func TestChartActionWithRetryDoesNotRetryTransportErrors(t *testing.T) {
 
 func TestLogChartActionFailureNilClientIsNoop(t *testing.T) {
 	// Must not panic or log diagnostics when there is no client to read with.
-	LogChartActionFailure(context.Background(), nil, "rancher-charts", "c-local", "cattle-monitoring-system", "rancher-monitoring")
+	LogChartActionFailure(context.Background(), nil, "rancher-charts", "c-local", "cattle-monitoring-system", []string{"rancher-monitoring"})
+}
+
+func TestChartOperationStatusForLogRedactsSensitiveFields(t *testing.T) {
+	operation := &v1.SteveAPIObject{
+		Status: map[string]any{
+			"action":      "install",
+			"chart":       "rancher-monitoring",
+			"version":     "102.0.0",
+			"releaseName": "rancher-monitoring",
+			"namespace":   "cattle-monitoring-system",
+			"podName":     "helm-operation-abc123",
+			"podCreated":  true,
+			"token":       "kubeconfig-u-abcdef-secrettoken",
+			"command":     []any{"helm", "upgrade", "--set", "token=secret"},
+		},
+	}
+	operation.Name = "helm-operation-abc123"
+
+	logged := chartOperationStatusForLog(operation)
+	for _, secret := range []string{"secrettoken", "token=", "helm\", \"upgrade"} {
+		if strings.Contains(logged, secret) {
+			t.Errorf("operation status log leaked sensitive material %q: %s", secret, logged)
+		}
+	}
+	for _, want := range []string{"install", "rancher-monitoring", "helm-operation-abc123"} {
+		if !strings.Contains(logged, want) {
+			t.Errorf("operation status log missing diagnostic field %q: %s", want, logged)
+		}
+	}
+}
+
+func TestIsChartOperationMatchesAnyTarget(t *testing.T) {
+	operation := &v1.SteveAPIObject{
+		Status: map[string]any{"releaseName": "rancher-monitoring-crd"},
+	}
+	operation.Name = "helm-operation-xyz789"
+
+	if !isChartOperation(operation, []string{"rancher-monitoring", "rancher-monitoring-crd"}) {
+		t.Error("companion CRD release must match the target set")
+	}
+	if isChartOperation(operation, []string{"rancher-monitoring"}) {
+		t.Error("non-target release must not match")
+	}
 }
 
 func TestChartActionHTTPStatus(t *testing.T) {
