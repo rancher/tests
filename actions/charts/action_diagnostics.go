@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
+	"net/http"
 	"time"
 
 	"github.com/rancher/shepherd/clients/rancher"
@@ -24,12 +24,13 @@ const (
 	verbUninstall = "uninstall"
 	actionParam   = "action"
 
+	// Steve schema ids are "<group>.<lowercased singular kind>" (same convention as
+	// shepherd's stevetypes and neuvector's proven clusterrepo read via ProxyDownstream).
 	appsSteveType        = "catalog.cattle.io.app"
 	operationsSteveType  = "catalog.cattle.io.operation"
 	clusterReposResource = "catalog.cattle.io.clusterrepo"
 	chartRepoURLPath     = "v1/catalog.cattle.io.clusterrepos/"
 	chartAppsURLPath     = "v1/catalog.cattle.io.apps/"
-	operationLabelFilter = "operation.cattle.io/"
 )
 
 // Timing knobs are vars so the verification harness can scale them down.
@@ -62,10 +63,10 @@ var sleepBetweenAttempts = func(ctx context.Context, d time.Duration) bool {
 }
 
 // ChartActionWithRetry executes a chart install/upgrade/uninstall request with bounded retry
-// on retryable failures (the observed PIT failures are 5xx whose raw bodies the k8s client
-// flattens to "unknown"), emitting a lifecycle line per action, the response status and raw
-// body of each failed attempt straight from the original rest.Result, and the downstream
-// catalog state on final failure.
+// on server-answered transient failures (429 and 5xx responses; the observed PIT failures
+// are 5xx whose raw bodies the k8s client flattens to "unknown"), emitting a lifecycle line
+// per action, the response status and raw body of each failed attempt straight from the
+// original rest.Result, and the downstream catalog state on final failure.
 //
 // repoName is the ClusterRepo the action targets (install/upgrade); it is empty for
 // uninstalls, which address the App directly. targetName is the catalog App the action
@@ -122,16 +123,20 @@ func waitBetweenAttempts(_ int) time.Duration {
 	return chartActionRetrySpacing
 }
 
-// isRetryableChartActionError reports whether a chart action error is worth retrying:
-// client-side k8s status errors (4xx family) are terminal, everything else (5xx, transport)
-// is retried. Uninstall no-ops (NotFound) therefore exit after a single fast attempt.
+// isRetryableChartActionError reports whether a chart action error is worth replaying.
+// Only server-answered failures are replay candidates: 429 (rate limited) and 5xx
+// responses (the observed PIT failures). Every other 4xx is deterministic and cannot
+// recover on retry. Errors without an HTTP status are transport-level failures where
+// the server may already have processed the request without us seeing the response;
+// replaying the non-idempotent chart action could then launch a duplicate Helm
+// operation, so they are terminal and left to the diagnostics bundle.
 func isRetryableChartActionError(err error) bool {
-	return !(apierrors.IsBadRequest(err) ||
-		apierrors.IsNotFound(err) ||
-		apierrors.IsConflict(err) ||
-		apierrors.IsForbidden(err) ||
-		apierrors.IsUnauthorized(err) ||
-		apierrors.IsInvalid(err))
+	var statusErr *apierrors.StatusError
+	if !errors.As(err, &statusErr) {
+		return false
+	}
+	code := statusErr.Status().Code
+	return code == http.StatusTooManyRequests || code >= 500
 }
 
 // LogChartActionFailure dumps the catalog state around a failed chart action: the
@@ -193,7 +198,9 @@ func logDownstreamCatalogDiagnostics(client *rancher.Client, clusterID, repoName
 		}
 	}
 
-	app, err := proxyClient.SteveType(appsSteveType).NamespacedSteveClient(namespace).ByID(targetName)
+	// NamespacedSteveClient.ByID delegates to the embedded SteveClient.ByID, which ignores
+	// the namespace, so the id must be namespace-qualified.
+	app, err := proxyClient.SteveType(appsSteveType).ByID(namespace + "/" + targetName)
 	if err != nil {
 		// Swallowed: the app may legitimately be absent, e.g. when the install never created it.
 		logrus.Warnf("chart action diagnostics: app %s/%s get: %v", namespace, targetName, err)
@@ -207,7 +214,9 @@ func logDownstreamCatalogDiagnostics(client *rancher.Client, clusterID, repoName
 		}
 	}
 
-	operations, err := proxyClient.SteveType(operationsSteveType).NamespacedSteveClient(namespace).List(nil)
+	// List is cluster-wide (the namespaced wrapper adds nothing for List); operations are
+	// filtered to the chart's namespace below.
+	operations, err := proxyClient.SteveType(operationsSteveType).List(nil)
 	if err != nil {
 		// Swallowed: diagnostics must not alter failure propagation.
 		logrus.Warnf("chart action diagnostics: operations list %s: %v", namespace, err)
@@ -220,6 +229,9 @@ func logDownstreamCatalogDiagnostics(client *rancher.Client, clusterID, repoName
 			break
 		}
 		operation := &operations.Data[i]
+		if operation.Namespace != namespace {
+			continue
+		}
 		if !isChartOperation(operation, targetName) {
 			continue
 		}
@@ -234,18 +246,14 @@ func logDownstreamCatalogDiagnostics(client *rancher.Client, clusterID, repoName
 	}
 }
 
-// isChartOperation reports whether an operation object relates to the chart, either through
-// the operation label family or the chart name appearing in the object name.
-func isChartOperation(operation *steveV1.SteveAPIObject, chartName string) bool {
-	if strings.Contains(operation.Name, chartName) {
-		return true
-	}
-	for labelKey := range operation.Labels {
-		if strings.Contains(labelKey, operationLabelFilter) {
-			return true
-		}
-	}
-	return false
+// isChartOperation reports whether an operation object relates to the target chart.
+// Operations are generated with helm-operation-* names and carry no chart labels; the
+// reliable correlation is status.releaseName, which rancher sets to the release (the App
+// name) the operation acts on.
+func isChartOperation(operation *steveV1.SteveAPIObject, targetName string) bool {
+	status, _ := operation.Status.(map[string]any)
+	releaseName, _ := status["releaseName"].(string)
+	return releaseName == targetName
 }
 
 // chartActionHTTPStatus extracts the HTTP status code the server returned from a chart

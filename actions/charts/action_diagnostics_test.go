@@ -1,3 +1,5 @@
+//go:build validation
+
 package charts
 
 import (
@@ -12,14 +14,16 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters"
 	scheme "github.com/rancher/shepherd/pkg/generated/clientset/versioned/scheme"
 	"github.com/sirupsen/logrus"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 )
 
 // newChartActionTestDoer builds a real rest client against a throwaway server so the
 // wrapper is exercised against genuine rest.Result objects, including error results
-// with retained raw bodies.
-func newChartActionTestDoer(t *testing.T, handler http.Handler) chartActionDoer {
+// with retained raw bodies. The server is also returned so tests can simulate
+// transport-level failures by closing it.
+func newChartActionTestDoer(t *testing.T, handler http.Handler) (chartActionDoer, *httptest.Server) {
 	t.Helper()
 
 	server := httptest.NewServer(handler)
@@ -37,9 +41,9 @@ func newChartActionTestDoer(t *testing.T, handler http.Handler) chartActionDoer 
 		t.Fatalf("rest client build failed: %v", err)
 	}
 	return client.Post().
-		AbsPath(chartRepoURLPath + "rancher-charts").
+		AbsPath(chartRepoURLPath+"rancher-charts").
 		Param(actionParam, verbInstall).
-		Body([]byte(`{"chart": "rancher-monitoring"}`))
+		Body([]byte(`{"chart": "rancher-monitoring"}`)), server
 }
 
 func chartActionTestOpts() *PayloadOpts {
@@ -80,7 +84,7 @@ func TestChartActionWithRetryCapturesStatusAndBody(t *testing.T) {
 	logs := captureChartActionLogs(t)
 	stubChartActionTiming(t, time.Millisecond, time.Second)
 
-	doer := newChartActionTestDoer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	doer, _ := newChartActionTestDoer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte(`{"kind":"Status","reason":"InternalError","message":"helm upgrade failed"}`))
@@ -102,13 +106,36 @@ func TestChartActionWithRetryCapturesStatusAndBody(t *testing.T) {
 	}
 }
 
+func TestChartActionWithRetryRecoversAfterTransientFailures(t *testing.T) {
+	stubChartActionTiming(t, time.Millisecond, time.Second)
+
+	var requests atomic.Int32
+	doer, _ := newChartActionTestDoer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if requests.Add(1) <= 2 {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`{"kind":"Status","code":500,"reason":"InternalError","message":"transient"}`))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	err := ChartActionWithRetry(context.Background(), nil, verbInstall, chartActionTestOpts(), "rancher-charts", "rancher-monitoring", doer)
+	if err != nil {
+		t.Fatalf("expected recovery on third attempt, got: %v", err)
+	}
+	if got := requests.Load(); got != 3 {
+		t.Errorf("expected exactly 3 requests on the recovery path, got %d", got)
+	}
+}
+
 func TestChartActionWithRetryStopsAtElapsedDeadline(t *testing.T) {
 	stubChartActionTiming(t, 10*time.Millisecond, 100*time.Millisecond)
 
 	var requests atomic.Int32
 	// Each handler call blocks well past the 100ms loop deadline, so only the first
 	// attempt may start; its per-attempt context must cut the hung request off.
-	doer := newChartActionTestDoer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	doer, _ := newChartActionTestDoer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		requests.Add(1)
 		select {
 		case <-time.After(400 * time.Millisecond):
@@ -138,7 +165,7 @@ func TestChartActionWithRetryHonorsContextCancellationBetweenAttempts(t *testing
 	stubChartActionTiming(t, 10*time.Second, time.Hour)
 
 	var requests atomic.Int32
-	doer := newChartActionTestDoer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	doer, _ := newChartActionTestDoer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		requests.Add(1)
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
@@ -159,7 +186,7 @@ func TestChartActionWithRetryUninstallNamesTargetNotRepo(t *testing.T) {
 	logs := captureChartActionLogs(t)
 	stubChartActionTiming(t, time.Millisecond, time.Second)
 
-	doer := newChartActionTestDoer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	doer, _ := newChartActionTestDoer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
 		_, _ = w.Write([]byte(`{"kind":"Status","reason":"NotFound","message":"apps.catalog.cattle.io not found"}`))
@@ -177,13 +204,64 @@ func TestChartActionWithRetryUninstallNamesTargetNotRepo(t *testing.T) {
 	}
 }
 
+func TestChartActionWithRetryDoesNotRetryClientErrors(t *testing.T) {
+	logs := captureChartActionLogs(t)
+	stubChartActionTiming(t, time.Millisecond, time.Second)
+
+	var requests atomic.Int32
+	doer, _ := newChartActionTestDoer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"kind":"Status","code":400,"reason":"BadRequest","message":"invalid chart values"}`))
+	}))
+
+	err := ChartActionWithRetry(context.Background(), nil, verbInstall, chartActionTestOpts(), "rancher-charts", "rancher-monitoring", doer)
+	if err == nil {
+		t.Fatal("expected failure, got nil")
+	}
+	if got := requests.Load(); got != 1 {
+		t.Errorf("terminal client error must not be retried, got %d requests", got)
+	}
+	if !apierrors.IsBadRequest(err) {
+		t.Errorf("wrapped API error not preserved through the retry error, got: %v", err)
+	}
+	if !strings.Contains(logs.String(), "status=400") {
+		t.Errorf("failure log missing HTTP status, got: %s", logs.String())
+	}
+}
+
+func TestChartActionWithRetryDoesNotRetryTransportErrors(t *testing.T) {
+	stubChartActionTiming(t, time.Millisecond, time.Second)
+
+	// A closed server means the request never gets an HTTP answer: the server may have
+	// processed an attempt without the client seeing a response, so the wrapper must
+	// treat the unknown-state failure as terminal rather than replay the action.
+	var requests atomic.Int32
+	doer, server := newChartActionTestDoer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+	}))
+	server.Close()
+
+	err := ChartActionWithRetry(context.Background(), nil, verbInstall, chartActionTestOpts(), "rancher-charts", "rancher-monitoring", doer)
+	if err == nil {
+		t.Fatal("expected failure, got nil")
+	}
+	if got := requests.Load(); got != 0 {
+		t.Errorf("transport failure must not be replayed, got %d handler calls", got)
+	}
+	if !strings.Contains(err.Error(), "failed after 1 attempts") {
+		t.Errorf("transport failure must stop after one attempt, got: %v", err)
+	}
+}
+
 func TestLogChartActionFailureNilClientIsNoop(t *testing.T) {
 	// Must not panic or log diagnostics when there is no client to read with.
 	LogChartActionFailure(context.Background(), nil, "rancher-charts", "c-local", "cattle-monitoring-system", "rancher-monitoring")
 }
 
 func TestChartActionHTTPStatus(t *testing.T) {
-	doer := newChartActionTestDoer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	doer, _ := newChartActionTestDoer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadGateway)
 	}))
 
