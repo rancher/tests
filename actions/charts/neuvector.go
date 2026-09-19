@@ -2,10 +2,12 @@ package charts
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/clients/rancher/catalog"
+	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/pkg/api/steve/catalog/types"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,7 +35,7 @@ func waitChartGone(catalogClient *catalog.Client, namespace, chartName string) e
 	})
 }
 
-func uninstallChartIfPresent(catalogClient *catalog.Client, namespace, chartName string) error {
+func uninstallChartIfPresent(client *rancher.Client, catalogClient *catalog.Client, opts *PayloadOpts, namespace, chartName string) error {
 	_, err := catalogClient.Apps(namespace).Get(context.TODO(), chartName, metav1.GetOptions{})
 	if err != nil {
 		if k8sErrors.IsNotFound(err) {
@@ -41,7 +43,13 @@ func uninstallChartIfPresent(catalogClient *catalog.Client, namespace, chartName
 		}
 		return err
 	}
-	if err := catalogClient.UninstallChart(chartName, namespace, NewChartUninstallAction()); err != nil {
+	chartOpts := *opts
+	chartOpts.Name = chartName
+	bodyBytes, err := json.Marshal(NewChartUninstallAction())
+	if err != nil {
+		return err
+	}
+	if err := ChartActionWithRetry(context.TODO(), client, verbUninstall, &chartOpts, "", chartName, buildAppUninstallRequest(catalogClient, namespace, chartName, bodyBytes)); err != nil {
 		if k8sErrors.IsNotFound(err) {
 			// Chart was removed between the Get and the uninstall call — treat as success.
 			return nil
@@ -150,7 +158,11 @@ func InstallNeuVectorChart(client *rancher.Client, payload PayloadOpts) error {
 	}
 
 	chartInstallAction := NewChartInstallAction(payload.Namespace, payload.ProjectID, chartInstalls)
-	err = catalogClient.InstallChart(chartInstallAction, catalog.RancherChartRepo)
+	bodyBytes, err := json.Marshal(chartInstallAction)
+	if err != nil {
+		return err
+	}
+	err = ChartActionWithRetry(context.TODO(), client, verbInstall, &payload, catalog.RancherChartRepo, NeuVectorChartName, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbInstall, bodyBytes))
 	if err != nil {
 		return err
 	}
@@ -168,9 +180,15 @@ func uninstallNeuVectorChart(client *rancher.Client, namespace string, clusterID
 		return err
 	}
 
-	if err := uninstallChartIfPresent(catalogClient, namespace, NeuVectorChartName); err != nil {
+	uninstallPayload := &PayloadOpts{
+		InstallOptions: InstallOptions{Cluster: &clusters.ClusterMeta{ID: clusterID}},
+		Name:           NeuVectorChartName,
+		Namespace:      namespace,
+	}
+
+	if err := uninstallChartIfPresent(client, catalogClient, uninstallPayload, namespace, NeuVectorChartName); err != nil {
 		return err
 	}
 
-	return uninstallChartIfPresent(catalogClient, namespace, NeuVectorChartName+"-crd")
+	return uninstallChartIfPresent(client, catalogClient, uninstallPayload, namespace, NeuVectorChartName+"-crd")
 }
