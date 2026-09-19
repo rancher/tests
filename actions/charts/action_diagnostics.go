@@ -203,8 +203,10 @@ func LogChartActionFailure(ctx context.Context, client *rancher.Client, repoName
 			if r := recover(); r != nil {
 				// Swallowed: shepherd client internals can panic (multi-page
 				// collections dereference an unset client, for example); diagnostics
-				// must never take the test process down with them.
-				logrus.Warnf("chart action diagnostics: recovered from panic: %v", r)
+				// must never take the test process down with them. The panic value can
+				// embed server-provided text, so it passes the redaction layer and cap
+				// like every other logged diagnostics string.
+				logrus.Warnf("chart action diagnostics: recovered from panic: %s", redactDiagnosticsBody([]byte(fmt.Sprintf("%v", r))))
 			}
 		}()
 		logDownstreamCatalogDiagnostics(client, clusterID, repoName, namespace, targetNames)

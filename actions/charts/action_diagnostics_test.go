@@ -529,6 +529,11 @@ func TestRedactDiagnosticsBody(t *testing.T) {
 					t.Errorf("redacted body leaked %q: %s", banned, logged)
 				}
 			}
+			for _, want := range tt.mustHave {
+				if !strings.Contains(logged, want) {
+					t.Errorf("redacted body missing %q: %s", want, logged)
+				}
+			}
 		})
 	}
 }
