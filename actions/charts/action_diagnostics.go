@@ -338,21 +338,26 @@ func cappedDiagnosticsBody(body []byte) string {
 
 // buildRepoActionRequest mirrors shepherd's InstallChart/UpgradeChart request shape
 // (clients/rancher/catalog/clusterrepo.go) without executing it, so the retry wrapper can
-// re-issue the identical request.
+// re-issue the identical request. MaxRetries(0) disables client-go's internal retry
+// (default 10 on Retry-After responses) so ChartActionWithRetry is the sole retry
+// owner and the attempt count in the logs matches the requests actually sent.
 func buildRepoActionRequest(catalogClient *catalog.Client, repoName, verb string, bodyBytes []byte) *rest.Request {
 	return catalogClient.RESTClient().Post().
 		AbsPath(chartRepoURLPath+repoName).Param(actionParam, verb).
 		VersionedParams(&metav1.CreateOptions{}, scheme.ParameterCodec).
-		Body(bodyBytes)
+		Body(bodyBytes).
+		MaxRetries(0)
 }
 
-// buildAppUninstallRequest mirrors shepherd's UninstallChart request shape without executing it.
+// buildAppUninstallRequest mirrors shepherd's UninstallChart request shape without
+// executing it. MaxRetries(0) keeps ChartActionWithRetry the sole retry owner.
 func buildAppUninstallRequest(catalogClient *catalog.Client, namespace, chartName string, bodyBytes []byte) *rest.Request {
 	return catalogClient.RESTClient().Post().
 		Name(chartName).
 		AbsPath(chartAppsURLPath+namespace).Param(actionParam, verbUninstall).
 		Body(bodyBytes).
-		VersionedParams(&metav1.CreateOptions{}, scheme.ParameterCodec)
+		VersionedParams(&metav1.CreateOptions{}, scheme.ParameterCodec).
+		MaxRetries(0)
 }
 
 // logChartActionLifecycle emits the machine-readable lifecycle line for every chart action.

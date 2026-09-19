@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rancher/shepherd/clients/rancher/catalog"
 	"github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/clusters"
 	scheme "github.com/rancher/shepherd/pkg/generated/clientset/versioned/scheme"
@@ -340,6 +341,46 @@ func TestChartActionWithRetryDoesNotRetryTransportErrors(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "failed after 1 attempts") {
 		t.Errorf("transport failure must stop after one attempt, got: %v", err)
+	}
+}
+
+func TestChartActionRequestBuildersDisableClientGoRetries(t *testing.T) {
+	stubChartActionTiming(t, time.Millisecond, time.Second, time.Second, 0)
+
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Retry-After", "1")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"kind":"Status","code":429,"reason":"TooManyRequests","message":"slow down"}`))
+	}))
+	t.Cleanup(server.Close)
+
+	config := &rest.Config{
+		Host: server.URL,
+		ContentConfig: rest.ContentConfig{
+			GroupVersion:         &schema.GroupVersion{Group: "catalog.cattle.io", Version: "v1"},
+			NegotiatedSerializer: scheme.Codecs.WithoutConversion(),
+		},
+	}
+	catClient, err := catalog.NewForConfig(config, nil)
+	if err != nil {
+		t.Fatalf("catalog client build failed: %v", err)
+	}
+
+	body := []byte(`{"chart": "rancher-monitoring"}`)
+	req := buildRepoActionRequest(catClient, "rancher-charts", verbInstall, body)
+
+	err = ChartActionWithRetry(context.Background(), nil, verbInstall, chartActionTestOpts(), "rancher-charts", []string{"rancher-monitoring"}, req)
+	if err == nil {
+		t.Fatal("expected failure, got nil")
+	}
+	// 3 wrapper attempts must mean exactly 3 POSTs: with client-go's default internal
+	// retry (maxRetries=10), a Retry-After 429 would multiply this to 33 requests
+	// while the logs still reported three attempts.
+	if got := requests.Load(); got != 3 {
+		t.Errorf("expected exactly 3 requests (one per wrapper attempt), got %d", got)
 	}
 }
 
