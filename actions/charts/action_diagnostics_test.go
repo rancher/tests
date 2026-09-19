@@ -472,6 +472,18 @@ func TestRedactDiagnosticsBody(t *testing.T) {
 			mustHave: []string{"rejected", "rancher-monitoring", "[redacted]"},
 		},
 		{
+			name:     "credential assignments inside ordinary string fields are scrubbed",
+			body:     `{"kind":"Status","message":"admission denied: password=hunter2 and api_key=ak-1234567890 for user admin","chart":"rancher-monitoring"}`,
+			mustNot:  []string{"hunter2", "ak-1234567890"},
+			mustHave: []string{"admission denied", "rancher-monitoring", "[redacted]"},
+		},
+		{
+			name:     "credential assignments in non-JSON text are scrubbed",
+			body:     "upstream webhook error: password=hunter2 rejected, token: tok-abcdef123456 expired",
+			mustNot:  []string{"hunter2", "tok-abcdef123456"},
+			mustHave: []string{"upstream webhook error", "[redacted]"},
+		},
+		{
 			name:     "unstructured body scrubs bearer credentials",
 			body:     "upstream error: Authorization: Bearer abc123def456ghi789 while proxying",
 			mustNot:  []string{"abc123def456ghi789"},
@@ -499,5 +511,29 @@ func TestRedactDiagnosticsBody(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestChartActionFailureLogOmitsServerErrorText(t *testing.T) {
+	// The server message (which can echo rejected chart values) must reach the log
+	// only through the redacted body, never through the error= field.
+	logs := captureChartActionLogs(t)
+	stubChartActionTiming(t, time.Millisecond, time.Second, time.Second, 0)
+
+	doer, _ := newChartActionTestDoer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"kind":"Status","message":"helm upgrade failed: password=hunter2 rejected"}`))
+	}))
+
+	err := ChartActionWithRetry(context.Background(), nil, verbInstall, chartActionTestOpts(), "rancher-charts", []string{"rancher-monitoring"}, doer)
+	if err == nil {
+		t.Fatal("expected failure, got nil")
+	}
+	if strings.Contains(logs.String(), "hunter2") {
+		t.Errorf("failure log leaked server-echoed credential, got: %s", logs.String())
+	}
+	if !strings.Contains(logs.String(), "error=see status and redacted body") {
+		t.Errorf("server-answered failure must not log raw error text, got: %s", logs.String())
 	}
 }

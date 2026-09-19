@@ -112,11 +112,18 @@ func ChartActionWithRetry(ctx context.Context, client *rancher.Client, verb stri
 		// The k8s client flattens non-Status 5xx bodies to "unknown"; Result.Raw retains
 		// the original response, so the status and body come from the failed attempt
 		// itself rather than a re-issued mutating request. The body passes the
-		// redaction layer before it can reach Jenkins logs or archived evidence.
+		// redaction layer before it can reach Jenkins logs or archived evidence, and the
+		// raw error text is logged only for transport failures: server-answered errors
+		// embed the unredacted server message, and the status plus redacted body already
+		// carry the response details.
 		body, _ := result.Raw()
+		errText := "see status and redacted body"
+		if httpStatus == 0 {
+			errText = lastErr.Error()
+		}
 		logrus.Warnf("chart action failed: ts=%s verb=%s chart=%s target=%s attempt=%d/%d elapsed=%s status=%d error=%v body=%s",
 			time.Now().UTC().Format(time.RFC3339), verb, opts.Name, strings.Join(targetNames, ","), attempt, chartActionMaxAttempts,
-			time.Since(start).Round(time.Millisecond), httpStatus, lastErr, redactDiagnosticsBody(body))
+			time.Since(start).Round(time.Millisecond), httpStatus, errText, redactDiagnosticsBody(body))
 
 		if !isRetryableChartActionStatus(httpStatus) || attempt == chartActionMaxAttempts {
 			break
@@ -321,15 +328,31 @@ func chartOperationStatusForLog(operation *steveV1.SteveAPIObject) string {
 // sensitiveFieldPattern matches object keys whose values must never reach logs.
 var sensitiveFieldPattern = regexp.MustCompile(`(?i)token|password|secret|credential|authorization|cookie|privatekey|clientkey|cert`)
 
-// credentialTextPattern matches bearer/basic credential shapes inside otherwise
-// unstructured error text.
+// credentialTextPattern matches bearer/basic credential shapes inside free text.
 var credentialTextPattern = regexp.MustCompile(`(?i)(bearer|basic)\s+[a-z0-9._~+/=-]{8,}`)
 
+// credentialAssignmentPattern matches key=value and key: value forms of credential
+// parameters embedded in free text, e.g. "password=hunter2" inside an error message.
+// authorization is deliberately absent: the Authorization header shape is owned by
+// credentialTextPattern, which preserves the scheme name in its replacement.
+var credentialAssignmentPattern = regexp.MustCompile(`(?i)\b(password|passwd|token|secret|api[_-]?key|client[_-]?secret|cookie)\s*([=:])\s*[^\s,"'}]+`)
+
+// scrubCredentialText applies the content-level credential policy to a free-text
+// string: known credential shapes and key=value assignments are replaced. Opaque
+// secrets without a recognizable shape are not statically detectable; suppressing all
+// response text instead would discard the failure evidence this diagnostics path
+// exists to collect.
+func scrubCredentialText(text string) string {
+	text = credentialTextPattern.ReplaceAllString(text, "$1 [redacted]")
+	return credentialAssignmentPattern.ReplaceAllString(text, "$1$2 [redacted]")
+}
+
 // redactDiagnosticsBody renders a response body safe for Jenkins logs and archived
-// evidence. Structured JSON is redacted recursively by sensitive key names; other
-// bodies (proxy or framework error text, which this diagnostics path exists to
-// capture) keep their diagnostic value with credential-shaped substrings scrubbed.
-// The result is truncated to diagnosticsBodyCapBytes.
+// evidence. Structured JSON is redacted recursively: values under sensitive keys are
+// dropped, and every remaining string value passes the same content-level credential
+// scrub the unstructured branch uses, so secrets echoed inside ordinary fields such as
+// message are caught in both shapes. The result is truncated to
+// diagnosticsBodyCapBytes.
 func redactDiagnosticsBody(body []byte) string {
 	var parsed any
 	if err := json.Unmarshal(body, &parsed); err == nil {
@@ -337,10 +360,11 @@ func redactDiagnosticsBody(body []byte) string {
 			return cappedDiagnosticsBody(redacted)
 		}
 	}
-	return cappedDiagnosticsBody([]byte(credentialTextPattern.ReplaceAllString(string(body), "$1 [redacted]")))
+	return cappedDiagnosticsBody([]byte(scrubCredentialText(string(body))))
 }
 
-// redactJSONValue replaces values under sensitive keys and recurses into containers.
+// redactJSONValue replaces values under sensitive keys with a placeholder, recurses
+// into containers, and content-scrubs remaining string leaves.
 func redactJSONValue(value any) any {
 	switch typed := value.(type) {
 	case map[string]any:
@@ -357,6 +381,8 @@ func redactJSONValue(value any) any {
 			typed[i] = redactJSONValue(inner)
 		}
 		return typed
+	case string:
+		return scrubCredentialText(typed)
 	}
 	return value
 }
