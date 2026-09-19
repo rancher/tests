@@ -127,6 +127,11 @@ func ChartActionWithRetry(ctx context.Context, client *rancher.Client, verb stri
 			lastErr = ctx.Err()
 			break
 		}
+		if time.Now().After(budgetEnd) {
+			// Scheduler delay can let the sleep finish past the budget; never start
+			// another attempt after it has expired.
+			break
+		}
 	}
 
 	LogChartActionFailure(ctx, client, repoName, opts.Cluster.ID, opts.Namespace, targetNames)
@@ -169,6 +174,14 @@ func LogChartActionFailure(ctx context.Context, client *rancher.Client, repoName
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
+		defer func() {
+			if r := recover(); r != nil {
+				// Swallowed: shepherd client internals can panic (multi-page
+				// collections dereference an unset client, for example); diagnostics
+				// must never take the test process down with them.
+				logrus.Warnf("chart action diagnostics: recovered from panic: %v", r)
+			}
+		}()
 		logDownstreamCatalogDiagnostics(client, clusterID, repoName, namespace, targetNames)
 	}()
 	select {
@@ -233,9 +246,11 @@ func logDownstreamCatalogDiagnostics(client *rancher.Client, clusterID, repoName
 		}
 	}
 
-	// NamespacedSteveClient.List scopes the collection URL to the namespace, and ListAll
-	// follows every page, so a busy cluster cannot hide this namespace's operations.
-	operations, err := proxyClient.SteveType(operationsSteveType).NamespacedSteveClient(namespace).ListAll(nil)
+	// NamespacedSteveClient.List scopes the collection URL to the namespace. Single page
+	// only: shepherd's ListAll panics when pagination.next is set, because List never
+	// initializes the private collection client that Next() dereferences. The recover
+	// guard in LogChartActionFailure is the second line of defense for other panics.
+	operations, err := proxyClient.SteveType(operationsSteveType).NamespacedSteveClient(namespace).List(nil)
 	if err != nil {
 		// Swallowed: diagnostics must not alter failure propagation.
 		logrus.Warnf("chart action diagnostics: operations list %s: %v", namespace, err)

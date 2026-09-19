@@ -209,6 +209,43 @@ func TestChartActionWithRetryStopsStartingAttemptsPastBudget(t *testing.T) {
 	}
 }
 
+func TestChartActionWithRetryRechecksBudgetAfterSleepOvershoot(t *testing.T) {
+	// The pre-sleep check passes (remaining 59ms > spacing 50ms), but the sleep seam
+	// simulates scheduler delay by running long past its requested duration, finishing
+	// after the 60ms budget has expired. The post-sleep re-check must stop the loop.
+	stubChartActionTiming(t, 50*time.Millisecond, 60*time.Millisecond, time.Second, 0)
+
+	origSleep := sleepBetweenAttempts
+	sleepBetweenAttempts = func(ctx context.Context, _ time.Duration) bool {
+		timer := time.NewTimer(90 * time.Millisecond)
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+			return false
+		case <-timer.C:
+			return true
+		}
+	}
+	t.Cleanup(func() { sleepBetweenAttempts = origSleep })
+
+	var requests atomic.Int32
+	doer, _ := newChartActionTestDoer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+
+	err := ChartActionWithRetry(context.Background(), nil, verbInstall, chartActionTestOpts(), "rancher-charts", []string{"rancher-monitoring"}, doer)
+	if err == nil {
+		t.Fatal("expected failure, got nil")
+	}
+	if got := requests.Load(); got != 1 {
+		t.Errorf("attempt must not start after the sleep overshot the budget, got %d requests", got)
+	}
+	if !strings.Contains(err.Error(), "failed after 1 attempts") {
+		t.Errorf("error does not report the budget-stopped attempt count, got: %v", err)
+	}
+}
+
 func TestChartActionWithRetryHonorsContextCancellationBetweenAttempts(t *testing.T) {
 	stubChartActionTiming(t, 10*time.Second, time.Hour, time.Second, 0)
 
