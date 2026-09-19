@@ -2,6 +2,7 @@ package charts
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/rancher/shepherd/clients/rancher"
@@ -44,8 +45,11 @@ func uninstallChartIfPresent(client *rancher.Client, catalogClient *catalog.Clie
 	}
 	chartOpts := *opts
 	chartOpts.Name = chartName
-	bodyBytes := marshalChartAction(NewChartUninstallAction())
-	if err := ChartActionWithRetry(context.TODO(), client, verbUninstall, &chartOpts, chartName, buildAppUninstallRequest(catalogClient, namespace, chartName, bodyBytes), bodyBytes); err != nil {
+	bodyBytes, err := json.Marshal(NewChartUninstallAction())
+	if err != nil {
+		return err
+	}
+	if err := ChartActionWithRetry(context.TODO(), client, verbUninstall, &chartOpts, "", chartName, buildAppUninstallRequest(catalogClient, namespace, chartName, bodyBytes)); err != nil {
 		if k8sErrors.IsNotFound(err) {
 			// Chart was removed between the Get and the uninstall call — treat as success.
 			return nil
@@ -154,8 +158,11 @@ func InstallNeuVectorChart(client *rancher.Client, payload PayloadOpts) error {
 	}
 
 	chartInstallAction := NewChartInstallAction(payload.Namespace, payload.ProjectID, chartInstalls)
-	bodyBytes := marshalChartAction(chartInstallAction)
-	err = ChartActionWithRetry(context.TODO(), client, verbInstall, &payload, catalog.RancherChartRepo, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbInstall, bodyBytes), bodyBytes)
+	bodyBytes, err := json.Marshal(chartInstallAction)
+	if err != nil {
+		return err
+	}
+	err = ChartActionWithRetry(context.TODO(), client, verbInstall, &payload, catalog.RancherChartRepo, NeuVectorChartName, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbInstall, bodyBytes))
 	if err != nil {
 		return err
 	}

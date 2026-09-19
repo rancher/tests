@@ -2,6 +2,7 @@ package charts
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	catalogv1 "github.com/rancher/rancher/pkg/apis/catalog.cattle.io/v1"
@@ -35,8 +36,11 @@ func InstallComplianceChart(client *rancher.Client, ChartInstallActionPayload *P
 	client.Session.RegisterCleanupFunc(func() error {
 		defaultChartUninstallAction := NewChartUninstallAction()
 
-		bodyBytes := marshalChartAction(defaultChartUninstallAction)
-		err = ChartActionWithRetry(context.TODO(), client, verbUninstall, ChartInstallActionPayload, ChartInstallActionPayload.Name, buildAppUninstallRequest(catalogClient, ChartInstallActionPayload.Namespace, ChartInstallActionPayload.Name, bodyBytes), bodyBytes)
+		bodyBytes, err := json.Marshal(defaultChartUninstallAction)
+		if err != nil {
+			return err
+		}
+		err = ChartActionWithRetry(context.TODO(), client, verbUninstall, ChartInstallActionPayload, "", ChartInstallActionPayload.Name, buildAppUninstallRequest(catalogClient, ChartInstallActionPayload.Namespace, ChartInstallActionPayload.Name, bodyBytes))
 		if err != nil {
 			return err
 		}
@@ -63,8 +67,11 @@ func InstallComplianceChart(client *rancher.Client, ChartInstallActionPayload *P
 			return err
 		}
 
-		bodyBytes = marshalChartAction(defaultChartUninstallAction)
-		err = ChartActionWithRetry(context.TODO(), client, verbUninstall, ChartInstallActionPayload, ChartInstallActionPayload.Name+"-crd", buildAppUninstallRequest(catalogClient, ChartInstallActionPayload.Namespace, ChartInstallActionPayload.Name+"-crd", bodyBytes), bodyBytes)
+		bodyBytes, err = json.Marshal(defaultChartUninstallAction)
+		if err != nil {
+			return err
+		}
+		err = ChartActionWithRetry(context.TODO(), client, verbUninstall, ChartInstallActionPayload, "", ChartInstallActionPayload.Name+"-crd", buildAppUninstallRequest(catalogClient, ChartInstallActionPayload.Namespace, ChartInstallActionPayload.Name+"-crd", bodyBytes))
 		if err != nil {
 			return err
 		}
@@ -139,8 +146,11 @@ func InstallComplianceChart(client *rancher.Client, ChartInstallActionPayload *P
 		})
 	})
 
-	bodyBytes := marshalChartAction(chartInstallAction)
-	err = ChartActionWithRetry(context.TODO(), client, verbInstall, ChartInstallActionPayload, catalog.RancherChartRepo, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbInstall, bodyBytes), bodyBytes)
+	bodyBytes, err := json.Marshal(chartInstallAction)
+	if err != nil {
+		return err
+	}
+	err = ChartActionWithRetry(context.TODO(), client, verbInstall, ChartInstallActionPayload, catalog.RancherChartRepo, ChartInstallActionPayload.Name, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbInstall, bodyBytes))
 	if err != nil {
 		return err
 	}
@@ -209,8 +219,11 @@ func UpgradeRancherComplianceChart(client *rancher.Client, installOptions *Insta
 		return err
 	}
 
-	bodyBytes := marshalChartAction(chartUpgradeAction)
-	err = ChartActionWithRetry(context.TODO(), client, verbUpgrade, benchmarkChartUpgradeActionPayload, catalog.RancherChartRepo, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbUpgrade, bodyBytes), bodyBytes)
+	bodyBytes, err := json.Marshal(chartUpgradeAction)
+	if err != nil {
+		return err
+	}
+	err = ChartActionWithRetry(context.TODO(), client, verbUpgrade, benchmarkChartUpgradeActionPayload, catalog.RancherChartRepo, benchmarkChartUpgradeActionPayload.Name, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbUpgrade, bodyBytes))
 	if err != nil {
 		return err
 	}

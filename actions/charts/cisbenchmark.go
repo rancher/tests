@@ -2,6 +2,7 @@ package charts
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	catalogv1 "github.com/rancher/rancher/pkg/apis/catalog.cattle.io/v1"
@@ -35,8 +36,11 @@ func InstallHardenedChart(client *rancher.Client, ChartInstallActionPayload *Pay
 	client.Session.RegisterCleanupFunc(func() error {
 		defaultChartUninstallAction := NewChartUninstallAction()
 
-		bodyBytes := marshalChartAction(defaultChartUninstallAction)
-		err = ChartActionWithRetry(context.TODO(), client, verbUninstall, ChartInstallActionPayload, ChartInstallActionPayload.Name, buildAppUninstallRequest(catalogClient, ChartInstallActionPayload.Namespace, ChartInstallActionPayload.Name, bodyBytes), bodyBytes)
+		bodyBytes, err := json.Marshal(defaultChartUninstallAction)
+		if err != nil {
+			return err
+		}
+		err = ChartActionWithRetry(context.TODO(), client, verbUninstall, ChartInstallActionPayload, "", ChartInstallActionPayload.Name, buildAppUninstallRequest(catalogClient, ChartInstallActionPayload.Namespace, ChartInstallActionPayload.Name, bodyBytes))
 		if err != nil {
 			return err
 		}
@@ -64,11 +68,14 @@ func InstallHardenedChart(client *rancher.Client, ChartInstallActionPayload *Pay
 		}
 
 		// Preserve the pre-existing namespace argument (chart name, not payload namespace) so
-		// the retry wrapper probes the identical request this cleanup actually makes.
+		// the retry wrapper issues the identical request this cleanup actually makes.
 		crdUninstallPayload := *ChartInstallActionPayload
 		crdUninstallPayload.Namespace = ChartInstallActionPayload.Name
-		bodyBytes = marshalChartAction(defaultChartUninstallAction)
-		err = ChartActionWithRetry(context.TODO(), client, verbUninstall, &crdUninstallPayload, ChartInstallActionPayload.Name+"-crd", buildAppUninstallRequest(catalogClient, ChartInstallActionPayload.Name, ChartInstallActionPayload.Name+"-crd", bodyBytes), bodyBytes)
+		bodyBytes, err = json.Marshal(defaultChartUninstallAction)
+		if err != nil {
+			return err
+		}
+		err = ChartActionWithRetry(context.TODO(), client, verbUninstall, &crdUninstallPayload, "", ChartInstallActionPayload.Name+"-crd", buildAppUninstallRequest(catalogClient, ChartInstallActionPayload.Name, ChartInstallActionPayload.Name+"-crd", bodyBytes))
 		if err != nil {
 			return err
 		}
@@ -143,8 +150,11 @@ func InstallHardenedChart(client *rancher.Client, ChartInstallActionPayload *Pay
 		})
 	})
 
-	bodyBytes := marshalChartAction(chartInstallAction)
-	err = ChartActionWithRetry(context.TODO(), client, verbInstall, ChartInstallActionPayload, catalog.RancherChartRepo, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbInstall, bodyBytes), bodyBytes)
+	bodyBytes, err := json.Marshal(chartInstallAction)
+	if err != nil {
+		return err
+	}
+	err = ChartActionWithRetry(context.TODO(), client, verbInstall, ChartInstallActionPayload, catalog.RancherChartRepo, ChartInstallActionPayload.Name, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbInstall, bodyBytes))
 	if err != nil {
 		return err
 	}
@@ -212,8 +222,11 @@ func UpgradeCISBenchmarkChart(client *rancher.Client, installOptions *InstallOpt
 		return err
 	}
 
-	bodyBytes := marshalChartAction(chartUpgradeAction)
-	err = ChartActionWithRetry(context.TODO(), client, verbUpgrade, benchmarkChartUpgradeActionPayload, catalog.RancherChartRepo, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbUpgrade, bodyBytes), bodyBytes)
+	bodyBytes, err := json.Marshal(chartUpgradeAction)
+	if err != nil {
+		return err
+	}
+	err = ChartActionWithRetry(context.TODO(), client, verbUpgrade, benchmarkChartUpgradeActionPayload, catalog.RancherChartRepo, benchmarkChartUpgradeActionPayload.Name, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbUpgrade, bodyBytes))
 	if err != nil {
 		return err
 	}

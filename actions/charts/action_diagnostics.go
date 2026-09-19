@@ -1,13 +1,10 @@
 package charts
 
 import (
-	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
 	"time"
 
@@ -33,11 +30,15 @@ const (
 	chartRepoURLPath     = "v1/catalog.cattle.io.clusterrepos/"
 	chartAppsURLPath     = "v1/catalog.cattle.io.apps/"
 	operationLabelFilter = "operation.cattle.io/"
+)
 
+// Timing knobs are vars so the verification harness can scale them down.
+var (
 	chartActionMaxAttempts  = 3
 	chartActionRetrySpacing = 30 * time.Second
 	chartActionMaxElapsed   = 150 * time.Second
 	diagnosticsBodyCapBytes = 4096
+	diagnosticsBundleLimit  = 60 * time.Second
 	diagnosticsListLimit    = 20
 )
 
@@ -47,44 +48,73 @@ type chartActionDoer interface {
 }
 
 // sleepBetweenAttempts is the indirection point for sleeping between retry attempts so the
-// throwaway verification harness can stub real sleeping out.
-var sleepBetweenAttempts = func(d time.Duration) {
-	// time.After instead of time.Sleep to stay clear of the forbidigo sleep ban.
-	<-time.After(d)
+// throwaway verification harness can stub real sleeping out. It reports whether the full
+// delay elapsed; false means ctx was cancelled and no further attempt should start.
+var sleepBetweenAttempts = func(ctx context.Context, d time.Duration) bool {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
 }
 
 // ChartActionWithRetry executes a chart install/upgrade/uninstall request with bounded retry
-// on retryable failures (the observed PIT failures are 5xx with flattened "unknown" bodies),
-// emitting a lifecycle line per action and the full diagnostics bundle on final failure.
-// Caller-visible error semantics are unchanged apart from the added attempts.
-func ChartActionWithRetry(ctx context.Context, client *rancher.Client, verb string, opts *PayloadOpts, repoName string, req chartActionDoer, body []byte) error {
-	logChartActionLifecycle(verb, opts, repoName)
+// on retryable failures (the observed PIT failures are 5xx whose raw bodies the k8s client
+// flattens to "unknown"), emitting a lifecycle line per action, the response status and raw
+// body of each failed attempt straight from the original rest.Result, and the downstream
+// catalog state on final failure.
+//
+// repoName is the ClusterRepo the action targets (install/upgrade); it is empty for
+// uninstalls, which address the App directly. targetName is the catalog App the action
+// applies to: the chart name for installs/upgrades and base uninstalls, "<chart>-crd" for
+// CRD cleanup uninstalls. Diagnostics, lifecycle logs, and the returned error all name
+// targetName, never repoName.
+func ChartActionWithRetry(ctx context.Context, client *rancher.Client, verb string, opts *PayloadOpts, repoName, targetName string, req chartActionDoer) error {
+	logChartActionLifecycle(verb, opts, repoName, targetName)
 
 	start := time.Now()
+	deadline := start.Add(chartActionMaxElapsed)
 	attemptsMade := 0
 	var lastErr error
 	for attempt := 1; attempt <= chartActionMaxAttempts; attempt++ {
 		attemptsMade = attempt
-		lastErr = req.Do(ctx).Error()
+		// Bound every attempt by the overall deadline so a hung request cannot push the
+		// loop past chartActionMaxElapsed.
+		attemptCtx, cancel := context.WithTimeout(ctx, time.Until(deadline))
+		result := req.Do(attemptCtx)
+		cancel()
+		lastErr = result.Error()
 		if lastErr == nil {
 			return nil
 		}
 
-		logrus.Warnf("chart action failed: ts=%s verb=%s chart=%s attempt=%d/%d elapsed=%s error=%v",
-			time.Now().UTC().Format(time.RFC3339), verb, opts.Name, attempt, chartActionMaxAttempts,
-			time.Since(start).Round(time.Millisecond), lastErr)
+		// The k8s client flattens non-Status 5xx bodies to "unknown"; Result.Raw retains
+		// the original response, so the status and body come from the failed attempt
+		// itself rather than a re-issued mutating request.
+		body, _ := result.Raw()
+		logrus.Warnf("chart action failed: ts=%s verb=%s chart=%s target=%s attempt=%d/%d elapsed=%s status=%d error=%v body=%s",
+			time.Now().UTC().Format(time.RFC3339), verb, opts.Name, targetName, attempt, chartActionMaxAttempts,
+			time.Since(start).Round(time.Millisecond), chartActionHTTPStatus(lastErr), lastErr, cappedDiagnosticsBody(body))
 
-		if !isRetryableChartActionError(lastErr) {
+		if !isRetryableChartActionError(lastErr) || attempt == chartActionMaxAttempts {
 			break
 		}
-		if attempt == chartActionMaxAttempts || time.Since(start) >= chartActionMaxElapsed {
+		remaining := time.Until(deadline)
+		spacing := waitBetweenAttempts(attempt)
+		if remaining <= spacing {
+			// Not enough budget left for the inter-attempt delay plus a meaningful retry.
 			break
 		}
-		sleepBetweenAttempts(waitBetweenAttempts(attempt))
+		if !sleepBetweenAttempts(ctx, spacing) {
+			break
+		}
 	}
 
-	LogChartActionFailure(ctx, client, verb, repoName, opts.Cluster.ID, opts.Namespace, opts.Name, body)
-	return fmt.Errorf("chart action %s %s failed after %d attempts: %w", verb, opts.Name, attemptsMade, lastErr)
+	LogChartActionFailure(ctx, client, repoName, opts.Cluster.ID, opts.Namespace, targetName)
+	return fmt.Errorf("chart action %s %s failed after %d attempts: %w", verb, targetName, attemptsMade, lastErr)
 }
 
 // waitBetweenAttempts returns the fixed delay between chart action retry attempts.
@@ -104,39 +134,42 @@ func isRetryableChartActionError(err error) bool {
 		apierrors.IsInvalid(err))
 }
 
-// LogChartActionFailure re-issues the failing chart action request against the raw cluster
-// API to capture the HTTP status and response body that the shepherd client discards, then
-// dumps the ClusterRepo and the catalog App/Operation state around the failure. Every step
-// logs and swallows its own error so diagnostics never alter the failure the caller returns.
-func LogChartActionFailure(ctx context.Context, client *rancher.Client, verb, repoName, clusterID, namespace, chartName string, body []byte) {
-	if client == nil || body == nil {
-		// Diagnostics are best-effort; without a client or request body there is nothing to probe with.
+// LogChartActionFailure dumps the catalog state around a failed chart action: the
+// ClusterRepo the action targeted (when non-empty), the target App, and the catalog
+// Operations in the chart's namespace, all through the downstream steve proxy. The bundle
+// runs under a wall-clock bound because shepherd's ProxyDownstream and steve reads accept
+// no context and must not delay failure propagation indefinitely. Every step logs and
+// swallows its own error so diagnostics never alter the failure the caller returns.
+func LogChartActionFailure(ctx context.Context, client *rancher.Client, repoName, clusterID, namespace, targetName string) {
+	if client == nil {
+		// Diagnostics are best-effort; without a client there is nothing to read with.
 		return
 	}
 
-	probeURL := buildChartActionURL(client.RancherConfig.Host, clusterID, chartRepoURLPath, repoName, verb)
-	if verb == verbUninstall {
-		// Uninstall actions target the namespaced app resource, not the cluster repo.
-		probeURL = buildChartActionURL(client.RancherConfig.Host, clusterID, chartAppsURLPath+namespace, chartName, verb)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		logDownstreamCatalogDiagnostics(client, clusterID, repoName, namespace, targetName)
+	}()
+	select {
+	case <-done:
+	case <-ctx.Done():
+		logrus.Warnf("chart action diagnostics: abandoned: %v", ctx.Err())
+	case <-time.After(diagnosticsBundleLimit):
+		// Swallowed: a wedged downstream tunnel must not block failure propagation. The
+		// goroutine is one-shot diagnostics; it exits with the process once its own
+		// calls fail or the connection drops.
+		logrus.Warnf("chart action diagnostics: bundle timed out after %s", diagnosticsBundleLimit)
 	}
-
-	status, responseBody, err := probeRequest(ctx, client.RancherConfig.Host, client.RancherConfig.AdminToken, probeURL, verb, body)
-	if err != nil {
-		// Swallowed: the probe is diagnostics and must not mask the original chart action failure.
-		logrus.Warnf("chart action probe: transport error: %v", err)
-	} else {
-		logrus.Warnf("chart action probe: verb=%s status=%d body=%s", verb, status, responseBody)
-	}
-
-	logDownstreamCatalogDiagnostics(client, clusterID, namespace, chartName)
 }
 
-// logDownstreamCatalogDiagnostics dumps the rancher-charts ClusterRepo status, the target app
-// status, and the catalog operations in the chart's namespace through the downstream steve
-// proxy. The ClusterRepo is read via the proxy with the singular steve type (the same proven
-// pattern as neuvector's waitForRancherChartsRepo); the management steve client rejects the
-// clusterrepo schema type with "Unknown schema type".
-func logDownstreamCatalogDiagnostics(client *rancher.Client, clusterID, namespace, chartName string) {
+// logDownstreamCatalogDiagnostics dumps the ClusterRepo named by repoName (when non-empty;
+// empty for uninstalls), the target App status, and the catalog operations in the chart's
+// namespace through the downstream steve proxy. The ClusterRepo is read via the proxy with
+// the singular steve type (the same proven pattern as neuvector's
+// waitForRancherChartsRepo); the management steve client rejects the clusterrepo schema
+// type with "Unknown schema type".
+func logDownstreamCatalogDiagnostics(client *rancher.Client, clusterID, repoName, namespace, targetName string) {
 	proxyClient, err := client.Steve.ProxyDownstream(clusterID)
 	if err != nil {
 		// Swallowed: diagnostics must not alter failure propagation.
@@ -144,31 +177,33 @@ func logDownstreamCatalogDiagnostics(client *rancher.Client, clusterID, namespac
 		return
 	}
 
-	repo, err := proxyClient.SteveType(clusterReposResource).ByID(catalog.RancherChartRepo)
-	if err != nil {
-		// Swallowed: diagnostics must not alter failure propagation.
-		logrus.Warnf("chart action diagnostics: clusterrepo %s get: %v", catalog.RancherChartRepo, err)
-	} else {
-		repoStatus, err := json.Marshal(repo.Status)
+	if repoName != "" {
+		repo, err := proxyClient.SteveType(clusterReposResource).ByID(repoName)
 		if err != nil {
-			// Swallowed: diagnostics only.
-			logrus.Warnf("chart action diagnostics: clusterrepo %s status marshal: %v", catalog.RancherChartRepo, err)
+			// Swallowed: diagnostics must not alter failure propagation.
+			logrus.Warnf("chart action diagnostics: clusterrepo %s get: %v", repoName, err)
 		} else {
-			logrus.Warnf("chart action diagnostics: clusterrepo %s status: %s", catalog.RancherChartRepo, repoStatus)
+			repoStatus, err := json.Marshal(repo.Status)
+			if err != nil {
+				// Swallowed: diagnostics only.
+				logrus.Warnf("chart action diagnostics: clusterrepo %s status marshal: %v", repoName, err)
+			} else {
+				logrus.Warnf("chart action diagnostics: clusterrepo %s status: %s", repoName, repoStatus)
+			}
 		}
 	}
 
-	app, err := proxyClient.SteveType(appsSteveType).NamespacedSteveClient(namespace).ByID(chartName)
+	app, err := proxyClient.SteveType(appsSteveType).NamespacedSteveClient(namespace).ByID(targetName)
 	if err != nil {
 		// Swallowed: the app may legitimately be absent, e.g. when the install never created it.
-		logrus.Warnf("chart action diagnostics: app %s/%s get: %v", namespace, chartName, err)
+		logrus.Warnf("chart action diagnostics: app %s/%s get: %v", namespace, targetName, err)
 	} else {
 		appStatus, err := json.Marshal(app.Status)
 		if err != nil {
 			// Swallowed: diagnostics only.
-			logrus.Warnf("chart action diagnostics: app %s/%s status marshal: %v", namespace, chartName, err)
+			logrus.Warnf("chart action diagnostics: app %s/%s status marshal: %v", namespace, targetName, err)
 		} else {
-			logrus.Warnf("chart action diagnostics: app %s/%s status: %s", namespace, chartName, appStatus)
+			logrus.Warnf("chart action diagnostics: app %s/%s status: %s", namespace, targetName, appStatus)
 		}
 	}
 
@@ -185,7 +220,7 @@ func logDownstreamCatalogDiagnostics(client *rancher.Client, clusterID, namespac
 			break
 		}
 		operation := &operations.Data[i]
-		if !isChartOperation(operation, chartName) {
+		if !isChartOperation(operation, targetName) {
 			continue
 		}
 		logged++
@@ -213,40 +248,22 @@ func isChartOperation(operation *steveV1.SteveAPIObject, chartName string) bool 
 	return false
 }
 
-// buildChartActionURL returns the rancher proxied cluster API URL for a chart action,
-// e.g. https://<host>/k8s/clusters/<clusterID>/v1/catalog.cattle.io.clusterrepos/<name>?action=install
-func buildChartActionURL(host, clusterID, path, name, verb string) string {
-	return fmt.Sprintf("https://%s/k8s/clusters/%s/%s/%s?action=%s", host, clusterID, strings.TrimSuffix(path, "/"), name, verb)
+// chartActionHTTPStatus extracts the HTTP status code the server returned from a chart
+// action error, or 0 for transport-level failures that never got a response.
+func chartActionHTTPStatus(err error) int32 {
+	var statusErr *apierrors.StatusError
+	if errors.As(err, &statusErr) {
+		return statusErr.Status().Code
+	}
+	return 0
 }
 
-// probeRequest performs one raw POST against the rancher cluster API and returns the HTTP
-// status code plus at most diagnosticsBodyCapBytes of the response body. Transport errors are
-// returned separately so callers can skip body logging.
-func probeRequest(ctx context.Context, host, adminToken, url, verb string, body []byte) (int, string, error) {
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
-	if err != nil {
-		return 0, "", fmt.Errorf("probe %s %s request build failed: %w", verb, host, err)
+// cappedDiagnosticsBody truncates a raw response body to diagnosticsBodyCapBytes for logging.
+func cappedDiagnosticsBody(body []byte) string {
+	if len(body) <= diagnosticsBodyCapBytes {
+		return string(body)
 	}
-	request.Header.Set("Authorization", "Bearer "+adminToken)
-	request.Header.Set("Content-Type", "application/json")
-
-	//nolint:gosec // diagnostic probe against self-signed PIT Rancher endpoints
-	httpClient := &http.Client{
-		Timeout:   30 * time.Second,
-		Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
-	}
-
-	response, err := httpClient.Do(request)
-	if err != nil {
-		return 0, "", fmt.Errorf("probe %s %s failed: %w", verb, host, err)
-	}
-	defer response.Body.Close()
-
-	probeBody, err := io.ReadAll(io.LimitReader(response.Body, diagnosticsBodyCapBytes))
-	if err != nil {
-		return response.StatusCode, "", fmt.Errorf("probe %s %s body read failed: %w", verb, host, err)
-	}
-	return response.StatusCode, string(probeBody), nil
+	return string(body[:diagnosticsBodyCapBytes]) + "...(truncated)"
 }
 
 // buildRepoActionRequest mirrors shepherd's InstallChart/UpgradeChart request shape
@@ -268,16 +285,8 @@ func buildAppUninstallRequest(catalogClient *catalog.Client, namespace, chartNam
 		VersionedParams(&metav1.CreateOptions{}, scheme.ParameterCodec)
 }
 
-// marshalChartAction serializes a chart action payload. Marshal errors are impossible for the
-// JSON-only payload structs used here and are ignored by design; a nil body degrades into a
-// server-side error that the retry loop and diagnostics surface.
-func marshalChartAction(action any) []byte {
-	bodyBytes, _ := json.Marshal(action)
-	return bodyBytes
-}
-
 // logChartActionLifecycle emits the machine-readable lifecycle line for every chart action.
-func logChartActionLifecycle(verb string, opts *PayloadOpts, repoName string) {
-	logrus.Infof("chart action: ts=%s verb=%s chart=%s version=%s namespace=%s cluster=%s repo=%s",
-		time.Now().UTC().Format(time.RFC3339), verb, opts.Name, opts.Version, opts.Namespace, opts.Cluster.ID, repoName)
+func logChartActionLifecycle(verb string, opts *PayloadOpts, repoName, targetName string) {
+	logrus.Infof("chart action: ts=%s verb=%s chart=%s version=%s target=%s namespace=%s cluster=%s repo=%s",
+		time.Now().UTC().Format(time.RFC3339), verb, opts.Name, opts.Version, targetName, opts.Namespace, opts.Cluster.ID, repoName)
 }

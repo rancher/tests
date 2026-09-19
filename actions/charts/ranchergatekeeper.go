@@ -2,6 +2,7 @@ package charts
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	catalogv1 "github.com/rancher/rancher/pkg/apis/catalog.cattle.io/v1"
@@ -58,8 +59,11 @@ func InstallRancherGatekeeperChart(client *rancher.Client, installOptions *Insta
 		// UninstallAction for when uninstalling the rancher-gatekeeper chart
 		defaultChartUninstallAction := NewChartUninstallAction()
 
-		bodyBytes := marshalChartAction(defaultChartUninstallAction)
-		err := ChartActionWithRetry(context.TODO(), client, verbUninstall, gatekeeperChartInstallActionPayload, RancherGatekeeperName, buildAppUninstallRequest(catalogClient, RancherGatekeeperNamespace, RancherGatekeeperName, bodyBytes), bodyBytes)
+		bodyBytes, err := json.Marshal(defaultChartUninstallAction)
+		if err != nil {
+			return err
+		}
+		err = ChartActionWithRetry(context.TODO(), client, verbUninstall, gatekeeperChartInstallActionPayload, "", RancherGatekeeperName, buildAppUninstallRequest(catalogClient, RancherGatekeeperNamespace, RancherGatekeeperName, bodyBytes))
 		if err != nil {
 			return err
 		}
@@ -87,8 +91,11 @@ func InstallRancherGatekeeperChart(client *rancher.Client, installOptions *Insta
 			return err
 		}
 
-		bodyBytes = marshalChartAction(defaultChartUninstallAction)
-		err = ChartActionWithRetry(context.TODO(), client, verbUninstall, gatekeeperChartInstallActionPayload, RancherGatekeeperCRDName, buildAppUninstallRequest(catalogClient, RancherGatekeeperNamespace, RancherGatekeeperCRDName, bodyBytes), bodyBytes)
+		bodyBytes, err = json.Marshal(defaultChartUninstallAction)
+		if err != nil {
+			return err
+		}
+		err = ChartActionWithRetry(context.TODO(), client, verbUninstall, gatekeeperChartInstallActionPayload, "", RancherGatekeeperCRDName, buildAppUninstallRequest(catalogClient, RancherGatekeeperNamespace, RancherGatekeeperCRDName, bodyBytes))
 		if err != nil {
 			return err
 		}
@@ -159,8 +166,11 @@ func InstallRancherGatekeeperChart(client *rancher.Client, installOptions *Insta
 		})
 	})
 
-	bodyBytes := marshalChartAction(chartInstallAction)
-	err = ChartActionWithRetry(context.TODO(), client, verbInstall, gatekeeperChartInstallActionPayload, catalog.RancherChartRepo, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbInstall, bodyBytes), bodyBytes)
+	bodyBytes, err := json.Marshal(chartInstallAction)
+	if err != nil {
+		return err
+	}
+	err = ChartActionWithRetry(context.TODO(), client, verbInstall, gatekeeperChartInstallActionPayload, catalog.RancherChartRepo, gatekeeperChartInstallActionPayload.Name, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbInstall, bodyBytes))
 	if err != nil {
 		return err
 	}
@@ -228,8 +238,11 @@ func UpgradeRancherGatekeeperChart(client *rancher.Client, installOptions *Insta
 		return err
 	}
 
-	bodyBytes := marshalChartAction(chartUpgradeAction)
-	err = ChartActionWithRetry(context.TODO(), client, verbUpgrade, gatekeeperChartUpgradeActionPayload, catalog.RancherChartRepo, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbUpgrade, bodyBytes), bodyBytes)
+	bodyBytes, err := json.Marshal(chartUpgradeAction)
+	if err != nil {
+		return err
+	}
+	err = ChartActionWithRetry(context.TODO(), client, verbUpgrade, gatekeeperChartUpgradeActionPayload, catalog.RancherChartRepo, gatekeeperChartUpgradeActionPayload.Name, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbUpgrade, bodyBytes))
 	if err != nil {
 		return err
 	}
