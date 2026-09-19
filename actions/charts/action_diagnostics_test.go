@@ -478,6 +478,18 @@ func TestRedactDiagnosticsBody(t *testing.T) {
 			mustHave: []string{"admission denied", "rancher-monitoring", "[redacted]"},
 		},
 		{
+			name:     "quoted credential assignments are scrubbed in structured fields",
+			body:     `{"kind":"Status","message":"rejected: password=\"hunter2\" and token='tok-abcdef123456'","chart":"rancher-monitoring"}`,
+			mustNot:  []string{"hunter2", "tok-abcdef123456"},
+			mustHave: []string{"rejected", "rancher-monitoring", "[redacted]"},
+		},
+		{
+			name:     "quoted credential assignments are scrubbed in plain text",
+			body:     `auth webhook denied: password="hunter2" token:'tok-abcdef123456' at 12:00`,
+			mustNot:  []string{"hunter2", "tok-abcdef123456"},
+			mustHave: []string{"auth webhook denied", "[redacted]"},
+		},
+		{
 			name:     "credential assignments in non-JSON text are scrubbed",
 			body:     "upstream webhook error: password=hunter2 rejected, token: tok-abcdef123456 expired",
 			mustNot:  []string{"hunter2", "tok-abcdef123456"},

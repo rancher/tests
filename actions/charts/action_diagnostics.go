@@ -228,7 +228,9 @@ func logDownstreamCatalogDiagnostics(client *rancher.Client, clusterID, repoName
 				// Swallowed: diagnostics only.
 				logrus.Warnf("chart action diagnostics: clusterrepo %s status marshal: %v", repoName, err)
 			} else {
-				logrus.Warnf("chart action diagnostics: clusterrepo %s status: %s", repoName, repoStatus)
+				// Conditions carry free-form controller messages; pass the serialized status
+				// through the redaction layer like every other logged server text.
+				logrus.Warnf("chart action diagnostics: clusterrepo %s status: %s", repoName, redactDiagnosticsBody(repoStatus))
 			}
 		}
 	}
@@ -248,7 +250,9 @@ func logDownstreamCatalogDiagnostics(client *rancher.Client, clusterID, repoName
 				// Swallowed: diagnostics only.
 				logrus.Warnf("chart action diagnostics: app %s/%s status marshal: %v", namespace, targetName, err)
 			} else {
-				logrus.Warnf("chart action diagnostics: app %s/%s status: %s", namespace, targetName, appStatus)
+				// App conditions carry free-form controller messages; redact like all other
+				// logged server text.
+				logrus.Warnf("chart action diagnostics: app %s/%s status: %s", namespace, targetName, redactDiagnosticsBody(appStatus))
 			}
 		}
 	}
@@ -322,7 +326,10 @@ func chartOperationStatusForLog(operation *steveV1.SteveAPIObject) string {
 		// Swallowed: diagnostics only.
 		return fmt.Sprintf("status project: %v", err)
 	}
-	return string(projected)
+	// Conditions are free-form controller messages: the projection's allowlist removes
+	// the token and command fields, and the redaction layer scrubs whatever a condition
+	// message may echo.
+	return redactDiagnosticsBody(projected)
 }
 
 // sensitiveFieldPattern matches object keys whose values must never reach logs.
@@ -333,9 +340,11 @@ var credentialTextPattern = regexp.MustCompile(`(?i)(bearer|basic)\s+[a-z0-9._~+
 
 // credentialAssignmentPattern matches key=value and key: value forms of credential
 // parameters embedded in free text, e.g. "password=hunter2" inside an error message.
-// authorization is deliberately absent: the Authorization header shape is owned by
-// credentialTextPattern, which preserves the scheme name in its replacement.
-var credentialAssignmentPattern = regexp.MustCompile(`(?i)\b(password|passwd|token|secret|api[_-]?key|client[_-]?secret|cookie)\s*([=:])\s*[^\s,"'}]+`)
+// Quoted values (terminated or not) are consumed conservatively through the end of the
+// quote or the surrounding text. authorization is deliberately absent: the
+// Authorization header shape is owned by credentialTextPattern, which preserves the
+// scheme name in its replacement.
+var credentialAssignmentPattern = regexp.MustCompile(`(?i)\b(password|passwd|token|secret|api[_-]?key|client[_-]?secret|cookie)\s*([=:])\s*(?:"[^"]*"?|'[^']*'?|[^\s,"'}]+)`)
 
 // scrubCredentialText applies the content-level credential policy to a free-text
 // string: known credential shapes and key=value assignments are replaced. Opaque
