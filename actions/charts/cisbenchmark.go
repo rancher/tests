@@ -67,21 +67,19 @@ func InstallHardenedChart(client *rancher.Client, ChartInstallActionPayload *Pay
 			return err
 		}
 
-		// Preserve the pre-existing namespace argument (chart name, not payload namespace) so
-		// the retry wrapper issues the identical request this cleanup actually makes.
-		crdUninstallPayload := *ChartInstallActionPayload
-		crdUninstallPayload.Namespace = ChartInstallActionPayload.Name
 		bodyBytes, err = json.Marshal(defaultChartUninstallAction)
 		if err != nil {
 			return err
 		}
-		err = ChartActionWithRetry(context.TODO(), client, verbUninstall, &crdUninstallPayload, "", []string{ChartInstallActionPayload.Name + "-crd"}, buildAppUninstallRequest(catalogClient, ChartInstallActionPayload.Name, ChartInstallActionPayload.Name+"-crd", bodyBytes))
+		// Both releases install into the payload namespace; the CRD release is named
+		// <chart>-crd, so the cleanup request and the watch below must target both.
+		err = ChartActionWithRetry(context.TODO(), client, verbUninstall, ChartInstallActionPayload, "", []string{ChartInstallActionPayload.Name + "-crd"}, buildAppUninstallRequest(catalogClient, ChartInstallActionPayload.Namespace, ChartInstallActionPayload.Name+"-crd", bodyBytes))
 		if err != nil {
 			return err
 		}
 
 		watchAppInterface, err = catalogClient.Apps(ChartInstallActionPayload.Namespace).Watch(context.TODO(), metav1.ListOptions{
-			FieldSelector:  "metadata.name=" + ChartInstallActionPayload.Name,
+			FieldSelector:  "metadata.name=" + ChartInstallActionPayload.Name + "-crd",
 			TimeoutSeconds: &defaults.WatchTimeoutSeconds,
 		})
 		if err != nil {

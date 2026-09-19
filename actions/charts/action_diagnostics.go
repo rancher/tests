@@ -3,9 +3,9 @@ package charts
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -15,7 +15,6 @@ import (
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	scheme "github.com/rancher/shepherd/pkg/generated/clientset/versioned/scheme"
 	"github.com/sirupsen/logrus"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 )
@@ -100,6 +99,11 @@ func ChartActionWithRetry(ctx context.Context, client *rancher.Client, verb stri
 		attemptCtx, cancel := context.WithTimeout(ctx, chartActionTimeout+chartActionAttemptSlack)
 		result := req.Do(attemptCtx)
 		cancel()
+		// The response status comes straight from rest.Result: a decoded Status body
+		// may omit or disagree with the HTTP status, and 0 means the attempt never
+		// got a response (transport failure).
+		var httpStatus int
+		result.StatusCode(&httpStatus)
 		lastErr = result.Error()
 		if lastErr == nil {
 			return nil
@@ -107,13 +111,14 @@ func ChartActionWithRetry(ctx context.Context, client *rancher.Client, verb stri
 
 		// The k8s client flattens non-Status 5xx bodies to "unknown"; Result.Raw retains
 		// the original response, so the status and body come from the failed attempt
-		// itself rather than a re-issued mutating request.
+		// itself rather than a re-issued mutating request. The body passes the
+		// redaction layer before it can reach Jenkins logs or archived evidence.
 		body, _ := result.Raw()
 		logrus.Warnf("chart action failed: ts=%s verb=%s chart=%s target=%s attempt=%d/%d elapsed=%s status=%d error=%v body=%s",
 			time.Now().UTC().Format(time.RFC3339), verb, opts.Name, strings.Join(targetNames, ","), attempt, chartActionMaxAttempts,
-			time.Since(start).Round(time.Millisecond), chartActionHTTPStatus(lastErr), lastErr, cappedDiagnosticsBody(body))
+			time.Since(start).Round(time.Millisecond), httpStatus, lastErr, redactDiagnosticsBody(body))
 
-		if !isRetryableChartActionError(lastErr) || attempt == chartActionMaxAttempts {
+		if !isRetryableChartActionStatus(httpStatus) || attempt == chartActionMaxAttempts {
 			break
 		}
 		remaining := time.Until(budgetEnd)
@@ -143,20 +148,15 @@ func waitBetweenAttempts(_ int) time.Duration {
 	return chartActionRetrySpacing
 }
 
-// isRetryableChartActionError reports whether a chart action error is worth replaying.
-// Only server-answered failures are replay candidates: 429 (rate limited) and 5xx
-// responses (the observed PIT failures). Every other 4xx is deterministic and cannot
-// recover on retry. Errors without an HTTP status are transport-level failures where
-// the server may already have processed the request without us seeing the response;
-// replaying the non-idempotent chart action could then launch a duplicate Helm
-// operation, so they are terminal and left to the diagnostics bundle.
-func isRetryableChartActionError(err error) bool {
-	var statusErr *apierrors.StatusError
-	if !errors.As(err, &statusErr) {
-		return false
-	}
-	code := statusErr.Status().Code
-	return code == http.StatusTooManyRequests || code >= 500
+// isRetryableChartActionStatus reports whether a chart action response is worth
+// replaying. Only server-answered failures are replay candidates: 429 (rate limited)
+// and 5xx responses (the observed PIT failures). Every other 4xx is deterministic and
+// cannot recover on retry. Status 0 means the attempt never got a response
+// (transport-level failure) where the server may already have processed the request
+// without us seeing it; replaying the non-idempotent chart action could then launch a
+// duplicate Helm operation, so those are terminal and left to the diagnostics bundle.
+func isRetryableChartActionStatus(status int) bool {
+	return status == http.StatusTooManyRequests || status >= 500
 }
 
 // LogChartActionFailure dumps the catalog state around a failed chart action: the
@@ -318,14 +318,47 @@ func chartOperationStatusForLog(operation *steveV1.SteveAPIObject) string {
 	return string(projected)
 }
 
-// chartActionHTTPStatus extracts the HTTP status code the server returned from a chart
-// action error, or 0 for transport-level failures that never got a response.
-func chartActionHTTPStatus(err error) int32 {
-	var statusErr *apierrors.StatusError
-	if errors.As(err, &statusErr) {
-		return statusErr.Status().Code
+// sensitiveFieldPattern matches object keys whose values must never reach logs.
+var sensitiveFieldPattern = regexp.MustCompile(`(?i)token|password|secret|credential|authorization|cookie|privatekey|clientkey|cert`)
+
+// credentialTextPattern matches bearer/basic credential shapes inside otherwise
+// unstructured error text.
+var credentialTextPattern = regexp.MustCompile(`(?i)(bearer|basic)\s+[a-z0-9._~+/=-]{8,}`)
+
+// redactDiagnosticsBody renders a response body safe for Jenkins logs and archived
+// evidence. Structured JSON is redacted recursively by sensitive key names; other
+// bodies (proxy or framework error text, which this diagnostics path exists to
+// capture) keep their diagnostic value with credential-shaped substrings scrubbed.
+// The result is truncated to diagnosticsBodyCapBytes.
+func redactDiagnosticsBody(body []byte) string {
+	var parsed any
+	if err := json.Unmarshal(body, &parsed); err == nil {
+		if redacted, err := json.Marshal(redactJSONValue(parsed)); err == nil {
+			return cappedDiagnosticsBody(redacted)
+		}
 	}
-	return 0
+	return cappedDiagnosticsBody([]byte(credentialTextPattern.ReplaceAllString(string(body), "$1 [redacted]")))
+}
+
+// redactJSONValue replaces values under sensitive keys and recurses into containers.
+func redactJSONValue(value any) any {
+	switch typed := value.(type) {
+	case map[string]any:
+		for key, inner := range typed {
+			if sensitiveFieldPattern.MatchString(key) {
+				typed[key] = "[redacted]"
+				continue
+			}
+			typed[key] = redactJSONValue(inner)
+		}
+		return typed
+	case []any:
+		for i, inner := range typed {
+			typed[i] = redactJSONValue(inner)
+		}
+		return typed
+	}
+	return value
 }
 
 // cappedDiagnosticsBody truncates a raw response body to diagnosticsBodyCapBytes for logging.

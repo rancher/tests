@@ -432,20 +432,72 @@ func TestIsChartOperationMatchesAnyTarget(t *testing.T) {
 	}
 }
 
-func TestChartActionHTTPStatus(t *testing.T) {
+func TestChartActionResultStatusDrivesRetryClassification(t *testing.T) {
+	// A 502 with a JSON body that omits the code field must still classify by the
+	// HTTP response status retained by rest.Result, not by the decoded body.
+	stubChartActionTiming(t, time.Millisecond, time.Second, time.Second, 0)
+	logs := captureChartActionLogs(t)
+
+	var requests atomic.Int32
 	doer, _ := newChartActionTestDoer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadGateway)
+		_, _ = w.Write([]byte(`{"kind":"Status","reason":"BadGateway","message":"upstream unavailable"}`))
 	}))
 
-	result := doer.Do(context.Background())
-	err := result.Error()
+	err := ChartActionWithRetry(context.Background(), nil, verbInstall, chartActionTestOpts(), "rancher-charts", []string{"rancher-monitoring"}, doer)
 	if err == nil {
-		t.Fatal("expected error from 502 handler")
+		t.Fatal("expected failure, got nil")
 	}
-	if got := chartActionHTTPStatus(err); got != http.StatusBadGateway {
-		t.Errorf("chartActionHTTPStatus = %d, want %d", got, http.StatusBadGateway)
+	if !strings.Contains(logs.String(), "status=502") {
+		t.Errorf("log must report the retained response status, got: %s", logs.String())
 	}
-	if got := chartActionHTTPStatus(nil); got != 0 {
-		t.Errorf("chartActionHTTPStatus(nil) = %d, want 0", got)
+	if got := requests.Load(); got != 3 {
+		t.Errorf("5xx without a Status code field must still be retried, got %d requests", got)
+	}
+}
+
+func TestRedactDiagnosticsBody(t *testing.T) {
+	tests := []struct {
+		name     string
+		body     string
+		mustNot  []string
+		mustHave []string
+	}{
+		{
+			name:     "structured body redacts nested sensitive keys",
+			body:     `{"kind":"Status","message":"rejected","metadata":{"password":"hunter2","labels":{"token":"abc"}},"chart":"rancher-monitoring"}`,
+			mustNot:  []string{"hunter2", `"abc"`},
+			mustHave: []string{"rejected", "rancher-monitoring", "[redacted]"},
+		},
+		{
+			name:     "unstructured body scrubs bearer credentials",
+			body:     "upstream error: Authorization: Bearer abc123def456ghi789 while proxying",
+			mustNot:  []string{"abc123def456ghi789"},
+			mustHave: []string{"upstream error", "Bearer [redacted]"},
+		},
+		{
+			name:     "plain proxy text is preserved",
+			body:     `502 Bad Gateway: connect() failed (111: Connection refused) while connecting to upstream`,
+			mustNot:  []string{},
+			mustHave: []string{"502 Bad Gateway", "Connection refused"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logged := redactDiagnosticsBody([]byte(tt.body))
+			for _, banned := range tt.mustNot {
+				if strings.Contains(logged, banned) {
+					t.Errorf("redacted body leaked %q: %s", banned, logged)
+				}
+			}
+			for _, want := range tt.mustHave {
+				if !strings.Contains(logged, want) {
+					t.Errorf("redacted body missing %q: %s", want, logged)
+				}
+			}
+		})
 	}
 }
