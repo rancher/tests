@@ -3,6 +3,7 @@ package charts
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -15,6 +16,7 @@ import (
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	scheme "github.com/rancher/shepherd/pkg/generated/clientset/versioned/scheme"
 	"github.com/sirupsen/logrus"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 )
@@ -101,12 +103,29 @@ func ChartActionWithRetry(ctx context.Context, client *rancher.Client, verb stri
 		cancel()
 		// The response status comes straight from rest.Result: a decoded Status body
 		// may omit or disagree with the HTTP status, and 0 means the attempt never
-		// got a response (transport failure).
+		// got a response (transport failure). One exception is recovered below: a
+		// non-2xx response whose content type has no negotiated decoder (e.g.
+		// text/plain) returns a Result that omits its retained status and body while
+		// the error still carries both.
 		var httpStatus int
 		result.StatusCode(&httpStatus)
 		lastErr = result.Error()
 		if lastErr == nil {
 			return nil
+		}
+		body, _ := result.Raw()
+		if httpStatus == 0 {
+			var statusErr *apierrors.StatusError
+			if errors.As(lastErr, &statusErr) && statusErr.Status().Code > 0 {
+				// Decoder-less server response: recover the status (so a transient
+				// text/plain 5xx still retries and classifies correctly) and the
+				// message text (so the evidence reaches the log through redaction
+				// instead of the raw error string).
+				httpStatus = int(statusErr.Status().Code)
+				if len(body) == 0 {
+					body = []byte(statusErr.Status().Message)
+				}
+			}
 		}
 
 		// The k8s client flattens non-Status 5xx bodies to "unknown"; Result.Raw retains
@@ -116,7 +135,6 @@ func ChartActionWithRetry(ctx context.Context, client *rancher.Client, verb stri
 		// raw error text is logged only for transport failures: server-answered errors
 		// embed the unredacted server message, and the status plus redacted body already
 		// carry the response details.
-		body, _ := result.Raw()
 		errText := "see status and redacted body"
 		if httpStatus == 0 {
 			errText = lastErr.Error()
@@ -213,7 +231,7 @@ func logDownstreamCatalogDiagnostics(client *rancher.Client, clusterID, repoName
 	proxyClient, err := client.Steve.ProxyDownstream(clusterID)
 	if err != nil {
 		// Swallowed: diagnostics must not alter failure propagation.
-		logrus.Warnf("chart action diagnostics: downstream proxy: %v", err)
+		logrus.Warnf("chart action diagnostics: downstream proxy: %s", redactDiagnosticsBody([]byte(err.Error())))
 		return
 	}
 
@@ -221,7 +239,7 @@ func logDownstreamCatalogDiagnostics(client *rancher.Client, clusterID, repoName
 		repo, err := proxyClient.SteveType(clusterReposResource).ByID(repoName)
 		if err != nil {
 			// Swallowed: diagnostics must not alter failure propagation.
-			logrus.Warnf("chart action diagnostics: clusterrepo %s get: %v", repoName, err)
+			logrus.Warnf("chart action diagnostics: clusterrepo %s get: %s", repoName, redactDiagnosticsBody([]byte(err.Error())))
 		} else {
 			repoStatus, err := json.Marshal(repo.Status)
 			if err != nil {
@@ -243,7 +261,7 @@ func logDownstreamCatalogDiagnostics(client *rancher.Client, clusterID, repoName
 		app, err := proxyClient.SteveType(appsSteveType).ByID(namespace + "/" + targetName)
 		if err != nil {
 			// Swallowed: the app may legitimately be absent, e.g. when the install never created it.
-			logrus.Warnf("chart action diagnostics: app %s/%s get: %v", namespace, targetName, err)
+			logrus.Warnf("chart action diagnostics: app %s/%s get: %s", namespace, targetName, redactDiagnosticsBody([]byte(err.Error())))
 		} else {
 			appStatus, err := json.Marshal(app.Status)
 			if err != nil {
@@ -264,7 +282,7 @@ func logDownstreamCatalogDiagnostics(client *rancher.Client, clusterID, repoName
 	operations, err := proxyClient.SteveType(operationsSteveType).NamespacedSteveClient(namespace).List(nil)
 	if err != nil {
 		// Swallowed: diagnostics must not alter failure propagation.
-		logrus.Warnf("chart action diagnostics: operations list %s: %v", namespace, err)
+		logrus.Warnf("chart action diagnostics: operations list %s: %s", namespace, redactDiagnosticsBody([]byte(err.Error())))
 		return
 	}
 
@@ -333,7 +351,7 @@ func chartOperationStatusForLog(operation *steveV1.SteveAPIObject) string {
 }
 
 // sensitiveFieldPattern matches object keys whose values must never reach logs.
-var sensitiveFieldPattern = regexp.MustCompile(`(?i)token|password|secret|credential|authorization|cookie|privatekey|clientkey|cert`)
+var sensitiveFieldPattern = regexp.MustCompile(`(?i)token|password|secret|credential|authorization|cookie|privatekey|clientkey|cert|api[_-]?key|access[_-]?key|private[_-]?key`)
 
 // credentialTextPattern matches bearer/basic credential shapes inside free text.
 var credentialTextPattern = regexp.MustCompile(`(?i)(bearer|basic)\s+[a-z0-9._~+/=-]{8,}`)
@@ -341,10 +359,11 @@ var credentialTextPattern = regexp.MustCompile(`(?i)(bearer|basic)\s+[a-z0-9._~+
 // credentialAssignmentPattern matches key=value and key: value forms of credential
 // parameters embedded in free text, e.g. "password=hunter2" inside an error message.
 // Quoted values (terminated or not) are consumed conservatively through the end of the
-// quote or the surrounding text. authorization is deliberately absent: the
-// Authorization header shape is owned by credentialTextPattern, which preserves the
-// scheme name in its replacement.
-var credentialAssignmentPattern = regexp.MustCompile(`(?i)\b(password|passwd|token|secret|api[_-]?key|client[_-]?secret|cookie)\s*([=:])\s*(?:"[^"]*"?|'[^']*'?|[^\s,"'}]+)`)
+// quote or the surrounding text. authorization is included for the assignment form;
+// the "Authorization: Bearer <token>" header shape is handled first by
+// credentialTextPattern, and any leftover scheme word after that replacement is
+// cosmetic only.
+var credentialAssignmentPattern = regexp.MustCompile(`(?i)\b(password|passwd|token|access[_-]?token|secret|api[_-]?key|access[_-]?key|private[_-]?key|client[_-]?secret|cookie|authorization)\s*([=:])\s*(?:"[^"]*"?|'[^']*'?|[^\s,"'}]+)`)
 
 // scrubCredentialText applies the content-level credential policy to a free-text
 // string: known credential shapes and key=value assignments are replaced. Opaque

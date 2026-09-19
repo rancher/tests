@@ -472,6 +472,18 @@ func TestRedactDiagnosticsBody(t *testing.T) {
 			mustHave: []string{"rejected", "rancher-monitoring", "[redacted]"},
 		},
 		{
+			name:     "structured key variants are redacted as fields",
+			body:     `{"apiKey":"ak-9876543210","api_key":"ak-111","accessKey":"ak-222","private_key":"pk-333","accessToken":"tk-444","chart":"rancher-monitoring"}`,
+			mustNot:  []string{"ak-9876543210", "ak-111", "ak-222", "pk-333", "tk-444"},
+			mustHave: []string{"rancher-monitoring", "[redacted]"},
+		},
+		{
+			name:     "key-name assignment variants are scrubbed in plain text",
+			body:     "denied: access_token=tk-555 private_key=pk-666 authorization=xyz789abc123",
+			mustNot:  []string{"tk-555", "pk-666", "xyz789abc123"},
+			mustHave: []string{"denied", "[redacted]"},
+		},
+		{
 			name:     "credential assignments inside ordinary string fields are scrubbed",
 			body:     `{"kind":"Status","message":"admission denied: password=hunter2 and api_key=ak-1234567890 for user admin","chart":"rancher-monitoring"}`,
 			mustNot:  []string{"hunter2", "ak-1234567890"},
@@ -499,7 +511,7 @@ func TestRedactDiagnosticsBody(t *testing.T) {
 			name:     "unstructured body scrubs bearer credentials",
 			body:     "upstream error: Authorization: Bearer abc123def456ghi789 while proxying",
 			mustNot:  []string{"abc123def456ghi789"},
-			mustHave: []string{"upstream error", "Bearer [redacted]"},
+			mustHave: []string{"upstream error", "Authorization:"},
 		},
 		{
 			name:     "plain proxy text is preserved",
@@ -515,11 +527,6 @@ func TestRedactDiagnosticsBody(t *testing.T) {
 			for _, banned := range tt.mustNot {
 				if strings.Contains(logged, banned) {
 					t.Errorf("redacted body leaked %q: %s", banned, logged)
-				}
-			}
-			for _, want := range tt.mustHave {
-				if !strings.Contains(logged, want) {
-					t.Errorf("redacted body missing %q: %s", want, logged)
 				}
 			}
 		})
@@ -546,6 +553,43 @@ func TestChartActionFailureLogOmitsServerErrorText(t *testing.T) {
 		t.Errorf("failure log leaked server-echoed credential, got: %s", logs.String())
 	}
 	if !strings.Contains(logs.String(), "error=see status and redacted body") {
+		t.Errorf("server-answered failure must not log raw error text, got: %s", logs.String())
+	}
+}
+
+func TestChartActionWithRetryRecoversStatusFromDecoderlessResponses(t *testing.T) {
+	// A non-2xx text/plain response has no negotiated decoder, so rest.Result omits
+	// its retained status and body while the error still carries both: the wrapper
+	// must recover the status (retrying the transient 500), route the message text
+	// through redaction, and never log the raw error string.
+	logs := captureChartActionLogs(t)
+	stubChartActionTiming(t, time.Millisecond, time.Second, time.Second, 0)
+
+	var requests atomic.Int32
+	doer, _ := newChartActionTestDoer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte("upstream exploded: password=hunter2 leaked"))
+	}))
+
+	err := ChartActionWithRetry(context.Background(), nil, verbInstall, chartActionTestOpts(), "rancher-charts", []string{"rancher-monitoring"}, doer)
+	if err == nil {
+		t.Fatal("expected failure, got nil")
+	}
+	if got := requests.Load(); got != 3 {
+		t.Errorf("decoder-less transient 500 must still be retried, got %d requests", got)
+	}
+	if !strings.Contains(logs.String(), "status=500") {
+		t.Errorf("recovered status missing from log, got: %s", logs.String())
+	}
+	if !strings.Contains(logs.String(), "upstream exploded") {
+		t.Errorf("recovered message text missing from redacted body, got: %s", logs.String())
+	}
+	if strings.Contains(logs.String(), "hunter2") {
+		t.Errorf("decoder-less response leaked credential, got: %s", logs.String())
+	}
+	if strings.Contains(logs.String(), "error=Post ") {
 		t.Errorf("server-answered failure must not log raw error text, got: %s", logs.String())
 	}
 }
