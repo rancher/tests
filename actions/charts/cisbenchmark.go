@@ -2,6 +2,7 @@ package charts
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	catalogv1 "github.com/rancher/rancher/pkg/apis/catalog.cattle.io/v1"
@@ -35,7 +36,11 @@ func InstallHardenedChart(client *rancher.Client, ChartInstallActionPayload *Pay
 	client.Session.RegisterCleanupFunc(func() error {
 		defaultChartUninstallAction := NewChartUninstallAction()
 
-		err = catalogClient.UninstallChart(ChartInstallActionPayload.Name, ChartInstallActionPayload.Namespace, defaultChartUninstallAction)
+		bodyBytes, err := json.Marshal(defaultChartUninstallAction)
+		if err != nil {
+			return err
+		}
+		err = ChartActionWithRetry(context.TODO(), client, verbUninstall, ChartInstallActionPayload, "", []string{ChartInstallActionPayload.Name}, buildAppUninstallRequest(catalogClient, ChartInstallActionPayload.Namespace, ChartInstallActionPayload.Name, bodyBytes))
 		if err != nil {
 			return err
 		}
@@ -62,13 +67,19 @@ func InstallHardenedChart(client *rancher.Client, ChartInstallActionPayload *Pay
 			return err
 		}
 
-		err = catalogClient.UninstallChart(ChartInstallActionPayload.Name+"-crd", ChartInstallActionPayload.Name, defaultChartUninstallAction)
+		bodyBytes, err = json.Marshal(defaultChartUninstallAction)
+		if err != nil {
+			return err
+		}
+		// Both releases install into the payload namespace; the CRD release is named
+		// <chart>-crd, so the cleanup request and the watch below must target both.
+		err = ChartActionWithRetry(context.TODO(), client, verbUninstall, ChartInstallActionPayload, "", []string{ChartInstallActionPayload.Name + "-crd"}, buildAppUninstallRequest(catalogClient, ChartInstallActionPayload.Namespace, ChartInstallActionPayload.Name+"-crd", bodyBytes))
 		if err != nil {
 			return err
 		}
 
 		watchAppInterface, err = catalogClient.Apps(ChartInstallActionPayload.Namespace).Watch(context.TODO(), metav1.ListOptions{
-			FieldSelector:  "metadata.name=" + ChartInstallActionPayload.Name,
+			FieldSelector:  "metadata.name=" + ChartInstallActionPayload.Name + "-crd",
 			TimeoutSeconds: &defaults.WatchTimeoutSeconds,
 		})
 		if err != nil {
@@ -137,7 +148,11 @@ func InstallHardenedChart(client *rancher.Client, ChartInstallActionPayload *Pay
 		})
 	})
 
-	err = catalogClient.InstallChart(chartInstallAction, catalog.RancherChartRepo)
+	bodyBytes, err := json.Marshal(chartInstallAction)
+	if err != nil {
+		return err
+	}
+	err = ChartActionWithRetry(context.TODO(), client, verbInstall, ChartInstallActionPayload, catalog.RancherChartRepo, []string{ChartInstallActionPayload.Name, ChartInstallActionPayload.Name + "-crd"}, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbInstall, bodyBytes))
 	if err != nil {
 		return err
 	}
@@ -205,7 +220,11 @@ func UpgradeCISBenchmarkChart(client *rancher.Client, installOptions *InstallOpt
 		return err
 	}
 
-	err = catalogClient.UpgradeChart(chartUpgradeAction, catalog.RancherChartRepo)
+	bodyBytes, err := json.Marshal(chartUpgradeAction)
+	if err != nil {
+		return err
+	}
+	err = ChartActionWithRetry(context.TODO(), client, verbUpgrade, benchmarkChartUpgradeActionPayload, catalog.RancherChartRepo, []string{benchmarkChartUpgradeActionPayload.Name, benchmarkChartUpgradeActionPayload.Name + "-crd"}, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbUpgrade, bodyBytes))
 	if err != nil {
 		return err
 	}

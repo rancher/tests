@@ -2,6 +2,7 @@ package charts
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	catalogv1 "github.com/rancher/rancher/pkg/apis/catalog.cattle.io/v1"
@@ -56,7 +57,11 @@ func InstallRancherAlertingChart(client *rancher.Client, installOptions *Install
 		// UninstallAction for when uninstalling the rancher-alerting-drivers chart
 		defaultChartUninstallAction := NewChartUninstallAction()
 
-		err = catalogClient.UninstallChart(RancherAlertingName, RancherAlertingNamespace, defaultChartUninstallAction)
+		bodyBytes, err := json.Marshal(defaultChartUninstallAction)
+		if err != nil {
+			return err
+		}
+		err = ChartActionWithRetry(context.TODO(), client, verbUninstall, alertingChartInstallActionPayload, "", []string{RancherAlertingName}, buildAppUninstallRequest(catalogClient, RancherAlertingNamespace, RancherAlertingName, bodyBytes))
 		if err != nil {
 			return err
 		}
@@ -84,7 +89,11 @@ func InstallRancherAlertingChart(client *rancher.Client, installOptions *Install
 		return nil
 	})
 
-	err = catalogClient.InstallChart(chartInstallAction, catalog.RancherChartRepo)
+	bodyBytes, err := json.Marshal(chartInstallAction)
+	if err != nil {
+		return err
+	}
+	err = ChartActionWithRetry(context.TODO(), client, verbInstall, alertingChartInstallActionPayload, catalog.RancherChartRepo, []string{alertingChartInstallActionPayload.Name}, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbInstall, bodyBytes))
 	if err != nil {
 		return err
 	}

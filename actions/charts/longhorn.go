@@ -2,12 +2,14 @@ package charts
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/clients/rancher/catalog"
 	shepherdCharts "github.com/rancher/shepherd/extensions/charts"
+	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/pkg/api/steve/catalog/types"
 	"github.com/rancher/shepherd/pkg/wait"
@@ -40,6 +42,10 @@ type LonghornGlobalSettingPut struct {
 // Extra values can be passed in through the values argument.
 // This also waits for installation to complete and checks if the deployments are Ready.
 func InstallLonghornChart(client *rancher.Client, payload PayloadOpts, values map[string]interface{}) error {
+	// Callers pass a payload without Name; populate it so chart-action lifecycle and
+	// failure logs carry the chart name.
+	payload.Name = LonghornChartName
+
 	catalogClient, err := client.GetClusterCatalogClient(payload.Cluster.ID)
 	if err != nil {
 		return err
@@ -67,7 +73,11 @@ func InstallLonghornChart(client *rancher.Client, payload PayloadOpts, values ma
 
 	chartInstallAction := NewChartInstallAction(payload.Namespace, payload.ProjectID, chartInstalls)
 
-	err = catalogClient.InstallChart(chartInstallAction, catalog.RancherChartRepo)
+	bodyBytes, err := json.Marshal(chartInstallAction)
+	if err != nil {
+		return err
+	}
+	err = ChartActionWithRetry(context.TODO(), client, verbInstall, &payload, catalog.RancherChartRepo, []string{LonghornChartName, LonghornChartName + "-crd"}, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbInstall, bodyBytes))
 	if err != nil {
 		return err
 	}
@@ -97,7 +107,18 @@ func UninstallLonghornChart(client *rancher.Client, namespace string, clusterID 
 		return err
 	}
 
-	err = catalogClient.UninstallChart(LonghornChartName, namespace, NewChartUninstallAction())
+	uninstallPayload := &PayloadOpts{
+		InstallOptions: InstallOptions{Cluster: &clusters.ClusterMeta{ID: clusterID}},
+		Name:           LonghornChartName,
+		Namespace:      namespace,
+		Host:           rancherHostname,
+	}
+
+	bodyBytes, err := json.Marshal(NewChartUninstallAction())
+	if err != nil {
+		return err
+	}
+	err = ChartActionWithRetry(context.TODO(), client, verbUninstall, uninstallPayload, "", []string{LonghornChartName}, buildAppUninstallRequest(catalogClient, namespace, LonghornChartName, bodyBytes))
 	if err != nil {
 		return err
 	}
@@ -108,7 +129,11 @@ func UninstallLonghornChart(client *rancher.Client, namespace string, clusterID 
 	}
 
 	// Uninstall CRDs last so we still have them in case uninstalling longhorn fails as they help debugging.
-	err = catalogClient.UninstallChart(LonghornChartName+"-crd", namespace, NewChartUninstallAction())
+	crdBodyBytes, err := json.Marshal(NewChartUninstallAction())
+	if err != nil {
+		return err
+	}
+	err = ChartActionWithRetry(context.TODO(), client, verbUninstall, uninstallPayload, "", []string{LonghornChartName + "-crd"}, buildAppUninstallRequest(catalogClient, namespace, LonghornChartName+"-crd", crdBodyBytes))
 	if err != nil {
 		return err
 	}

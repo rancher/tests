@@ -65,7 +65,11 @@ func InstallRancherMonitoringChart(client *rancher.Client, installOptions *Insta
 		// UninstallAction for when uninstalling the rancher-monitoring chart
 		defaultChartUninstallAction := NewChartUninstallAction()
 
-		err = catalogClient.UninstallChart(RancherMonitoringName, RancherMonitoringNamespace, defaultChartUninstallAction)
+		bodyBytes, err := json.Marshal(defaultChartUninstallAction)
+		if err != nil {
+			return err
+		}
+		err = ChartActionWithRetry(context.TODO(), client, verbUninstall, monitoringChartInstallActionPayload, "", []string{RancherMonitoringName}, buildAppUninstallRequest(catalogClient, RancherMonitoringNamespace, RancherMonitoringName, bodyBytes))
 		if err != nil {
 			return err
 		}
@@ -92,7 +96,11 @@ func InstallRancherMonitoringChart(client *rancher.Client, installOptions *Insta
 			return err
 		}
 
-		err = catalogClient.UninstallChart(RancherMonitoringCRDName, RancherMonitoringNamespace, defaultChartUninstallAction)
+		bodyBytes, err = json.Marshal(defaultChartUninstallAction)
+		if err != nil {
+			return err
+		}
+		err = ChartActionWithRetry(context.TODO(), client, verbUninstall, monitoringChartInstallActionPayload, "", []string{RancherMonitoringCRDName}, buildAppUninstallRequest(catalogClient, RancherMonitoringNamespace, RancherMonitoringCRDName, bodyBytes))
 		if err != nil {
 			return err
 		}
@@ -119,7 +127,11 @@ func InstallRancherMonitoringChart(client *rancher.Client, installOptions *Insta
 		return err
 	})
 
-	err = catalogClient.InstallChart(chartInstallAction, catalog.RancherChartRepo)
+	bodyBytes, err := json.Marshal(chartInstallAction)
+	if err != nil {
+		return err
+	}
+	err = ChartActionWithRetry(context.TODO(), client, verbInstall, monitoringChartInstallActionPayload, catalog.RancherChartRepo, []string{monitoringChartInstallActionPayload.Name, RancherMonitoringCRDName}, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbInstall, bodyBytes))
 	if err != nil {
 		return err
 	}
@@ -214,7 +226,11 @@ func UpgradeRancherMonitoringChart(client *rancher.Client, installOptions *Insta
 		return err
 	}
 
-	err = catalogClient.UpgradeChart(chartUpgradeAction, catalog.RancherChartRepo)
+	bodyBytes, err := json.Marshal(chartUpgradeAction)
+	if err != nil {
+		return err
+	}
+	err = ChartActionWithRetry(context.TODO(), client, verbUpgrade, monitoringChartUpgradeActionPayload, catalog.RancherChartRepo, []string{monitoringChartUpgradeActionPayload.Name, RancherMonitoringCRDName}, buildRepoActionRequest(catalogClient, catalog.RancherChartRepo, verbUpgrade, bodyBytes))
 	if err != nil {
 		return err
 	}

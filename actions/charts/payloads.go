@@ -1,8 +1,6 @@
 package charts
 
 import (
-	"time"
-
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/pkg/api/steve/catalog/types"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -23,7 +21,7 @@ func NewChartUninstallAction() *types.ChartUninstallAction {
 func NewChartInstallAction(namespace, projectID string, chartInstalls []types.ChartInstall) *types.ChartInstallAction {
 	return &types.ChartInstallAction{
 		DisableHooks:             false,
-		Timeout:                  &metav1.Duration{Duration: 600 * time.Second},
+		Timeout:                  &metav1.Duration{Duration: chartActionTimeout},
 		Wait:                     true,
 		Namespace:                namespace,
 		ProjectID:                projectID,
@@ -36,7 +34,7 @@ func NewChartInstallAction(namespace, projectID string, chartInstalls []types.Ch
 func NewChartUpgradeAction(namespace string, chartUpgrades []types.ChartUpgrade) *types.ChartUpgradeAction {
 	return &types.ChartUpgradeAction{
 		DisableHooks:             false,
-		Timeout:                  &metav1.Duration{Duration: 600 * time.Second},
+		Timeout:                  &metav1.Duration{Duration: chartActionTimeout},
 		Wait:                     true,
 		Namespace:                namespace,
 		DisableOpenAPIValidation: false,
