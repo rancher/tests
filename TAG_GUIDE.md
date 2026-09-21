@@ -116,3 +116,10 @@ The pit tags organizes Go tests using **build tags**. These tags define when and
 - Airgap-compatible pit tests need **no** airgap term on the file — they join merely by their `pit.*` tag.
 - The `airgap.pit` tag is scoped to pit-scheduled tests only. Bare `airgap` (provisioning, recurring) is a separate tag for infrastructure airgap tests (`validation/provisioning/airgap/*`), which run in their own airgap provisioning job and are **not** pulled into pit-scoped airgap runs — bare `airgap` is not set on those invocations.
 - The tag gates airgap compatibility only; scheduling is handled by the CI job, not by the tag name. Environment differences (cluster, private registry, UI-extension mirror) belong in `cattle-config.yaml`, not in separate `*_airgap_test.go` variant files. NeuVector is the reference example: one config-driven suite serves both schedules (see `validation/neuvector/README.md`).
+
+## Related Tooling
+
+After adding or changing tests in a PIT-tagged package (`pit.daily`, `pit.weekly`,
+`pit.harvester.daily`, `pit.elemental`, `pit.event`), use the
+[`schema` skill](./.github/skills/schema/SKILL.md) to
+keep that package's `schemas/pit_schemas.yaml` file in sync with its `Test*` functions.
