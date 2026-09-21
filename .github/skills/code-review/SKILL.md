@@ -33,7 +33,9 @@ changed files) — do not review from memory without seeing the actual changes.
 3. For every changed `Jenkinsfile*` (under `validation/`, `validation/pipeline/`, or
    subdirectories like `rancherha/`, `qainfra/`), walk the **Jenkinsfile review**
    checklist below.
-4. For every new/changed helper function, walk the **Actions vs. extensions** checklist.
+4. For every new/changed helper function, check it against the **Actions Vs. Extensions**
+   criteria in the repo's root `copilot-instructions.md` (single source of truth for that
+   distinction).
 5. Report only high-confidence issues tied to a specific file/line. Do not comment on
    style or formatting already enforced by `golangci-lint`.
 6. Summarize findings grouped by severity, referencing file paths and line numbers.
@@ -217,21 +219,6 @@ treat deviations from their patterns as signal, not just this checklist:
 **Pinned versions**
 - Docker image and library references use pinned digests or explicit version tags —
   never `latest`
-
-## Actions vs. extensions checklist
-
-Flag a new helper as a candidate for the [shepherd](https://github.com/rancher/shepherd)
-repo (extension) only if **all** of the following hold:
-- It wraps an API call not natively captured by the client, or is a specific CRUD/wait
-  on a resource
-- It needs no custom, test-specific config
-- It is not a validation of any kind (waits are fine)
-- It is more than a direct/trivial conversion of a resource (pure call + error-catch is
-  not enough)
-- It is highly reusable across features, not tied to one test's logic
-
-Otherwise it belongs in `actions/<feature>/` (if reusable across packages) or as a private
-test helper in the package (if package-specific).
 
 ## When not to use it
 
