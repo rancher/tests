@@ -106,8 +106,6 @@ signal, not just this checklist:
 **Logging and output**
 - In suite methods (`SetupSuite`, `TearDownSuite`, `SetupTest`, `TearDownTest`, all `Test*`
   methods), use `s.T().Log()` / `s.T().Logf()` — never `logrus` or `fmt.Print*` there
-- Use `logrus` only in helper/non-test functions where `*testing.T` is not in scope
-  (standalone helper files, `actions/`)
 - Logs clearly describe test steps to improve traceability
 - No `time.Sleep` calls anywhere — use appropriate polls/watches instead
 

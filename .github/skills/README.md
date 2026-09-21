@@ -46,4 +46,5 @@ Testing) test packages, based on a package's `Test*` functions.
 
 - [Repository Copilot instructions](../copilot-instructions.md)
 - [TAG_GUIDE.md](../../TAG_GUIDE.md) — build tag conventions
+- [GitHub Copilot CLI documentation](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/copilot-cli/using-copilot-cli) — installation and usage instructions
 
