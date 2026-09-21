@@ -1,12 +1,8 @@
 rancher:
-  host: "<required>"
-  adminPassword: "<required>"
+  host: "<required>.<HB_AWS_ROUTE_53_ZONE>"
+  adminPassword: "<HB_RANCHER_ADMIN_PASSWORD>"
   insecure: true
   cleanup: true
-
-awsCredentials:
-  accessKey: "<required>"
-  secretKey: "<required>"
 
 terraform:
   awsCredentials:
@@ -29,7 +25,7 @@ terraform:
     awsSecurityGroupNames: ["<HB_AWS_SECURITY_GROUP_NAMES_COMMUNITY>"]
     awsSubnetID: "<HB_AWS_SUBNET_ID>"
     awsVpcID: "<HB_AWS_VPC_ID>"
-    awsZoneLetter: "<HB_AWS_ZONE_LETTER>"
+    awsZoneLetter: "<HB_IPV6_AWS_ZONE_LETTER>"
     awsRootSize: "<HB_AWS_ROOT_SIZE>"
     awsRoute53Zone: "<HB_AWS_ROUTE_53_ZONE>"
     awsUser: "<HB_IPV6_AWS_USER>"
@@ -39,9 +35,9 @@ terraform:
     httpProtocolIPv6: "enabled"
     sshConnectionType: "<HB_SSH_CONNECTION_TYPE>"
     timeout: "<HB_SSH_TIMEOUT>"
-    ipAddressType: "ipv6"
-    loadBalancerType: "dualstack"
-    targetType: "ip"
+    ipAddressType: "<HB_IPV6_ADDRESS_TYPE>"
+    loadBalancerType: "<HB_LOAD_BALANCER_DUALSTACK_TYPE>"
+    targetType: "<HB_TARGET_IPV6_TYPE>"
   standalone:
     bootstrapPassword: "<HB_RANCHER_ADMIN_PASSWORD>"
     certManagerVersion: "<HB_CERT_MANAGER_VERSION>"
