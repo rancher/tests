@@ -35,9 +35,7 @@ in that folder based on the associated test file(s).
 
 ## Rules
 
-- The value of `custom_field["15"]` must exactly match the Go test function name (e.g.
-  `"TestCISBenchmarkInstallation"`). Read the test file to find all `Test*` functions
-  and create one case per function.
+- The value of `custom_field["15"]` must match the test's Qase runtime name. For a plain suite test method, that is the Go method name (e.g. `"TestCISBenchmarkInstallation"`). For a table-driven test that calls `qase.UpdateSchemaParameters(tt.name, ...)`, use the runtime subtest name passed to that call (e.g. `"RKE2_Scale_Control_Plane"`), one case per subtest; see `validation/nodescaling/rke2/schemas/pit_schemas.yaml`.
 - Each high-level action in the test function body maps to one step entry. Steps must
   be sequential and numbered starting at 1.
 - Always use `[RANCHERINT]` (no spaces) as the `projects` value.

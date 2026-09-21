@@ -193,7 +193,7 @@ Always update relevant documentation when making changes:
 * all code should build successfully
 * Tests should be independent and not rely on state from other tests
 * Use appropriate timeouts and retry logic for async operations
-* Clean up of any and all resources should only be only in TearDownSuite, setting session cleanup appropriately throughout tests
+* Clean up suite-scoped resources only in TearDownSuite via `session.Cleanup()`; per-test-scoped resources use a sub-session (`s.session.NewSession()`) cleaned up locally with `defer subSession.Cleanup()
 * Support both admin and standard user contexts where applicable
 * Use meaningful test names that describe what is being tested
 * use rancher's steve api wherever possible, unless explicitly mentioned to use a different api
