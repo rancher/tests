@@ -393,6 +393,19 @@ jobs:
           repository: rancher/tfp-automation
           path: tfp-automation
 
+      - name: Azure Provider Setup
+        uses: ./.github/actions/azure-provider-setup
+        with:
+          downstream-cluster-provider: ${{ env.DOWNSTREAM_CLUSTER_PROVIDER }}
+          iam-role: ${{ secrets.IAM_ROLE }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          region: ${{ secrets.AWS_REGION }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          azure-subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+
       - name: Setup kubectl
         uses: azure/setup-kubectl@15650b3ad78fff148532a140b8a4c821796b2d7b #v5
         with:
@@ -687,6 +700,19 @@ jobs:
         with:
           repository: rancher/tfp-automation
           path: tfp-automation
+
+      - name: Azure Provider Setup
+        uses: ./.github/actions/azure-provider-setup
+        with:
+          downstream-cluster-provider: ${{ env.DOWNSTREAM_CLUSTER_PROVIDER }}
+          iam-role: ${{ secrets.IAM_ROLE }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          region: ${{ secrets.AWS_REGION }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          azure-subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
 
       - name: Setup kubectl
         uses: azure/setup-kubectl@15650b3ad78fff148532a140b8a4c821796b2d7b #v5

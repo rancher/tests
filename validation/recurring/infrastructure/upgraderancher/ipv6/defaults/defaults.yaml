@@ -1,33 +1,29 @@
 rancher:
-  host: "<required>"
-  adminPassword: "<required>"
+  host: "<required>.<HB_AWS_ROUTE_53_ZONE>"
+  adminPassword: "<HB_RANCHER_ADMIN_PASSWORD>"
   insecure: true
   cleanup: true
 
-awsCredentials:
-  accessKey: "<required>"
-  secretKey: "<required>"
-
 terraform:
   awsCredentials:
-    awsAccessKey: "<required>"
-    awsSecretKey: "<required>"
+    awsAccessKey: "<AWS_ACCESS_KEY_ID>"
+    awsSecretKey: "<AWS_SECRET_ACCESS_KEY>"
   cni: "<HB_CNI>"
   defaultClusterRoleForProjectMembers: "true"
   enableNetworkPolicy: false
-  provider: "<HB_PROVIDER_AMAZON>"
-  downstreamClusterProvider: "<HB_PROVIDER_AMAZON>"
+  provider: "<HB_PROVIDER>"
+  downstreamClusterProvider: "<HB_PROVIDER>"
   privateKeyPath: "<HB_TFP_SSH_PRIVATE_KEY_PATH>"
   resourcePrefix: "<HB_HOSTNAME_PREFIX>"
   awsConfig:
     ami: "<HB_AWS_IPV6_AMI>"
     awsKeyName: "<HB_SSH_PRIVATE_KEY_NAME>"
-    awsInstanceType: "<HB_AWS_INSTANCE_TYPE>"
+    awsInstanceType: "t2.2xlarge"
     awsVolumeType: "<HB_AWS_VOLUME_TYPE>"
     region: "<HB_AWS_REGION>"
     awsSecurityGroups: ["<HB_AWS_SECURITY_GROUPS_COMMUNITY>"]
     awsSecurityGroupNames: ["<HB_AWS_SECURITY_GROUP_NAMES_COMMUNITY>"]
-    awsSubnetID: "<HB_AWS_IPV6_SUBNET_ID>"
+    awsSubnetID: "<HB_AWS_SUBNET_ID>"
     awsVpcID: "<HB_AWS_VPC_ID>"
     awsZoneLetter: "<HB_IPV6_AWS_ZONE_LETTER>"
     awsRootSize: "<HB_AWS_ROOT_SIZE>"
@@ -38,7 +34,7 @@ terraform:
     enablePrimaryIPv6: true
     httpProtocolIPv6: "enabled"
     sshConnectionType: "<HB_SSH_CONNECTION_TYPE>"
-    timeout: "<HB_TIMEOUT>"
+    timeout: "<HB_SSH_TIMEOUT>"
     ipAddressType: "<HB_IPV6_ADDRESS_TYPE>"
     loadBalancerType: "<HB_LOAD_BALANCER_DUALSTACK_TYPE>"
     targetType: "<HB_TARGET_IPV6_TYPE>"
