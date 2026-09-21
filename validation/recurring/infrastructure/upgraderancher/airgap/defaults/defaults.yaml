@@ -24,6 +24,7 @@ terraform:
     ami: "<HB_AIRGAP_AWS_AMI>"
     awsKeyName: "<HB_SSH_PRIVATE_KEY_NAME>"
     awsInstanceType: "<HB_AWS_INSTANCE_TYPE>"
+    rancherInstance: "<HB_RANCHER_INSTANCE_TYPE>"
     awsVolumeType: "<HB_AWS_VOLUME_TYPE>"
     region: "<HB_AWS_REGION>"
     awsSecurityGroups: ["<HB_AIRGAP_AWS_SECURITY_GROUPS>"]

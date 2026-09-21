@@ -173,6 +173,7 @@ jobs:
               ami: "${{ secrets.AWS_AMI }}"
               awsKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}"
               awsInstanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
+              rancherInstance: "${{ vars.RANCHER_INSTANCE_TYPE }}"
               awsVolumeType: "${{ vars.AWS_VOLUME_TYPE }}"
               region: "${{ vars.AWS_REGION }}"
               awsSecurityGroups: [${{ secrets.AIRGAP_AWS_SECURITY_GROUPS }}]

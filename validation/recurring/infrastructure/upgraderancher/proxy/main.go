@@ -39,6 +39,9 @@ func main() {
 	if err != nil {
 		logrus.Fatalf("Failed to load package defaults: %v", err)
 	}
+	if err = infraConfig.OverrideRancherInstanceType(cattleConfig); err != nil {
+		logrus.Fatalf("Failed to apply Rancher instance type: %v", err)
+	}
 	testSession := session.NewSession()
 
 	client, proxyBastion, proxyPrivateIP, _, _, cattleConfig := setupproxy.SetupProxyRancher(t, testSession, keypath.ProxyKeyPath, cattleConfig)

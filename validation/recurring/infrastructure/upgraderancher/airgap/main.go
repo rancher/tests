@@ -34,6 +34,9 @@ func main() {
 	if err != nil {
 		logrus.Fatalf("Failed to load package defaults: %v", err)
 	}
+	if err = infraConfig.OverrideRancherInstanceType(cattleConfig); err != nil {
+		logrus.Fatalf("Failed to apply Rancher instance type: %v", err)
+	}
 	testSession := session.NewSession()
 
 	client, registry, bastion, _, _, cattleConfig, tunnel := setupairgap.SetupAirgapRancher(t, testSession, keypath.AirgapKeyPath, cattleConfig)

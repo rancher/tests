@@ -23,6 +23,9 @@ func main() {
 	t := &testing.T{}
 
 	cattleConfig := shepherdConfig.LoadConfigFromFile(os.Getenv(shepherdConfig.ConfigEnvironmentKey))
+	if err := infraConfig.OverrideRancherInstanceType(cattleConfig); err != nil {
+		logrus.Fatalf("Failed to apply Rancher instance type: %v", err)
+	}
 
 	infraConfig.WriteConfigToFile(os.Getenv(config.ConfigEnvironmentKey), cattleConfig)
 

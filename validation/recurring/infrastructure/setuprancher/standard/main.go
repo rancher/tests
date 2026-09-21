@@ -43,6 +43,9 @@ func main() {
 	if err != nil {
 		logrus.Fatalf("Failed to load Secrets Manager defaults: %v", err)
 	}
+	if err = infraConfig.OverrideRancherInstanceType(cattleConfig); err != nil {
+		logrus.Fatalf("Failed to apply Rancher instance type: %v", err)
+	}
 
 	err = defaults.VerifyCattleConfig(cattleConfig, nil)
 	if err != nil {
