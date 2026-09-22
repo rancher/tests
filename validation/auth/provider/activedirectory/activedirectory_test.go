@@ -423,8 +423,11 @@ func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryRestrictedAccessMo
 	require.NoError(a.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
 
+	subClient, err := a.client.WithSession(subSession)
+	require.NoError(a.T(), err, "Failed to scope an admin client to the test subsession")
+
 	principalIDs, err := authactions.SetupRequiredAccessModePrincipals(
-		authAdmin,
+		subClient,
 		a.cluster.ID,
 		a.authConfig,
 		authactions.ActiveDirectory,
@@ -449,6 +452,9 @@ func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryRequiredModeNested
 	require.NoError(a.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
 
+	subClient, err := a.client.WithSession(subSession)
+	require.NoError(a.T(), err, "Failed to scope an admin client to the test subsession")
+
 	nestedGroupPrincipalID := authactions.GetGroupPrincipalID(
 		authactions.ActiveDirectory,
 		a.authConfig.NestedGroup,
@@ -457,7 +463,7 @@ func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryRequiredModeNested
 	)
 
 	crtb, err := rbacapi.CreateGroupClusterRoleTemplateBinding(
-		authAdmin,
+		subClient,
 		a.cluster.ID,
 		nestedGroupPrincipalID,
 		rbac.ClusterMember.String(),
@@ -512,8 +518,11 @@ func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryRequiredModeUnauth
 	require.NoError(a.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
 
+	subClient, err := a.client.WithSession(subSession)
+	require.NoError(a.T(), err, "Failed to scope an admin client to the test subsession")
+
 	principalIDs, err := authactions.SetupRequiredAccessModePrincipals(
-		authAdmin,
+		subClient,
 		a.cluster.ID,
 		a.authConfig,
 		authactions.ActiveDirectory,

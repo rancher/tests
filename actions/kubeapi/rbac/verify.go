@@ -1,6 +1,7 @@
 package rbac
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -9,6 +10,7 @@ import (
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/rancher"
+	"github.com/rancher/shepherd/extensions/defaults"
 	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/wrangler"
@@ -20,7 +22,10 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
+
+const allNamespaces = ""
 
 // VerifyClusterRoleTemplateBindingForUser is a helper function to verify the number of cluster role template bindings for a user
 func VerifyClusterRoleTemplateBindingForUser(client *rancher.Client, username string, expectedCount int) ([]v3.ClusterRoleTemplateBinding, error) {
@@ -634,4 +639,71 @@ func filterClusterRoleBindings(clusterRoleBindings *rbacv1.ClusterRoleBindingLis
 		}
 	}
 	return filteredCRBs
+}
+
+// VerifyBindingsDeletedForProvider waits until no global, cluster or project role binding still references a principal emitted by the given auth provider
+func VerifyBindingsDeletedForProvider(client *rancher.Client, providerName string) error {
+	prefix := providerName + "_"
+
+	var lastErr error
+
+	err := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.TwoMinuteTimeout, false, func(context.Context) (bool, error) {
+		remaining, checkErr := remainingBindingsForProvider(client, prefix)
+		if checkErr != nil {
+			lastErr = checkErr
+			return false, nil
+		}
+
+		if len(remaining) > 0 {
+			lastErr = fmt.Errorf("bindings still reference %s principals: %s", providerName, strings.Join(remaining, ", "))
+			return false, nil
+		}
+
+		return true, nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("role bindings were not cleaned up: %w", lastErr)
+	}
+
+	return nil
+}
+
+func remainingBindingsForProvider(client *rancher.Client, prefix string) ([]string, error) {
+	var remaining []string
+
+	grbs, err := client.WranglerContext.Mgmt.GlobalRoleBinding().List(metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list global role bindings: %w", err)
+	}
+
+	for _, grb := range grbs.Items {
+		if strings.HasPrefix(grb.GroupPrincipalName, prefix) || strings.HasPrefix(grb.UserPrincipalName, prefix) {
+			remaining = append(remaining, "globalrolebinding/"+grb.Name)
+		}
+	}
+
+	crtbs, err := client.WranglerContext.Mgmt.ClusterRoleTemplateBinding().List(allNamespaces, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list cluster role template bindings: %w", err)
+	}
+
+	for _, crtb := range crtbs.Items {
+		if strings.HasPrefix(crtb.GroupPrincipalName, prefix) || strings.HasPrefix(crtb.UserPrincipalName, prefix) {
+			remaining = append(remaining, "clusterroletemplatebinding/"+crtb.Name)
+		}
+	}
+
+	prtbs, err := client.WranglerContext.Mgmt.ProjectRoleTemplateBinding().List(allNamespaces, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list project role template bindings: %w", err)
+	}
+
+	for _, prtb := range prtbs.Items {
+		if strings.HasPrefix(prtb.GroupPrincipalName, prefix) || strings.HasPrefix(prtb.UserPrincipalName, prefix) {
+			remaining = append(remaining, "projectroletemplatebinding/"+prtb.Name)
+		}
+	}
+
+	return remaining, nil
 }
