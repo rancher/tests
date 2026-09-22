@@ -7,8 +7,11 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/defaults"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	extnamespaceapi "github.com/rancher/shepherd/extensions/kubeapi/namespaces"
+	extquotaapi "github.com/rancher/shepherd/extensions/kubeapi/resourcequotas"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
@@ -19,6 +22,7 @@ const (
 	ResourceQuotaAnnotation                 = "field.cattle.io/resourceQuota"
 	ResourceQuotaStatusAnnotation           = "cattle.io/status"
 	InitialUsedResourceQuotaValue           = "0"
+	ManagedResourceQuotaLabel               = "resourcequota.management.cattle.io/default-resource-quota"
 )
 
 // GetNamespacesInProject retrieves all namespaces in a specific project within a cluster
@@ -131,4 +135,135 @@ func GetConditionStatusAndMessageFromAnnotation(annotation string, conditionType
 	}
 
 	return "", "", fmt.Errorf("no condition of type '%s' found", conditionType)
+}
+
+// NewResourceQuota builds a ResourceQuota with the given hard limits, optionally carrying the Rancher-managed marker label.
+func NewResourceQuota(namespaceName, name, hardCPU, hardMemory string, managed bool) *corev1.ResourceQuota {
+	rq := &corev1.ResourceQuota{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespaceName,
+		},
+		Spec: corev1.ResourceQuotaSpec{
+			Hard: corev1.ResourceList{
+				corev1.ResourceLimitsCPU:    resource.MustParse(hardCPU),
+				corev1.ResourceLimitsMemory: resource.MustParse(hardMemory),
+			},
+		},
+	}
+	if managed {
+		rq.Labels = map[string]string{ManagedResourceQuotaLabel: "true"}
+	}
+	return rq
+}
+
+// NewLimitRange builds a container-default LimitRange, optionally carrying the Rancher-managed marker label.
+func NewLimitRange(namespaceName, name string, managed bool) *corev1.LimitRange {
+	lr := &corev1.LimitRange{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespaceName,
+		},
+		Spec: corev1.LimitRangeSpec{
+			Limits: []corev1.LimitRangeItem{
+				{
+					Type: corev1.LimitTypeContainer,
+					Default: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("500m"),
+						corev1.ResourceMemory: resource.MustParse("512Mi"),
+					},
+					DefaultRequest: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("250m"),
+						corev1.ResourceMemory: resource.MustParse("256Mi"),
+					},
+				},
+			},
+		},
+	}
+	if managed {
+		lr.Labels = map[string]string{ManagedResourceQuotaLabel: "true"}
+	}
+	return lr
+}
+
+// WaitForManagedResourceQuotaHard polls until the single Rancher-managed ResourceQuota in the namespace has the expected hard limits.
+func WaitForManagedResourceQuotaHard(client *rancher.Client, clusterID, namespaceName string, expected corev1.ResourceList) (*corev1.ResourceQuota, error) {
+	var managed *corev1.ResourceQuota
+	err := kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (bool, error) {
+		list, err := extquotaapi.ListResourceQuotas(client, clusterID, namespaceName, metav1.ListOptions{LabelSelector: ManagedResourceQuotaLabel + "=true"})
+		if err != nil || len(list.Items) != 1 {
+			return false, nil
+		}
+		rq := list.Items[0]
+		for name, want := range expected {
+			got, ok := rq.Spec.Hard[name]
+			if !ok || want.Cmp(got) != 0 {
+				return false, nil
+			}
+		}
+		managed = rq.DeepCopy()
+		return true, nil
+	})
+	return managed, err
+}
+
+// WaitForManagedResourceQuota polls until a Rancher-managed ResourceQuota exists in the namespace.
+func WaitForManagedResourceQuota(client *rancher.Client, clusterID, namespaceName string) (*corev1.ResourceQuota, error) {
+	var managed *corev1.ResourceQuota
+	err := kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (bool, error) {
+		list, err := extquotaapi.ListResourceQuotas(client, clusterID, namespaceName, metav1.ListOptions{LabelSelector: ManagedResourceQuotaLabel + "=true"})
+		if err != nil || len(list.Items) != 1 {
+			return false, nil
+		}
+		managed = list.Items[0].DeepCopy()
+		return true, nil
+	})
+	return managed, err
+}
+
+// WaitForManagedLimitRange polls until a Rancher-managed LimitRange exists in the namespace.
+func WaitForManagedLimitRange(client *rancher.Client, clusterID, namespaceName string) (*corev1.LimitRange, error) {
+	clusterContext, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
+	if err != nil {
+		return nil, err
+	}
+
+	var managed *corev1.LimitRange
+	err = kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (bool, error) {
+		list, err := clusterContext.Core.LimitRange().List(namespaceName, metav1.ListOptions{LabelSelector: ManagedResourceQuotaLabel + "=true"})
+		if err != nil || len(list.Items) != 1 {
+			return false, nil
+		}
+		managed = list.Items[0].DeepCopy()
+		return true, nil
+	})
+	return managed, err
+}
+
+// WaitForManagedLimitRangeDefault polls until the Rancher-managed LimitRange in the namespace has the expected container default limits.
+func WaitForManagedLimitRangeDefault(client *rancher.Client, clusterID, namespaceName string, expectedCPU, expectedMemory resource.Quantity) (*corev1.LimitRange, error) {
+	clusterContext, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
+	if err != nil {
+		return nil, err
+	}
+
+	var managed *corev1.LimitRange
+	err = kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (bool, error) {
+		list, err := clusterContext.Core.LimitRange().List(namespaceName, metav1.ListOptions{LabelSelector: ManagedResourceQuotaLabel + "=true"})
+		if err != nil || len(list.Items) != 1 {
+			return false, nil
+		}
+		lr := list.Items[0]
+		if len(lr.Spec.Limits) == 0 {
+			return false, nil
+		}
+		gotCPU, cpuOK := lr.Spec.Limits[0].Default[corev1.ResourceCPU]
+		gotMemory, memOK := lr.Spec.Limits[0].Default[corev1.ResourceMemory]
+		if !cpuOK || !memOK || expectedCPU.Cmp(gotCPU) != 0 || expectedMemory.Cmp(gotMemory) != 0 {
+			return false, nil
+		}
+		managed = lr.DeepCopy()
+		return true, nil
+	})
+	return managed, err
 }
