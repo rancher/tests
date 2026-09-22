@@ -8,6 +8,7 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/cloudcredentials"
+	extClusters "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
@@ -69,6 +70,7 @@ func nodeDriverSetup(t *testing.T) nodeDriverTest {
 func TestNodeDriver(t *testing.T) {
 	t.Parallel()
 	r := nodeDriverSetup(t)
+	t.Cleanup(r.session.Cleanup)
 
 	nodeRolesAll := []provisioninginput.MachinePools{provisioninginput.AllRolesMachinePool}
 	nodeRolesShared := []provisioninginput.MachinePools{provisioninginput.EtcdControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
@@ -94,14 +96,22 @@ func TestNodeDriver(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		var err error
-		t.Cleanup(func() {
-			logrus.Infof("Running cleanup (%s)", tt.name)
-			r.session.Cleanup()
-		})
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
+			resourceSession := session.NewSession()
+			clusterSession := session.NewSession()
+			t.Cleanup(func() {
+				logrus.Infof("Running cleanup (%s)", tt.name)
+				clusterSession.Cleanup()
+				resourceSession.Cleanup()
+			})
+
+			testClient, err := tt.client.WithSession(resourceSession)
+			require.NoError(t, err)
+
+			adminClient, err := r.client.WithSession(resourceSession)
+			require.NoError(t, err)
 
 			clusterConfig := new(clusters.ClusterConfig)
 			operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
@@ -135,28 +145,35 @@ func TestNodeDriver(t *testing.T) {
 			}
 
 			logrus.Info("Provisioning cluster")
-			cluster, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
+			cluster, err := provisioning.CreateProvisioningClusterWithClusterSession(testClient, provider, credentialSpec, clusterConfig, machineConfigSpec, nil, clusterSession)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
-			err = provisioning.VerifyClusterReady(r.client, cluster)
+			err = provisioning.VerifyClusterReady(adminClient, cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
-			err = deployment.VerifyClusterDeployments(tt.client, cluster)
+			err = deployment.VerifyClusterDeployments(testClient, cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
-			err = pods.VerifyClusterPods(r.client, cluster)
+			err = pods.VerifyClusterPods(adminClient, cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying service account token secret (%s)", cluster.Name)
-			err = clusters.VerifyServiceAccountTokenSecret(r.client, cluster.Name)
+			err = clusters.VerifyServiceAccountTokenSecret(adminClient, cluster.Name)
 			require.NoError(t, err)
+
+			logrus.Infof("Deleting cluster (%s)", cluster.Name)
+			err = extClusters.DeleteK3SRKE2Cluster(adminClient, cluster.ID)
+			require.NoError(t, err)
+
+			provisioning.VerifyDeleteRKE2K3SCluster(t, adminClient, cluster.ID)
+			clusterSession.CleanupEnabled = false
 		})
 
 		params := provisioning.GetProvisioningSchemaParams(tt.client, r.cattleConfig)
-		err = qase.UpdateSchemaParameters(tt.name, params)
+		err := qase.UpdateSchemaParameters(tt.name, params)
 		if err != nil {
 			logrus.Warningf("Failed to upload schema parameters %s", err)
 		}

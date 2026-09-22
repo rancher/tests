@@ -58,6 +58,15 @@ const (
 
 // CreateProvisioningCluster provisions a non-rke1 cluster, then runs verify checks
 func CreateProvisioningCluster(client *rancher.Client, provider Provider, credentialSpec cloudcredentials.CloudCredential, clustersConfig *clusters.ClusterConfig, machineConfigSpec machinepools.MachineConfigs, hostnameTruncation []machinepools.HostnameTruncation) (*v1.SteveAPIObject, error) {
+	return createProvisioningCluster(client, provider, credentialSpec, clustersConfig, machineConfigSpec, hostnameTruncation, client.Session)
+}
+
+// CreateProvisioningClusterWithClusterSession provisions a cluster with its delete callback on a separate session.
+func CreateProvisioningClusterWithClusterSession(client *rancher.Client, provider Provider, credentialSpec cloudcredentials.CloudCredential, clustersConfig *clusters.ClusterConfig, machineConfigSpec machinepools.MachineConfigs, hostnameTruncation []machinepools.HostnameTruncation, clusterSession *session.Session) (*v1.SteveAPIObject, error) {
+	return createProvisioningCluster(client, provider, credentialSpec, clustersConfig, machineConfigSpec, hostnameTruncation, clusterSession)
+}
+
+func createProvisioningCluster(client *rancher.Client, provider Provider, credentialSpec cloudcredentials.CloudCredential, clustersConfig *clusters.ClusterConfig, machineConfigSpec machinepools.MachineConfigs, hostnameTruncation []machinepools.HostnameTruncation, clusterSession *session.Session) (*v1.SteveAPIObject, error) {
 	var clusterName string
 
 	if clustersConfig.ResourcePrefix != "" {
@@ -189,8 +198,14 @@ func CreateProvisioningCluster(client *rancher.Client, provider Provider, creden
 	// steve registers a delete for every object it creates; the cluster's delete is
 	// discarded here so only the watch based one from CreateK3SRKE2Cluster runs
 	logrus.Debugf("Creating cluster steve object (%s)", clusterName)
+	clusterClient, err := provisioningClient.WithSession(clusterSession)
+	if err != nil {
+		return nil, err
+	}
+	clusterClient.Steve.Ops.Session = session.NewSession()
+
 	err = kwait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
-		_, err = shepherdclusters.CreateK3SRKE2Cluster(provisioningClient, cluster)
+		_, err = shepherdclusters.CreateK3SRKE2Cluster(clusterClient, cluster)
 		if err != nil {
 			if strings.Contains(err.Error(), "401") {
 				return false, nil
