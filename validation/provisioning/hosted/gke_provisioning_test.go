@@ -28,11 +28,6 @@ func TestProvisioningGKE(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Cleanup(func() {
-			logrus.Infof("Running cleanup (%s)", tt.name)
-			h.Session.Cleanup()
-		})
-
 		var gkeClusterConfig gke.ClusterConfig
 		operations.LoadObjectFromMap(gke.GKEClusterConfigConfigurationFileKey, h.CattleConfig, &gkeClusterConfig)
 
@@ -61,6 +56,10 @@ func TestProvisioningGKE(t *testing.T) {
 
 		logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
 		err = pods.VerifyClusterPods(h.Client, cluster)
+		require.NoError(t, err)
+
+		logrus.Infof("Deleting cluster (%s)", cluster.Name)
+		err = tt.client.Management.Cluster.Delete(clusterObject)
 		require.NoError(t, err)
 	}
 }

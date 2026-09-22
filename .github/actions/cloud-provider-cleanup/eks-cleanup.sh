@@ -62,7 +62,14 @@ if [ -n "$CLUSTER_NAMES" ]; then
   for cluster in $CLUSTER_NAMES; do
     echo "Deleting cluster $cluster..."
     eksctl utils write-kubeconfig --cluster "$cluster" --region "$AWS_REGION" > /dev/null
-    eksctl delete nodegroup --cluster "$cluster" --region "$AWS_REGION" --name "${PREFIX}-ng" --wait --drain=false > /dev/null
+
+    NODEGROUP_NAMES=$(aws eks list-nodegroups --cluster-name "$cluster" --region "$AWS_REGION" --query "nodegroups" --output text)
+
+    if [ -n "$NODEGROUP_NAMES" ]; then
+      for nodegroup in $NODEGROUP_NAMES; do
+        eksctl delete nodegroup --cluster "$cluster" --region "$AWS_REGION" --name "$nodegroup" --wait --drain=false > /dev/null
+      done
+    fi
 
     while true; do
       COUNT=$(aws eks list-nodegroups --cluster-name "$cluster" --region "$AWS_REGION" --query "length(nodegroups)" --output text)

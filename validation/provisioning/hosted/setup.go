@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
-	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
@@ -25,7 +24,6 @@ type hostedTest struct {
 	CattleConfig       map[string]any
 	ClusterConfig      *clusters.ClusterConfig
 	rancherConfig      *rancher.Config
-	Cluster            *management.Cluster
 }
 
 func Setup(t *testing.T) *hostedTest {
