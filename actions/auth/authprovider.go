@@ -6,6 +6,7 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/clients/rancher/auth"
+	"github.com/rancher/shepherd/clients/rancher/auth/saml"
 	v3 "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/pkg/session"
@@ -27,18 +28,36 @@ const (
 	AccessModeRequired                   = "required"
 	OpenLdap                             = "openldap"
 	ActiveDirectory                      = "activedirectory"
+	KeycloakSAML                         = "keycloak"
 	OpenLdapPasswordSecretID             = "openldapconfig-serviceaccountpassword"
 	ActiveDirectoryPasswordSecretID      = "activedirectoryconfig-serviceaccountpassword"
+	KeycloakSAMLKeySecretID              = "keycloakconfig-spkey"
 	PrincipalTypeUser                    = "user"
 	PrincipalTypeGroup                   = "group"
 	AccessModeMissingRequiredError       = "accessMode=MissingRequired"
+	NotNullableError                     = "code=NotNullable"
+	AccessModeFieldError                 = "fieldName=accessMode"
 	PermissionDeniedError                = "PermissionDenied"
 	LocalPrincipalPrefix                 = "local://"
 )
 
+var samlProviders = map[string]saml.Provider{
+	KeycloakSAML: saml.KeycloakSAML,
+}
+
 type User struct {
-	Username string
-	Password string
+	Username      string
+	Password      string
+	PrincipalName string
+}
+
+// PrincipalNameOf returns the name a user's principal ID is built from
+func PrincipalNameOf(user User) string {
+	if user.PrincipalName != "" {
+		return user.PrincipalName
+	}
+
+	return user.Username
 }
 
 // AuthConfig is a generic struct for auth provider configuration
@@ -51,6 +70,16 @@ type AuthConfig struct {
 	DoubleNestedUsers []User `yaml:"doubleNestedUsers"`
 	TripleNestedGroup string `yaml:"tripleNestedGroup"`
 	TripleNestedUsers []User `yaml:"tripleNestedUsers"`
+}
+
+type SAMLAuthConfig struct {
+	Group             string `yaml:"group"`
+	Users             []User `yaml:"users"`
+	ExcludedUsers     []User `yaml:"excludedUsers"`
+	NestedGroup       string `yaml:"nestedGroup"`
+	NestedUsers       []User `yaml:"nestedUsers"`
+	DoubleNestedGroup string `yaml:"doubleNestedGroup"`
+	DoubleNestedUsers []User `yaml:"doubleNestedUsers"`
 }
 
 // SetupAuthenticatedSession enables the auth provider, logs in as the admin user, and returns a new session and client
@@ -105,11 +134,20 @@ func WaitForAuthProviderAnnotationUpdate(client *rancher.Client, providerName, e
 func LoginAsAuthUser(client *rancher.Client, user *v3.User, providerName string) (*rancher.Client, error) {
 	var userEnabled = true
 	user.Enabled = &userEnabled
+
+	if samlProvider, isSAML := samlProviders[providerName]; isSAML {
+		return client.AsSAMLUser(user, samlProvider)
+	}
+
 	return client.AsAuthUser(user, auth.Provider(providerName))
 }
 
-// NewPrincipalID constructs a principal ID string in the format required by AD authentication
+// NewPrincipalID constructs a principal ID string in the format required by the auth provider
 func NewPrincipalID(authConfigID, principalType, name, userSearchBase, groupSearchBase string) string {
+	if _, isSAML := samlProviders[authConfigID]; isSAML {
+		return fmt.Sprintf("%s_%s://%s", authConfigID, principalType, name)
+	}
+
 	baseDN := userSearchBase
 
 	if principalType == PrincipalTypeGroup {
@@ -183,6 +221,8 @@ func EnsureAuthProviderEnabled(client *rancher.Client, providerName string) erro
 		err = client.Auth.OLDAP.Enable()
 	case ActiveDirectory:
 		err = client.Auth.ActiveDirectory.Enable()
+	case KeycloakSAML:
+		err = enableKeycloakSAML(client)
 	default:
 		return fmt.Errorf("unsupported auth provider: %s", providerName)
 	}
@@ -219,8 +259,26 @@ func GetUserPrincipalID(providerName, username, userSearchBase, groupSearchBase 
 	return NewPrincipalID(providerName, PrincipalTypeUser, username, userSearchBase, groupSearchBase)
 }
 
+// GetSAMLGroupPrincipalID constructs a group principal ID for a SAML provider
+func GetSAMLGroupPrincipalID(providerName, groupName string) string {
+	return GetGroupPrincipalID(providerName, groupName, "", "")
+}
+
+// GetSAMLUserPrincipalID constructs a user principal ID for a SAML provider
+func GetSAMLUserPrincipalID(providerName string, user User) string {
+	return GetUserPrincipalID(providerName, PrincipalNameOf(user), "", "")
+}
+
 // UpdateAccessMode updates the auth config to the specified access mode with optional allowed principal IDs
 func UpdateAccessMode(client *rancher.Client, providerName, accessMode string, allowedPrincipalIDs []string) (*v3.AuthConfig, error) {
+	if providerName == KeycloakSAML {
+		if err := client.Auth.KeycloakSAML.UpdateAccessMode(accessMode, allowedPrincipalIDs); err != nil {
+			return nil, fmt.Errorf("failed to update auth config to access mode %s: %w", accessMode, err)
+		}
+
+		return client.Management.AuthConfig.ByID(providerName)
+	}
+
 	existing, updates, err := NewAuthConfigWithAccessMode(client, providerName, accessMode, allowedPrincipalIDs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare auth config with access mode %s: %w", accessMode, err)
@@ -254,5 +312,23 @@ func SetupRequiredAccessModePrincipals(authAdmin *rancher.Client, clusterID stri
 		userPrincipal := GetUserPrincipalID(providerName, v.Username, userSearchBase, groupSearchBase)
 		principalIDs = append(principalIDs, userPrincipal)
 	}
+	return principalIDs, nil
+}
+
+// SetupSAMLRequiredAccessModePrincipals grants a SAML group cluster access and returns the principal IDs that have to be allowed for that group and its members to sign in
+func SetupSAMLRequiredAccessModePrincipals(authAdmin *rancher.Client, clusterID string, authConfig *SAMLAuthConfig, providerName string) ([]string, error) {
+	groupPrincipalID := GetGroupPrincipalID(providerName, authConfig.Group, "", "")
+
+	_, err := rbacapi.CreateGroupClusterRoleTemplateBinding(authAdmin, clusterID, groupPrincipalID, rbac.ClusterMember.String())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create cluster role binding: %w", err)
+	}
+
+	principalIDs := []string{groupPrincipalID}
+
+	for _, v := range authConfig.Users {
+		principalIDs = append(principalIDs, GetUserPrincipalID(providerName, PrincipalNameOf(v), "", ""))
+	}
+
 	return principalIDs, nil
 }
