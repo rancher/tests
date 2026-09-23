@@ -73,13 +73,12 @@ jobs:
         shell: bash
         run: |
           if [[ "$RUN_ALL_VERSIONS" == "true" || "$GITHUB_EVENT_NAME" == "schedule" ]]; then
-            versions='["16", "15", "14", "13"]'
+            versions='["16", "15", "14"]'
           else
             case "$RANCHER_VERSION_INPUT" in
               head) versions='["16"]' ;;
               v2.15-head) versions='["15"]' ;;
               v2.14-head) versions='["14"]' ;;
-              v2.13-head) versions='["13"]' ;;
               *) versions='[]' ;;
             esac
           fi

@@ -12,6 +12,11 @@ on:
       rancher_chart_version:
         description: "Rancher chart version"
         required: false
+      run_all_versions:
+        description: "Run all supported versions if manually triggered"
+        required: false
+        default: false
+        type: boolean
       reporting:
         description: "Enable reporting to Qase and Slack"
         required: false
@@ -30,16 +35,6 @@ on:
         required: false
         default: true
         type: boolean
-  workflow_call:
-    inputs:
-      rancher_version:
-        description: "Rancher tag version provided from check-rancher-tag workflow"
-        required: false
-        type: string
-      rancher_chart_version:
-        description: "Rancher chart version provided from check-rancher-tag workflow"
-        required: false
-        type: string
 
 permissions:
   id-token: write
@@ -56,30 +51,50 @@ env:
   REPORTING_ENABLED: >-
         ${{
           github.event_name == 'schedule' ||
-          github.event_name == 'workflow_call' ||
           github.actor == 'github-actions[bot]' ||
           (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
         }}
   CLEANUP_ENABLED: >-
     ${{
       github.event_name == 'schedule' ||
-      github.event_name == 'workflow_call' ||
       github.actor == 'github-actions[bot]' ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.environment_cleanup == 'true' )
     }}
 
-jobs: 
-  v2-15:
-    if: |
-      github.event_name == 'schedule' ||
-      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.15')) ||
-      (github.event_name == 'workflow_call' && startsWith(inputs.rancher_version, 'v2.15-head'))
-    name: ${{ github.event.inputs.rancher_version }}
+jobs:
+  prepare-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    env:
+      RUN_ALL_VERSIONS: ${{ github.event.inputs.run_all_versions || 'false' }}
+      RANCHER_VERSION_INPUT: ${{ github.event.inputs.rancher_version || inputs.rancher_version }}
+    steps:
+      - id: set-matrix
+        shell: bash
+        run: |
+          if [[ "$RUN_ALL_VERSIONS" == "true" || "$GITHUB_EVENT_NAME" == "schedule" ]]; then
+            versions='["16", "15"]'
+          else
+            case "$RANCHER_VERSION_INPUT" in
+              head) versions='["16"]' ;;
+              v2.15-head) versions='["15"]' ;;
+              *) versions='[]' ;;
+            esac
+          fi
+          echo "matrix={\"version\":$versions}" >> "$GITHUB_OUTPUT"
+
+  community-to-prime-upgrade:
+    needs: prepare-matrix
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare-matrix.outputs.matrix) }}
+    name: ${{ vars[format('RANCHER_VERSION_2_{0}_HEAD', matrix.version)] }}
     runs-on: ubuntu-latest
     environment: upgrade-community-prime-head
     env:
-      RANCHER2_PROVIDER_VERSION: "${{ vars.RANCHER2_PROVIDER_VERSION_2_15 }}"
-      HOSTNAME_PREFIX: "ctp-up-215"
+      RANCHER2_PROVIDER_VERSION: "${{ vars[format('RANCHER2_PROVIDER_VERSION_2_{0}', matrix.version)] }}"
+      HOSTNAME_PREFIX: "ctp-up-${{ matrix.version }}"
 
     steps:
       - name: Checkout repository
@@ -162,8 +177,8 @@ jobs:
           value: |
             ${{ 
               github.event.inputs.rancher_version || 
-              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version) ||
-              (github.event_name == 'schedule' && vars.RANCHER_VERSION_2_15_HEAD)
+              inputs.rancher_version || 
+              vars[format('RANCHER_VERSION_2_{0}_HEAD', matrix.version)] 
             }}
 
       - name: Set upgraded Rancher chart version
@@ -173,15 +188,15 @@ jobs:
           value: |
             ${{ 
               github.event.inputs.rancher_chart_version || 
-              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version) ||
-              (github.event_name == 'schedule' && vars.RELEASED_RANCHER_CHART_VERSION_2_15)
+              inputs.rancher_chart_version || 
+              vars[format('RELEASED_RANCHER_CHART_VERSION_2_{0}', matrix.version)]
             }}
 
       - name: Get Qase ID
         id: get-qase-id
         uses: ./.github/actions/get-qase-id
         with:
-          qase_recurring_id: ${{ vars.HB_QASE_RECURRING_TEST_RUN_ID_2_15 }}
+          qase_recurring_id: ${{ vars[format('HB_QASE_RECURRING_TEST_RUN_ID_2_{0}', matrix.version)] }}
 
       - name: Create config.yaml
         run: |
@@ -233,18 +248,19 @@ jobs:
             standalone:
               bootstrapPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
               certManagerVersion: "${{ vars.CERT_MANAGER_VERSION }}"
-              chartVersion: "${{ vars.RELEASED_RANCHER_CHART_VERSION_2_15 }}"
-              k3sVersion: "${{ vars.K3S_VERSION_2_15 }}${{ vars.K3S_VERSION_SUFFIX }}"
+              chartVersion: "${{ vars[format('RELEASED_RANCHER_CHART_VERSION_2_{0}', matrix.version)] }}"
+              k3sVersion: "${{ vars[format('K3S_VERSION_2_{0}', matrix.version)] }}${{ vars.K3S_VERSION_SUFFIX }}"
               osUser: "${{ vars.OS_USER }}"
               osGroup: "${{ vars.OS_GROUP }}"
               rancherChartRepository: "${{ secrets.RANCHER_HELM_CHART_URL }}"
               rancherHostname: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
               rancherImage: "${{ secrets.RANCHER_IMAGE }}"
-              rancherTagVersion: "${{ vars.RELEASED_RANCHER_VERSION_2_15 }}"
+              rancherTagVersion: "${{ vars[format('RELEASED_RANCHER_VERSION_2_{0}', matrix.version)] }}"
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
               repo: "${{ secrets.RANCHER_REPO }}"
-              rke2Version: "${{ vars.RKE2_VERSION_2_15 }}"
+              rke2Version: "${{ vars[format('RKE2_VERSION_2_{0}', matrix.version)] }}"
+              upgradedRancherAgentImage: "${{ secrets.UPGRADED_RANCHER_AGENT_IMAGE }}"
               upgradedRancherChartRepository: "${{ secrets.UPGRADED_RANCHER_HELM_CHART_URL }}"
               upgradedRancherChartVersion: "${{ env.UPGRADED_RANCHER_CHART_VERSION }}"
               upgradedRancherImage: "${{ secrets.UPGRADED_RANCHER_IMAGE }}"
@@ -413,3 +429,11 @@ jobs:
           rancher-version: ${{ env.UPGRADED_RANCHER_VERSION }}
           job-status: ${{ steps.set-job-status.outputs.job_status }}
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Save test result weekly summary
+        if: always() && github.event_name == 'schedule'
+        uses: ./.github/actions/save-weekly-summary-result
+        with:
+          rancher_version: ${{ env.UPGRADED_RANCHER_VERSION }}
+          workflow: community-to-prime-upgrade
+          job: v2-${{ matrix.version }}
