@@ -13,6 +13,12 @@ ARG GOTESTSUM_VERSION
 ARG ANSIBLE_CORE_VERSION
 ARG AWSCLI_VERSION
 
+# Allow go to download a newer toolchain when go.mod requires one (official
+# golang images default to GOTOOLCHAIN=local, which hard-fails instead). Keeps
+# pipelines building while the base image digest lags a go.mod bump in
+# rancher/rancher main. Only downloads when the module requires it.
+ENV GOTOOLCHAIN=auto
+
 # Install runtime dependencies
 RUN apk add --no-cache \
     bash \
