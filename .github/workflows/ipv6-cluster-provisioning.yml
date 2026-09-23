@@ -35,16 +35,6 @@ on:
         required: false
         default: true
         type: boolean
-  workflow_call:
-    inputs:
-      rancher_version:
-        description: "Rancher tag version provided from check-rancher-tag workflow"
-        required: false
-        type: string
-      rancher_chart_version:
-        description: "Rancher chart version provided from check-rancher-tag workflow"
-        required: false
-        type: string
 
 permissions:
   id-token: write
@@ -61,30 +51,50 @@ env:
   REPORTING_ENABLED: >-
         ${{
           github.event_name == 'schedule' ||
-          github.event_name == 'workflow_call' ||
           github.actor == 'github-actions[bot]' ||
           (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
         }}
   CLEANUP_ENABLED: >-
     ${{
       github.event_name == 'schedule' ||
-      github.event_name == 'workflow_call' ||
       github.actor == 'github-actions[bot]' ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.environment_cleanup == 'true' )
     }}
 
 jobs:
-  v2-16:
-    if: |
-      github.event_name == 'schedule' ||
-      github.event.inputs.run_all_versions == 'true' ||
-      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'head'))
-    name: ${{ github.event.inputs.rancher_version }}
+  prepare-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    env:
+      RUN_ALL_VERSIONS: ${{ github.event.inputs.run_all_versions || 'false' }}
+      RANCHER_VERSION_INPUT: ${{ github.event.inputs.rancher_version || inputs.rancher_version }}
+    steps:
+      - id: set-matrix
+        shell: bash
+        run: |
+          if [[ "$RUN_ALL_VERSIONS" == "true" || "$GITHUB_EVENT_NAME" == "schedule" ]]; then
+            versions='["16", "15"]'
+          else
+            case "$RANCHER_VERSION_INPUT" in
+              head) versions='["16"]' ;;
+              v2.15-head) versions='["15"]' ;;
+              *) versions='[]' ;;
+            esac
+          fi
+          echo "matrix={\"version\":$versions}" >> "$GITHUB_OUTPUT"
+
+  ipv6-cluster-provisioning:
+    needs: prepare-matrix
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare-matrix.outputs.matrix) }}
+    name: ${{ vars[format('RANCHER_VERSION_2_{0}_HEAD', matrix.version)] }}
     runs-on: ubuntu-latest
     environment: head
     env:
-      RANCHER2_PROVIDER_VERSION: "${{ vars.RANCHER2_PROVIDER_VERSION_2_16 }}"
-      HOSTNAME_PREFIX: "gha6-prov-216"
+      RANCHER2_PROVIDER_VERSION: "${{ vars[format('RANCHER2_PROVIDER_VERSION_2_{0}', matrix.version)] }}"
+      HOSTNAME_PREFIX: "gha6-prov-${{ matrix.version }}"
 
     steps:
       - name: Checkout repository
@@ -126,314 +136,15 @@ jobs:
             HB_AWS_REGION, HB_AWS_REGION
             HB_RANCHER_ADMIN_PASSWORD, HB_RANCHER_ADMIN_PASSWORD
             HB_RANCHER_REPO, HB_RANCHER_REPO
-            HB_RANCHER_VERSION_HEAD, HB_RANCHER_VERSION_HEAD
+            HB_RANCHER_VERSION_2_16_HEAD, HB_RANCHER_VERSION_2_16_HEAD
+            HB_RANCHER_VERSION_2_15_HEAD, HB_RANCHER_VERSION_2_15_HEAD
             HB_RELEASED_RANCHER_CHART_VERSION_2_15, HB_RELEASED_RANCHER_CHART_VERSION_2_15
             HB_RKE2_VERSION_2_16, HB_RKE2_VERSION_2_16
             HB_K3S_VERSION_2_16, HB_K3S_VERSION_2_16
-            HB_K3S_VERSION_SUFFIX, HB_K3S_VERSION_SUFFIX
-            HB_QASE_RELEASE_TEST_RUN_ID_2_16, HB_QASE_RELEASE_TEST_RUN_ID_2_16
-            HB_QASE_RECURRING_TEST_RUN_ID_2_16, HB_QASE_RECURRING_TEST_RUN_ID_2_16
-            HB_QA_PRIVATE_REGISTRY_NAME, HB_QA_PRIVATE_REGISTRY_NAME
-            HB_QASE_AUTOMATION_TOKEN, HB_QASE_AUTOMATION_TOKEN
-            HB_QASE_PROJECT_ID, HB_QASE_PROJECT_ID
-            HB_RANCHER_HELM_CHART_URL, HB_RANCHER_HELM_CHART_URL
-            HB_STAGING_RANCHER_HELM_CHART_URL, HB_STAGING_RANCHER_HELM_CHART_URL
-            HB_SLACK_WEBHOOK_URL, HB_SLACK_WEBHOOK_URL
-
-      - name: Fetch and Set DockerHub Credentials
-        uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 #v3
-        with:
-          secrets: |
-            secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials username | DOCKERHUB_USERNAME ;
-            secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials password | DOCKERHUB_PASSWORD
-
-      - name: Masking Secrets
-        uses: ./.github/actions/mask-secrets
-        with:
-          secrets: |
-            ${{ env.DOCKERHUB_USERNAME }}
-            ${{ env.DOCKERHUB_PASSWORD }}
-            ${{ env.HB_SSH_PRIVATE_KEY }}
-            ${{ env.HB_WINDOWS_SSH_PRIVATE_KEY }}
-            ${{ env.HB_PRIVATE_FULL_CHAIN }}
-            ${{ env.HB_PRIVATE_CERT_KEY }}
-
-      - name: Whitelist Runner IP
-        id: whitelist-runner-ip
-        uses: ./.github/actions/whitelist-runner-ip
-        with:
-          prefix-list-id: ${{ fromJSON(env.HB_AWS_MANAGED_PREFIX_LIST_ID).value }}
-          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
-
-      - name: Set up SSH Keys
-        id: setup-ssh-keys
-        uses: ./.github/actions/setup-ssh-keys
-        with:
-          ssh-private-key: ${{ fromJSON(env.HB_SSH_PRIVATE_KEY).value }}
-          ssh-private-key-name: ${{ fromJSON(env.HB_SSH_PRIVATE_KEY_NAME).value }}
-          windows-ssh-private-key: ${{ fromJSON(env.HB_WINDOWS_SSH_PRIVATE_KEY).value }}
-          windows-ssh-private-key-name: ${{ fromJSON(env.HB_WINDOWS_SSH_PRIVATE_KEY_NAME).value }}
-
-      - name: Set up certificates
-        id: setup-certs
-        uses: ./.github/actions/setup-certs
-        with:
-          private-full-chain: ${{ fromJSON(env.HB_PRIVATE_FULL_CHAIN).value }}
-          private-full-chain-name: ${{ fromJSON(env.HB_PRIVATE_FULL_CHAIN_NAME).value }}
-          private-cert-key: ${{ fromJSON(env.HB_PRIVATE_CERT_KEY).value }}
-          private-cert-key-name: ${{ fromJSON(env.HB_PRIVATE_CERT_KEY_NAME).value }}
-
-      - name: Uniquify hostname prefix
-        uses: ./.github/actions/uniquify-hostname
-
-      - name: Set Rancher version
-        uses: ./.github/actions/set-env-var
-        with:
-          key: RANCHER_VERSION
-          value: |
-            ${{ 
-              github.event.inputs.rancher_version || 
-              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version) || 
-              (github.event_name == 'schedule' && fromJSON(env.HB_RANCHER_VERSION_HEAD).value) ||
-              (github.event.inputs.run_all_versions == 'true' && fromJSON(env.HB_RANCHER_VERSION_HEAD).value)
-            }}
-
-      - name: Set Rancher chart version
-        uses: ./.github/actions/set-env-var
-        with:
-          key: RANCHER_CHART_VERSION
-          value: |
-            ${{ 
-              github.event.inputs.rancher_chart_version || 
-              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version) || 
-              (github.event_name == 'schedule' && fromJSON(env.HB_RELEASED_RANCHER_CHART_VERSION_2_15).value) ||
-              (github.event.inputs.run_all_versions == 'true' && fromJSON(env.HB_RELEASED_RANCHER_CHART_VERSION_2_15).value)
-            }}
-
-      - name: Set Rancher repo
-        uses: ./.github/actions/set-rancher-repo
-        with:
-          rancher-version: ${{ env.RANCHER_VERSION }}
-          fallback-repo: ${{ fromJSON(env.HB_RANCHER_REPO).value }}
-          is-prime: false
-          release-community-version: "2.16"
-
-      - name: Get Qase ID
-        id: get-qase-id
-        uses: ./.github/actions/get-qase-id
-        with:
-          triggered_tag: ${{ github.event.inputs.rancher_version }}
-          qase_release_id: ${{ fromJSON(env.HB_QASE_RELEASE_TEST_RUN_ID_2_16).value }}
-          qase_recurring_id: ${{ fromJSON(env.HB_QASE_RECURRING_TEST_RUN_ID_2_16).value }}
-
-      - name: Set Rancher chart url
-        uses: ./.github/actions/set-rancher-chart-url
-        with:
-          rancher-repo: ${{ env.RANCHER_REPO }}
-          is-prime: false
-          community-chart-url: ${{ vars.COMMUNITY_HELM_CHART_URL }}
-          staging-chart-url: ${{ fromJSON(env.HB_STAGING_RANCHER_HELM_CHART_URL).value }}
-          fallback-chart-url: ${{ fromJSON(env.HB_RANCHER_HELM_CHART_URL).value }}
-
-      - name: Create config.yaml
-        run: |
-          cat > config.yaml <<EOF
-          rancher:
-            host: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
-
-          awsCredentials:
-            accessKey: "$AWS_ACCESS_KEY"
-            secretKey: "$AWS_SECRET_KEY"
-            defaultRegion: "${{ fromJSON(env.HB_AWS_REGION).value }}"
-
-          terraform:
-            localCluster: "${{ env.LOCAL_CLUSTER_TYPE }}"
-            privateKeyPath: "${{ steps.setup-ssh-keys.outputs.ssh-private-key-path }}"
-            privateFullChainPath: "${{ steps.setup-certs.outputs.private-full-chain-tfp-path }}"
-            privateCertKeyPath: "${{ steps.setup-certs.outputs.private-cert-key-tfp-path }}"
-            resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
-
-            standalone:
-              chartVersion: "${{ env.RANCHER_CHART_VERSION }}"
-              rancherTagVersion: "${{ env.RANCHER_VERSION }}"
-              rancherChartRepository: "${{ env.RANCHER_HELM_CHART_URL }}"
-              repo: "${{ env.RANCHER_REPO }}"
-              registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
-              registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
-              rancherHostname: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
-              rke2Version: "<HB_RKE2_VERSION_2_16>"
-              k3sVersion: "<HB_K3S_VERSION_2_16><HB_K3S_VERSION_SUFFIX>"
-
-          clusterConfig:
-            registries:
-              rke2Password: "${{ env.DOCKERHUB_PASSWORD }}"
-              rke2Username: "${{ env.DOCKERHUB_USERNAME }}"
-              rke2Registries:
-                mirrors:
-                  "docker.io":
-                    endpoint: ["https://${{ fromJSON(env.HB_QA_PRIVATE_REGISTRY_NAME).value }}"]
-                configs:
-                  "${{ fromJSON(env.HB_QA_PRIVATE_REGISTRY_NAME).value }}":
-                    "auth":
-                      username: "${{ env.DOCKERHUB_USERNAME }}"
-                      password: "${{ env.DOCKERHUB_PASSWORD }}"
-                    insecureSkipVerify: true
-          EOF
-
-      - name: Export CATTLE_TEST_CONFIG
-        run: echo "CATTLE_TEST_CONFIG=${{ github.workspace }}/config.yaml" >> $GITHUB_ENV
-        shell: bash
-
-      - name: Set up Go environment
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 #v6
-        with:
-          go-version-file: "./go.mod"
-
-      - name: Build Packages
-        run: ./.github/scripts/go-build.sh
-
-      - name: Install gotestsum
-        run: go install gotest.tools/gotestsum@c4a0df2e75a225d979a444342dd3db752b53619f
-
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@5e8dbf3c6d9deaf4193ca7a8fb23f2ac83bb6c85 #v4
-        with:
-          terraform_version: "${{ vars.TERRAFORM_VERSION }}"
-          terraform_wrapper: false
-
-      - name: Creating Rancher server
-        run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/ipv6/main.go
-
-      - name: Run IPv6 Provisioning tests
-        env:
-          QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
-          QASE_AUTOMATION_TOKEN: ${{ fromJSON(env.HB_QASE_AUTOMATION_TOKEN).value }}
-          QASE_CUSTOM_FIELD_FILTER: Hostbusters
-          QASE_SCHEMA_PREFIX: hostbusters
-          QASE_PROJECT_ID: ${{ fromJSON(env.HB_QASE_PROJECT_ID).value }}
-        uses: ./.github/actions/run-hostbusters-provisioning
-        with:
-          reporting: ${{ env.REPORTING_ENABLED }}
-          tags: ipv6
-
-      - name: Cleanup Infrastructure
-        if: always() && env.CLEANUP_ENABLED == 'true'
-        working-directory: tfp-automation/modules/ipv6/aws
-        run: terraform destroy -auto-approve > /dev/null 2>&1
-
-      - name: Refresh AWS credentials
-        if: always()
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
-        with:
-          role-to-assume: ${{ secrets.IAM_ROLE }}
-          aws-region: ${{ vars.AWS_REGION }}
-
-      - name: AWS Custodian Infrastructure Cleanup
-        if: always() && env.CLEANUP_ENABLED == 'true'
-        uses: ./.github/actions/aws-cleanup
-        with:
-          prefix: "${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ vars.AWS_REGION }}"
-
-      - name: AWS Custodian Downstream Cleanup - Node driver
-        if: always() && env.CLEANUP_ENABLED == 'true'
-        uses: ./.github/actions/aws-cleanup
-        with:
-          prefix: "auto-${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ vars.AWS_REGION }}"
-
-      - name: AWS Custodian Downstream Cleanup - Custom
-        if: always() && env.CLEANUP_ENABLED == 'true'
-        uses: ./.github/actions/aws-cleanup
-        with:
-          prefix: "rancher-validation${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ vars.AWS_REGION }}"
-
-      - name: Revoke Runner IP
-        if: always()
-        uses: ./.github/actions/revoke-runner-ip
-        with:
-          prefix-list-id: ${{ fromJSON(env.HB_AWS_MANAGED_PREFIX_LIST_ID).value }}
-          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
-
-      - name: Set job status output
-        if: always()
-        run: echo "job_status=${{ job.status }}" >> $GITHUB_OUTPUT
-        id: set-job-status
-
-      - name: Reporting Results to Slack
-        if: always() && env.REPORTING_ENABLED == 'true'
-        uses: ./.github/actions/report-to-slack
-        with:
-          rancher-version: ${{ env.RANCHER_VERSION }}
-          job-status: ${{ steps.set-job-status.outputs.job_status }}
-          slack-webhook-url: ${{ fromJSON(env.HB_SLACK_WEBHOOK_URL).value }}
-
-      - name: Save test result weekly summary
-        if: always() && github.event_name == 'schedule'
-        uses: ./.github/actions/save-weekly-summary-result
-        with:
-          rancher_version: ${{ env.UPGRADED_RANCHER_VERSION }}
-          workflow: ipv6-cluster-provisioning
-          job: v2-16
-  
-  v2-15:
-    if: |
-      github.event_name == 'schedule' ||
-      github.event.inputs.run_all_versions == 'true' ||
-      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.15-head'))
-    name: ${{ github.event.inputs.rancher_version }}
-    runs-on: ubuntu-latest
-    environment: head
-    env:
-      RANCHER2_PROVIDER_VERSION: "${{ vars.RANCHER2_PROVIDER_VERSION_2_15 }}"
-      HOSTNAME_PREFIX: "gha6-prov-215"
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6
-        with:
-          submodules: recursive
-
-      - name: Checkout tfp-automation repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6
-        with:
-          repository: rancher/tfp-automation
-          path: tfp-automation
-
-      - name: Set up local rancher2 Terraform provider
-        if: contains(env.RANCHER2_PROVIDER_VERSION, '-rc')
-        run: chmod +x ./tfp-automation/scripts/setup-provider.sh && ./tfp-automation/scripts/setup-provider.sh rancher2 v${{ env.RANCHER2_PROVIDER_VERSION }}
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
-        with:
-          role-to-assume: ${{ secrets.IAM_ROLE }}
-          aws-region: ${{ vars.AWS_REGION }}
-
-      - name: Get AWS credentials from Secrets Manager
-        uses: aws-actions/aws-secretsmanager-get-secrets@3a411b6ec5cace3d626412dd917e7bfeac242cfa #v3
-        with:
-          secret-ids: |
-            AWS_ACCESS_KEY, ${{ secrets.AWS_ACCESS_KEY_ID }}
-            AWS_SECRET_KEY, ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-            HB_AWS_MANAGED_PREFIX_LIST_ID, HB_AWS_MANAGED_PREFIX_LIST_ID
-            HB_SSH_PRIVATE_KEY, HB_SSH_PRIVATE_KEY
-            HB_SSH_PRIVATE_KEY_NAME, HB_SSH_PRIVATE_KEY_NAME
-            HB_WINDOWS_SSH_PRIVATE_KEY, HB_WINDOWS_SSH_PRIVATE_KEY
-            HB_WINDOWS_SSH_PRIVATE_KEY_NAME, HB_WINDOWS_SSH_PRIVATE_KEY_NAME
-            HB_PRIVATE_FULL_CHAIN, HB_PRIVATE_FULL_CHAIN
-            HB_PRIVATE_FULL_CHAIN_NAME, HB_PRIVATE_FULL_CHAIN_NAME
-            HB_PRIVATE_CERT_KEY, HB_PRIVATE_CERT_KEY
-            HB_PRIVATE_CERT_KEY_NAME, HB_PRIVATE_CERT_KEY_NAME
-            HB_AWS_REGION, HB_AWS_REGION
-            HB_RANCHER_ADMIN_PASSWORD, HB_RANCHER_ADMIN_PASSWORD
-            HB_RANCHER_REPO, HB_RANCHER_REPO
-            HB_RANCHER_VERSION_HEAD, HB_RANCHER_VERSION_HEAD
-            HB_RELEASED_RANCHER_CHART_VERSION_2_15, HB_RELEASED_RANCHER_CHART_VERSION_2_15
             HB_RKE2_VERSION_2_15, HB_RKE2_VERSION_2_15
             HB_K3S_VERSION_2_15, HB_K3S_VERSION_2_15
             HB_K3S_VERSION_SUFFIX, HB_K3S_VERSION_SUFFIX
+            HB_QASE_RECURRING_TEST_RUN_ID_2_16, HB_QASE_RECURRING_TEST_RUN_ID_2_16
             HB_QASE_RECURRING_TEST_RUN_ID_2_15, HB_QASE_RECURRING_TEST_RUN_ID_2_15
             HB_QA_PRIVATE_REGISTRY_NAME, HB_QA_PRIVATE_REGISTRY_NAME
             HB_QASE_AUTOMATION_TOKEN, HB_QASE_AUTOMATION_TOKEN
@@ -495,9 +206,8 @@ jobs:
           value: |
             ${{ 
               github.event.inputs.rancher_version || 
-              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version) || 
-              (github.event_name == 'schedule' && fromJSON(env.HB_RANCHER_VERSION_HEAD).value) ||
-              (github.event.inputs.run_all_versions == 'true' && fromJSON(env.HB_RANCHER_VERSION_HEAD).value)
+              inputs.rancher_version || 
+              (fromJSON(env[format('HB_RANCHER_VERSION_2_{0}_HEAD', matrix.version)]).value) 
             }}
 
       - name: Set Rancher chart version
@@ -507,9 +217,8 @@ jobs:
           value: |
             ${{ 
               github.event.inputs.rancher_chart_version || 
-              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version) || 
-              (github.event_name == 'schedule' && fromJSON(env.HB_RELEASED_RANCHER_CHART_VERSION_2_15).value) ||
-              (github.event.inputs.run_all_versions == 'true' && fromJSON(env.HB_RELEASED_RANCHER_CHART_VERSION_2_15).value)
+              inputs.rancher_chart_version ||
+              (fromJSON(env[format('HB_RELEASED_RANCHER_CHART_VERSION_2_{0}', matrix.version)]).value)
             }}
 
       - name: Set Rancher repo
@@ -518,14 +227,13 @@ jobs:
           rancher-version: ${{ env.RANCHER_VERSION }}
           fallback-repo: ${{ fromJSON(env.HB_RANCHER_REPO).value }}
           is-prime: false
-          release-community-version: "2.15"
+          release-community-version: "2.${{ matrix.version }}"
 
       - name: Get Qase ID
         id: get-qase-id
         uses: ./.github/actions/get-qase-id
         with:
-          triggered_tag: ${{ github.event.inputs.rancher_version }}
-          qase_recurring_id: ${{ fromJSON(env.HB_QASE_RECURRING_TEST_RUN_ID_2_15).value }}
+          qase_recurring_id: ${{ fromJSON(env[format('HB_QASE_RECURRING_TEST_RUN_ID_2_{0}', matrix.version)]).value }}
 
       - name: Set Rancher chart url
         uses: ./.github/actions/set-rancher-chart-url
@@ -562,8 +270,8 @@ jobs:
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
               rancherHostname: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
-              rke2Version: "<HB_RKE2_VERSION_2_15>"
-              k3sVersion: "<HB_K3S_VERSION_2_15><HB_K3S_VERSION_SUFFIX>"
+              rke2Version: "${{ fromJSON(env[format('HB_RKE2_VERSION_2_{0}', matrix.version)]).value }}"
+              k3sVersion: "${{ fromJSON(env[format('HB_K3S_VERSION_2_{0}', matrix.version)]).value }}${{ fromJSON(env.HB_K3S_VERSION_SUFFIX).value }}"
 
           clusterConfig:
             registries:
@@ -676,605 +384,4 @@ jobs:
         with:
           rancher_version: ${{ env.UPGRADED_RANCHER_VERSION }}
           workflow: ipv6-cluster-provisioning
-          job: v2-15
-  
-  v2-14:
-    if: |
-      github.event.inputs.run_all_versions == 'true' ||
-      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.14'))
-    name: ${{ github.event.inputs.rancher_version }}
-    runs-on: ubuntu-latest
-    environment: head
-    env:
-      RANCHER2_PROVIDER_VERSION: "${{ vars.RANCHER2_PROVIDER_VERSION_2_14 }}"
-      HOSTNAME_PREFIX: "gha6-prov-214"
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6
-        with:
-          submodules: recursive
-
-      - name: Checkout tfp-automation repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6
-        with:
-          repository: rancher/tfp-automation
-          path: tfp-automation
-
-      - name: Set up local rancher2 Terraform provider
-        if: contains(env.RANCHER2_PROVIDER_VERSION, '-rc')
-        run: chmod +x ./tfp-automation/scripts/setup-provider.sh && ./tfp-automation/scripts/setup-provider.sh rancher2 v${{ env.RANCHER2_PROVIDER_VERSION }}
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
-        with:
-          role-to-assume: ${{ secrets.IAM_ROLE }}
-          aws-region: ${{ vars.AWS_REGION }}
-
-      - name: Get AWS credentials from Secrets Manager
-        uses: aws-actions/aws-secretsmanager-get-secrets@3a411b6ec5cace3d626412dd917e7bfeac242cfa #v3
-        with:
-          secret-ids: |
-            AWS_ACCESS_KEY, ${{ secrets.AWS_ACCESS_KEY_ID }}
-            AWS_SECRET_KEY, ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-            HB_AWS_MANAGED_PREFIX_LIST_ID, HB_AWS_MANAGED_PREFIX_LIST_ID
-            HB_SSH_PRIVATE_KEY, HB_SSH_PRIVATE_KEY
-            HB_SSH_PRIVATE_KEY_NAME, HB_SSH_PRIVATE_KEY_NAME
-            HB_WINDOWS_SSH_PRIVATE_KEY, HB_WINDOWS_SSH_PRIVATE_KEY
-            HB_WINDOWS_SSH_PRIVATE_KEY_NAME, HB_WINDOWS_SSH_PRIVATE_KEY_NAME
-            HB_PRIVATE_FULL_CHAIN, HB_PRIVATE_FULL_CHAIN
-            HB_PRIVATE_FULL_CHAIN_NAME, HB_PRIVATE_FULL_CHAIN_NAME
-            HB_PRIVATE_CERT_KEY, HB_PRIVATE_CERT_KEY
-            HB_PRIVATE_CERT_KEY_NAME, HB_PRIVATE_CERT_KEY_NAME
-            HB_AWS_REGION, HB_AWS_REGION
-            HB_RANCHER_ADMIN_PASSWORD, HB_RANCHER_ADMIN_PASSWORD
-            HB_RANCHER_REPO, HB_RANCHER_REPO
-            HB_RANCHER_VERSION_HEAD, HB_RANCHER_VERSION_HEAD
-            HB_RELEASED_RANCHER_CHART_VERSION_2_14, HB_RELEASED_RANCHER_CHART_VERSION_2_14
-            HB_RKE2_VERSION_2_14, HB_RKE2_VERSION_2_14
-            HB_K3S_VERSION_2_14, HB_K3S_VERSION_2_14
-            HB_K3S_VERSION_SUFFIX, HB_K3S_VERSION_SUFFIX
-            HB_QASE_RECURRING_TEST_RUN_ID_2_14, HB_QASE_RECURRING_TEST_RUN_ID_2_14
-            HB_QA_PRIVATE_REGISTRY_NAME, HB_QA_PRIVATE_REGISTRY_NAME
-            HB_QASE_AUTOMATION_TOKEN, HB_QASE_AUTOMATION_TOKEN
-            HB_QASE_PROJECT_ID, HB_QASE_PROJECT_ID
-            HB_RANCHER_HELM_CHART_URL, HB_RANCHER_HELM_CHART_URL
-            HB_STAGING_RANCHER_HELM_CHART_URL, HB_STAGING_RANCHER_HELM_CHART_URL
-            HB_SLACK_WEBHOOK_URL, HB_SLACK_WEBHOOK_URL
-
-      - name: Fetch and Set DockerHub Credentials
-        uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 #v3
-        with:
-          secrets: |
-            secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials username | DOCKERHUB_USERNAME ;
-            secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials password | DOCKERHUB_PASSWORD
-
-      - name: Masking Secrets
-        uses: ./.github/actions/mask-secrets
-        with:
-          secrets: |
-            ${{ env.DOCKERHUB_USERNAME }}
-            ${{ env.DOCKERHUB_PASSWORD }}
-            ${{ env.HB_SSH_PRIVATE_KEY }}
-            ${{ env.HB_WINDOWS_SSH_PRIVATE_KEY }}
-            ${{ env.HB_PRIVATE_FULL_CHAIN }}
-            ${{ env.HB_PRIVATE_CERT_KEY }}
-
-      - name: Whitelist Runner IP
-        id: whitelist-runner-ip
-        uses: ./.github/actions/whitelist-runner-ip
-        with:
-          prefix-list-id: ${{ fromJSON(env.HB_AWS_MANAGED_PREFIX_LIST_ID).value }}
-          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
-
-      - name: Set up SSH Keys
-        id: setup-ssh-keys
-        uses: ./.github/actions/setup-ssh-keys
-        with:
-          ssh-private-key: ${{ fromJSON(env.HB_SSH_PRIVATE_KEY).value }}
-          ssh-private-key-name: ${{ fromJSON(env.HB_SSH_PRIVATE_KEY_NAME).value }}
-          windows-ssh-private-key: ${{ fromJSON(env.HB_WINDOWS_SSH_PRIVATE_KEY).value }}
-          windows-ssh-private-key-name: ${{ fromJSON(env.HB_WINDOWS_SSH_PRIVATE_KEY_NAME).value }}
-
-      - name: Set up certificates
-        id: setup-certs
-        uses: ./.github/actions/setup-certs
-        with:
-          private-full-chain: ${{ fromJSON(env.HB_PRIVATE_FULL_CHAIN).value }}
-          private-full-chain-name: ${{ fromJSON(env.HB_PRIVATE_FULL_CHAIN_NAME).value }}
-          private-cert-key: ${{ fromJSON(env.HB_PRIVATE_CERT_KEY).value }}
-          private-cert-key-name: ${{ fromJSON(env.HB_PRIVATE_CERT_KEY_NAME).value }}
-
-      - name: Uniquify hostname prefix
-        uses: ./.github/actions/uniquify-hostname
-
-      - name: Set Rancher version
-        uses: ./.github/actions/set-env-var
-        with:
-          key: RANCHER_VERSION
-          value: |
-            ${{ 
-              github.event.inputs.rancher_version || 
-              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version) || 
-              (github.event_name == 'schedule' && fromJSON(env.HB_RANCHER_VERSION_HEAD).value) ||
-              (github.event.inputs.run_all_versions == 'true' && fromJSON(env.HB_RANCHER_VERSION_HEAD).value)
-            }}
-
-      - name: Set Rancher chart version
-        uses: ./.github/actions/set-env-var
-        with:
-          key: RANCHER_CHART_VERSION
-          value: |
-            ${{ 
-              github.event.inputs.rancher_chart_version || 
-              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version) || 
-              (github.event_name == 'schedule' && fromJSON(env.HB_RELEASED_RANCHER_CHART_VERSION_2_14).value) ||
-              (github.event.inputs.run_all_versions == 'true' && fromJSON(env.HB_RELEASED_RANCHER_CHART_VERSION_2_14).value)
-            }}
-
-      - name: Set Rancher repo
-        uses: ./.github/actions/set-rancher-repo
-        with:
-          rancher-version: ${{ env.RANCHER_VERSION }}
-          fallback-repo: ${{ fromJSON(env.HB_RANCHER_REPO).value }}
-          is-prime: false
-          release-community-version: "2.14"
-
-      - name: Get Qase ID
-        id: get-qase-id
-        uses: ./.github/actions/get-qase-id
-        with:
-          triggered_tag: ${{ github.event.inputs.rancher_version }}
-          qase_recurring_id: ${{ fromJSON(env.HB_QASE_RECURRING_TEST_RUN_ID_2_14).value }}
-
-      - name: Set Rancher chart url
-        uses: ./.github/actions/set-rancher-chart-url
-        with:
-          rancher-repo: ${{ env.RANCHER_REPO }}
-          is-prime: false
-          community-chart-url: ${{ vars.COMMUNITY_HELM_CHART_URL }}
-          staging-chart-url: ${{ fromJSON(env.HB_STAGING_RANCHER_HELM_CHART_URL).value }}
-          fallback-chart-url: ${{ fromJSON(env.HB_RANCHER_HELM_CHART_URL).value }}
-
-      - name: Create config.yaml
-        run: |
-          cat > config.yaml <<EOF
-          rancher:
-            host: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
-
-          awsCredentials:
-            accessKey: "$AWS_ACCESS_KEY"
-            secretKey: "$AWS_SECRET_KEY"
-            defaultRegion: "${{ fromJSON(env.HB_AWS_REGION).value }}"
-
-          terraform:
-            localCluster: "${{ env.LOCAL_CLUSTER_TYPE }}"
-            privateKeyPath: "${{ steps.setup-ssh-keys.outputs.ssh-private-key-path }}"
-            privateFullChainPath: "${{ steps.setup-certs.outputs.private-full-chain-tfp-path }}"
-            privateCertKeyPath: "${{ steps.setup-certs.outputs.private-cert-key-tfp-path }}"
-            resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
-
-            standalone:
-              chartVersion: "${{ env.RANCHER_CHART_VERSION }}"
-              rancherTagVersion: "${{ env.RANCHER_VERSION }}"
-              rancherChartRepository: "${{ env.RANCHER_HELM_CHART_URL }}"
-              repo: "${{ env.RANCHER_REPO }}"
-              registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
-              registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
-              rancherHostname: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
-              rke2Version: "<HB_RKE2_VERSION_2_14>"
-              k3sVersion: "<HB_K3S_VERSION_2_14><HB_K3S_VERSION_SUFFIX>"
-
-          clusterConfig:
-            registries:
-              rke2Password: "${{ env.DOCKERHUB_PASSWORD }}"
-              rke2Username: "${{ env.DOCKERHUB_USERNAME }}"
-              rke2Registries:
-                mirrors:
-                  "docker.io":
-                    endpoint: ["https://${{ fromJSON(env.HB_QA_PRIVATE_REGISTRY_NAME).value }}"]
-                configs:
-                  "${{ fromJSON(env.HB_QA_PRIVATE_REGISTRY_NAME).value }}":
-                    "auth":
-                      username: "${{ env.DOCKERHUB_USERNAME }}"
-                      password: "${{ env.DOCKERHUB_PASSWORD }}"
-                    insecureSkipVerify: true
-          EOF
-
-      - name: Export CATTLE_TEST_CONFIG
-        run: echo "CATTLE_TEST_CONFIG=${{ github.workspace }}/config.yaml" >> $GITHUB_ENV
-        shell: bash
-
-      - name: Set up Go environment
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 #v6
-        with:
-          go-version-file: "./go.mod"
-
-      - name: Build Packages
-        run: ./.github/scripts/go-build.sh
-
-      - name: Install gotestsum
-        run: go install gotest.tools/gotestsum@c4a0df2e75a225d979a444342dd3db752b53619f
-
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@5e8dbf3c6d9deaf4193ca7a8fb23f2ac83bb6c85 #v4
-        with:
-          terraform_version: "${{ vars.TERRAFORM_VERSION }}"
-          terraform_wrapper: false
-
-      - name: Creating Rancher server
-        run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/ipv6/main.go
-
-      - name: Run IPv6 Provisioning tests
-        env:
-          QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
-          QASE_AUTOMATION_TOKEN: ${{ fromJSON(env.HB_QASE_AUTOMATION_TOKEN).value }}
-          QASE_CUSTOM_FIELD_FILTER: Hostbusters
-          QASE_SCHEMA_PREFIX: hostbusters
-          QASE_PROJECT_ID: ${{ fromJSON(env.HB_QASE_PROJECT_ID).value }}
-        uses: ./.github/actions/run-hostbusters-provisioning
-        with:
-          reporting: ${{ env.REPORTING_ENABLED }}
-          tags: ipv6
-
-      - name: Cleanup Infrastructure
-        if: always() && env.CLEANUP_ENABLED == 'true'
-        working-directory: tfp-automation/modules/ipv6/aws
-        run: terraform destroy -auto-approve > /dev/null 2>&1
-
-      - name: Refresh AWS credentials
-        if: always()
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
-        with:
-          role-to-assume: ${{ secrets.IAM_ROLE }}
-          aws-region: ${{ vars.AWS_REGION }}
-
-      - name: AWS Custodian Infrastructure Cleanup
-        if: always() && env.CLEANUP_ENABLED == 'true'
-        uses: ./.github/actions/aws-cleanup
-        with:
-          prefix: "${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ vars.AWS_REGION }}"
-
-      - name: AWS Custodian Downstream Cleanup - Node driver
-        if: always() && env.CLEANUP_ENABLED == 'true'
-        uses: ./.github/actions/aws-cleanup
-        with:
-          prefix: "auto-${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ vars.AWS_REGION }}"
-
-      - name: AWS Custodian Downstream Cleanup - Custom
-        if: always() && env.CLEANUP_ENABLED == 'true'
-        uses: ./.github/actions/aws-cleanup
-        with:
-          prefix: "rancher-validation${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ vars.AWS_REGION }}"
-
-      - name: Revoke Runner IP
-        if: always()
-        uses: ./.github/actions/revoke-runner-ip
-        with:
-          prefix-list-id: ${{ fromJSON(env.HB_AWS_MANAGED_PREFIX_LIST_ID).value }}
-          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
-
-      - name: Set job status output
-        if: always()
-        run: echo "job_status=${{ job.status }}" >> $GITHUB_OUTPUT
-        id: set-job-status
-
-      - name: Reporting Results to Slack
-        if: always() && env.REPORTING_ENABLED == 'true'
-        uses: ./.github/actions/report-to-slack
-        with:
-          rancher-version: ${{ env.RANCHER_VERSION }}
-          job-status: ${{ steps.set-job-status.outputs.job_status }}
-          slack-webhook-url: ${{ fromJSON(env.HB_SLACK_WEBHOOK_URL).value }}
-
-      - name: Save test result weekly summary
-        if: always() && github.event_name == 'schedule'
-        uses: ./.github/actions/save-weekly-summary-result
-        with:
-          rancher_version: ${{ env.UPGRADED_RANCHER_VERSION }}
-          workflow: ipv6-cluster-provisioning
-          job: v2-14
-
-  v2-13:
-    if: |
-      github.event.inputs.run_all_versions == 'true' ||
-      (github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.rancher_version, 'v2.13'))
-    name: ${{ github.event.inputs.rancher_version }}
-    runs-on: ubuntu-latest
-    environment: staging-latest
-    env:
-      RANCHER2_PROVIDER_VERSION: "${{ vars.RANCHER2_PROVIDER_VERSION_2_13 }}"
-      HOSTNAME_PREFIX: "gha6-prov-213"
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6
-        with:
-          submodules: recursive
-
-      - name: Checkout tfp-automation repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6
-        with:
-          repository: rancher/tfp-automation
-          path: tfp-automation
-
-      - name: Set up local rancher2 Terraform provider
-        if: contains(env.RANCHER2_PROVIDER_VERSION, '-rc')
-        run: chmod +x ./tfp-automation/scripts/setup-provider.sh && ./tfp-automation/scripts/setup-provider.sh rancher2 v${{ env.RANCHER2_PROVIDER_VERSION }}
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
-        with:
-          role-to-assume: ${{ secrets.IAM_ROLE }}
-          aws-region: ${{ vars.AWS_REGION }}
-
-      - name: Get AWS credentials from Secrets Manager
-        uses: aws-actions/aws-secretsmanager-get-secrets@3a411b6ec5cace3d626412dd917e7bfeac242cfa #v3
-        with:
-          secret-ids: |
-            AWS_ACCESS_KEY, ${{ secrets.AWS_ACCESS_KEY_ID }}
-            AWS_SECRET_KEY, ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-            HB_AWS_MANAGED_PREFIX_LIST_ID, HB_AWS_MANAGED_PREFIX_LIST_ID
-            HB_SSH_PRIVATE_KEY, HB_SSH_PRIVATE_KEY
-            HB_SSH_PRIVATE_KEY_NAME, HB_SSH_PRIVATE_KEY_NAME
-            HB_WINDOWS_SSH_PRIVATE_KEY, HB_WINDOWS_SSH_PRIVATE_KEY
-            HB_WINDOWS_SSH_PRIVATE_KEY_NAME, HB_WINDOWS_SSH_PRIVATE_KEY_NAME
-            HB_PRIVATE_FULL_CHAIN, HB_PRIVATE_FULL_CHAIN
-            HB_PRIVATE_FULL_CHAIN_NAME, HB_PRIVATE_FULL_CHAIN_NAME
-            HB_PRIVATE_CERT_KEY, HB_PRIVATE_CERT_KEY
-            HB_PRIVATE_CERT_KEY_NAME, HB_PRIVATE_CERT_KEY_NAME
-            HB_AWS_REGION, HB_AWS_REGION
-            HB_RANCHER_ADMIN_PASSWORD, HB_RANCHER_ADMIN_PASSWORD
-            HB_RANCHER_REPO, HB_RANCHER_REPO
-            HB_RANCHER_VERSION_HEAD, HB_RANCHER_VERSION_HEAD
-            HB_RELEASED_RANCHER_CHART_VERSION_2_13, HB_RELEASED_RANCHER_CHART_VERSION_2_13
-            HB_RKE2_VERSION_2_13, HB_RKE2_VERSION_2_13
-            HB_K3S_VERSION_2_13, HB_K3S_VERSION_2_13
-            HB_K3S_VERSION_SUFFIX, HB_K3S_VERSION_SUFFIX
-            HB_QASE_RECURRING_TEST_RUN_ID_2_13, HB_QASE_RECURRING_TEST_RUN_ID_2_13
-            HB_QA_PRIVATE_REGISTRY_NAME, HB_QA_PRIVATE_REGISTRY_NAME
-            HB_QASE_AUTOMATION_TOKEN, HB_QASE_AUTOMATION_TOKEN
-            HB_QASE_PROJECT_ID, HB_QASE_PROJECT_ID
-            HB_RANCHER_HELM_CHART_URL, HB_RANCHER_HELM_CHART_URL
-            HB_STAGING_RANCHER_HELM_CHART_URL, HB_STAGING_RANCHER_HELM_CHART_URL
-            HB_SLACK_WEBHOOK_URL, HB_SLACK_WEBHOOK_URL
-
-      - name: Fetch and Set DockerHub Credentials
-        uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 #v3
-        with:
-          secrets: |
-            secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials username | DOCKERHUB_USERNAME ;
-            secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials password | DOCKERHUB_PASSWORD
-
-      - name: Masking Secrets
-        uses: ./.github/actions/mask-secrets
-        with:
-          secrets: |
-            ${{ env.DOCKERHUB_USERNAME }}
-            ${{ env.DOCKERHUB_PASSWORD }}
-            ${{ env.HB_SSH_PRIVATE_KEY }}
-            ${{ env.HB_WINDOWS_SSH_PRIVATE_KEY }}
-            ${{ env.HB_PRIVATE_FULL_CHAIN }}
-            ${{ env.HB_PRIVATE_CERT_KEY }}
-
-      - name: Whitelist Runner IP
-        id: whitelist-runner-ip
-        uses: ./.github/actions/whitelist-runner-ip
-        with:
-          prefix-list-id: ${{ fromJSON(env.HB_AWS_MANAGED_PREFIX_LIST_ID).value }}
-          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
-
-      - name: Set up SSH Keys
-        id: setup-ssh-keys
-        uses: ./.github/actions/setup-ssh-keys
-        with:
-          ssh-private-key: ${{ fromJSON(env.HB_SSH_PRIVATE_KEY).value }}
-          ssh-private-key-name: ${{ fromJSON(env.HB_SSH_PRIVATE_KEY_NAME).value }}
-          windows-ssh-private-key: ${{ fromJSON(env.HB_WINDOWS_SSH_PRIVATE_KEY).value }}
-          windows-ssh-private-key-name: ${{ fromJSON(env.HB_WINDOWS_SSH_PRIVATE_KEY_NAME).value }}
-
-      - name: Set up certificates
-        id: setup-certs
-        uses: ./.github/actions/setup-certs
-        with:
-          private-full-chain: ${{ fromJSON(env.HB_PRIVATE_FULL_CHAIN).value }}
-          private-full-chain-name: ${{ fromJSON(env.HB_PRIVATE_FULL_CHAIN_NAME).value }}
-          private-cert-key: ${{ fromJSON(env.HB_PRIVATE_CERT_KEY).value }}
-          private-cert-key-name: ${{ fromJSON(env.HB_PRIVATE_CERT_KEY_NAME).value }}
-
-      - name: Uniquify hostname prefix
-        uses: ./.github/actions/uniquify-hostname
-
-      - name: Set Rancher version
-        uses: ./.github/actions/set-env-var
-        with:
-          key: RANCHER_VERSION
-          value: |
-            ${{ 
-              github.event.inputs.rancher_version || 
-              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version) || 
-              (github.event_name == 'schedule' && fromJSON(env.HB_RANCHER_VERSION_HEAD).value) ||
-              (github.event.inputs.run_all_versions == 'true' && fromJSON(env.HB_RANCHER_VERSION_HEAD).value)
-            }}
-
-      - name: Set Rancher chart version
-        uses: ./.github/actions/set-env-var
-        with:
-          key: RANCHER_CHART_VERSION
-          value: |
-            ${{ 
-              github.event.inputs.rancher_chart_version || 
-              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version) || 
-              (github.event_name == 'schedule' && fromJSON(env.HB_RELEASED_RANCHER_CHART_VERSION_2_13).value) ||
-              (github.event.inputs.run_all_versions == 'true' && fromJSON(env.HB_RELEASED_RANCHER_CHART_VERSION_2_13).value)
-            }}
-
-      - name: Set Rancher repo
-        uses: ./.github/actions/set-rancher-repo
-        with:
-          rancher-version: ${{ env.RANCHER_VERSION }}
-          fallback-repo: ${{ fromJSON(env.HB_RANCHER_REPO).value }}
-          is-prime: true
-          release-prime-version: "2.13"
-
-      - name: Get Qase ID
-        id: get-qase-id
-        uses: ./.github/actions/get-qase-id
-        with:
-          triggered_tag: ${{ github.event.inputs.rancher_version }}
-          qase_recurring_id: ${{ fromJSON(env.HB_QASE_RECURRING_TEST_RUN_ID_2_13).value }}
-
-      - name: Set Rancher chart url
-        uses: ./.github/actions/set-rancher-chart-url
-        with:
-          rancher-repo: ${{ env.RANCHER_REPO }}
-          is-prime: true
-          community-chart-url: ${{ vars.COMMUNITY_HELM_CHART_URL }}
-          staging-chart-url: ${{ fromJSON(env.HB_STAGING_RANCHER_HELM_CHART_URL).value }}
-          fallback-chart-url: ${{ fromJSON(env.HB_RANCHER_HELM_CHART_URL).value }}
-
-      - name: Create config.yaml
-        run: |
-          cat > config.yaml <<EOF
-          rancher:
-            host: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
-
-          awsCredentials:
-            accessKey: "$AWS_ACCESS_KEY"
-            secretKey: "$AWS_SECRET_KEY"
-            defaultRegion: "${{ fromJSON(env.HB_AWS_REGION).value }}"
-
-          terraform:
-            generateV3Token: true
-            localCluster: "${{ env.LOCAL_CLUSTER_TYPE }}"
-            privateKeyPath: "${{ steps.setup-ssh-keys.outputs.ssh-private-key-path }}"
-            privateFullChainPath: "${{ steps.setup-certs.outputs.private-full-chain-tfp-path }}"
-            privateCertKeyPath: "${{ steps.setup-certs.outputs.private-cert-key-tfp-path }}"
-            resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
-
-            standalone:
-              chartVersion: "${{ env.RANCHER_CHART_VERSION }}"
-              rancherTagVersion: "${{ env.RANCHER_VERSION }}"
-              rancherChartRepository: "${{ env.RANCHER_HELM_CHART_URL }}"
-              repo: "${{ env.RANCHER_REPO }}"
-              registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
-              registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
-              rancherHostname: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
-              rke2Version: "<HB_RKE2_VERSION_2_13>"
-              k3sVersion: "<HB_K3S_VERSION_2_13><HB_K3S_VERSION_SUFFIX>"
-
-          clusterConfig:
-            registries:
-              rke2Password: "${{ env.DOCKERHUB_PASSWORD }}"
-              rke2Username: "${{ env.DOCKERHUB_USERNAME }}"
-              rke2Registries:
-                mirrors:
-                  "docker.io":
-                    endpoint: ["https://${{ fromJSON(env.HB_QA_PRIVATE_REGISTRY_NAME).value }}"]
-                configs:
-                  "${{ fromJSON(env.HB_QA_PRIVATE_REGISTRY_NAME).value }}":
-                    "auth":
-                      username: "${{ env.DOCKERHUB_USERNAME }}"
-                      password: "${{ env.DOCKERHUB_PASSWORD }}"
-                    insecureSkipVerify: true
-          EOF
-
-      - name: Export CATTLE_TEST_CONFIG
-        run: echo "CATTLE_TEST_CONFIG=${{ github.workspace }}/config.yaml" >> $GITHUB_ENV
-        shell: bash
-
-      - name: Set up Go environment
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 #v6
-        with:
-          go-version-file: "./go.mod"
-
-      - name: Build Packages
-        run: ./.github/scripts/go-build.sh
-
-      - name: Install gotestsum
-        run: go install gotest.tools/gotestsum@c4a0df2e75a225d979a444342dd3db752b53619f
-
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@5e8dbf3c6d9deaf4193ca7a8fb23f2ac83bb6c85 #v4
-        with:
-          terraform_version: "${{ vars.TERRAFORM_VERSION }}"
-          terraform_wrapper: false
-
-      - name: Creating Rancher server
-        run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/ipv6/main.go
-
-      - name: Run IPv6 Provisioning tests
-        env:
-          QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
-          QASE_AUTOMATION_TOKEN: ${{ fromJSON(env.HB_QASE_AUTOMATION_TOKEN).value }}
-          QASE_CUSTOM_FIELD_FILTER: Hostbusters
-          QASE_SCHEMA_PREFIX: hostbusters
-          QASE_PROJECT_ID: ${{ fromJSON(env.HB_QASE_PROJECT_ID).value }}
-        uses: ./.github/actions/run-hostbusters-provisioning
-        with:
-          reporting: ${{ env.REPORTING_ENABLED }}
-          tags: ipv6
-
-      - name: Cleanup Infrastructure
-        if: always() && env.CLEANUP_ENABLED == 'true'
-        working-directory: tfp-automation/modules/ipv6/aws
-        run: terraform destroy -auto-approve > /dev/null 2>&1
-
-      - name: Refresh AWS credentials
-        if: always()
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
-        with:
-          role-to-assume: ${{ secrets.IAM_ROLE }}
-          aws-region: ${{ vars.AWS_REGION }}
-
-      - name: AWS Custodian Infrastructure Cleanup
-        if: always() && env.CLEANUP_ENABLED == 'true'
-        uses: ./.github/actions/aws-cleanup
-        with:
-          prefix: "${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ vars.AWS_REGION }}"
-
-      - name: AWS Custodian Downstream Cleanup - Node driver
-        if: always() && env.CLEANUP_ENABLED == 'true'
-        uses: ./.github/actions/aws-cleanup
-        with:
-          prefix: "auto-${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ vars.AWS_REGION }}"
-
-      - name: AWS Custodian Downstream Cleanup - Custom
-        if: always() && env.CLEANUP_ENABLED == 'true'
-        uses: ./.github/actions/aws-cleanup
-        with:
-          prefix: "rancher-validation${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ vars.AWS_REGION }}"
-
-      - name: Revoke Runner IP
-        if: always()
-        uses: ./.github/actions/revoke-runner-ip
-        with:
-          prefix-list-id: ${{ fromJSON(env.HB_AWS_MANAGED_PREFIX_LIST_ID).value }}
-          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
-
-      - name: Set job status output
-        if: always()
-        run: echo "job_status=${{ job.status }}" >> $GITHUB_OUTPUT
-        id: set-job-status
-
-      - name: Reporting Results to Slack
-        if: always() && env.REPORTING_ENABLED == 'true'
-        uses: ./.github/actions/report-to-slack
-        with:
-          rancher-version: ${{ env.RANCHER_VERSION }}
-          job-status: ${{ steps.set-job-status.outputs.job_status }}
-          slack-webhook-url: ${{ fromJSON(env.HB_SLACK_WEBHOOK_URL).value }}
-
-      - name: Save test result weekly summary
-        if: always() && github.event_name == 'schedule'
-        uses: ./.github/actions/save-weekly-summary-result
-        with:
-          rancher_version: ${{ env.UPGRADED_RANCHER_VERSION }}
-          workflow: ipv6-cluster-provisioning
-          job: v2-13
+          job: v2-${{ matrix.version }}
