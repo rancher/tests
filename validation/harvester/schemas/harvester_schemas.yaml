@@ -20,7 +20,7 @@
     custom_field:
       "15": "TestHarvesterTestSuite/TestImport"
   - title: "Node Driver Cluster Provisioning"
-    description: "TestRKE2ProvisioningTestSuite TestK3SProvisioningTestSuite TestRKE1ProvisioningTestSuite"
+    description: "TestNodeDriver"
     automation: 2
     steps:
     - action: "Prerequisites"
@@ -32,9 +32,9 @@
       expectedresult: "cluster comes to an `active` state"
       position: 2
     custom_field:
-      "15": "TestRKE2ProvisioningTestSuite TestK3SProvisioningTestSuite TestRKE1ProvisioningTestSuite"
+      "15": "TestNodeDriver"
   - title: "Node Driver Cloud Provider RKE2 - Loadbalancing and Storage"
-    description: "HarvesterProvisioningTestSuite"
+    description: "TestHarvesterProvisioningTestSuite/TestCloudProvider"
     automation: 2
     steps:
     - action: "Prerequisites"
@@ -50,9 +50,9 @@
       expectedresult: "writing and reading file(s) in the mountpoint are successful"
       position: 3
     custom_field:
-      "15": "HarvesterProvisioningTestSuite"
+      "15": "TestHarvesterProvisioningTestSuite/TestCloudProvider"
   - title: "Custom Cluster Provisioning"
-    description: "TestCustomClusterRKE2ProvisioningTestSuite TestCustomClusterK3SProvisioningTestSuite TestCustomClusterRKE1ProvisioningTestSuite"
+    description: "TestCustom"
     automation: 2
     steps:
     - action: "Prerequisites"
@@ -75,7 +75,7 @@
       expectedresult: "all nodes come to an active state, and the entire cluster updates to `active` once all nodes are active in the cluster"
       position: 4
     custom_field:
-      "15": "TestCustomClusterRKE2ProvisioningTestSuite TestCustomClusterK3SProvisioningTestSuite TestCustomClusterRKE1ProvisioningTestSuite"
+      "15": "TestCustom"
   - title: "Scale Pools on a Downstream Cluster"
     description: ""
     automation: 2
@@ -89,7 +89,7 @@
       expectedresult: "all pools are scaled appropriately"
       position: 2
     custom_field:
-      "15": "TestNodeScalingTestSuite/TestScalingNodePools"
+      "15": "TestScalingNodePools"
   - title: "Public Fleet Git Repo"
     description: ""
     automation: 2
@@ -121,7 +121,7 @@
       expectedresult: "snapshot completes for all etcd nodes and shows as active in the appropriate store / locally"
       position: 3
     custom_field:
-      "15": "TestSnapshotRestoreUpgradeStrategyTestSuite"
+      "15": "TestSnapshotRestoreUpgradeStrategy"
   - title: "Certificate Rotation of a Downstream Cluster"
     description: ""
     automation: 2
@@ -135,7 +135,7 @@
       expectedresult: "all certificates are rotated (have new expiration dates)"
       position: 2
     custom_field:
-      "15": "TestCertRotationTestSuite"
+      "15": "TestCertRotation"
   - title: "Imported Cluster from Harvester VMs"
     description: ""
     automation: 0
@@ -160,7 +160,7 @@
       position: 4
   - title: "Install UI Extension"
     description: ""
-    automation: 0
+    automation: 2
     steps:
     - action: "Prerequisites"
       data: "preferred for automation purposes to already have a harvester setup imported into rancher, however this is not the default/happy path from a customer point of view"
@@ -170,6 +170,8 @@
       data: "chart is pre-packaged in rancher. Should be nearly as simple as installing a helm chart"
       expectedresult: "harvester UI available for admin user"
       position: 2
+    custom_field:
+      "15": "TestHarvesterTestSuite"
   - title: "Cloud Credential Rotation"
     description: ""
     automation: 0
