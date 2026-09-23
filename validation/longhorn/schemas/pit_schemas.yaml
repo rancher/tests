@@ -93,7 +93,7 @@
       "15": "TestRBACIntegration"
   - title: "Volume Creation Through Rancher Workloads"
     description: "Verify automatic volume provisioning and attachment when deploying workloads with Longhorn storage through Rancher."
-    automation: 2
+    automation: 0
     steps:
     - action: "Navigate to 'Workloads' in Rancher cluster view"
       data: ""
@@ -187,7 +187,7 @@
       "15": "TestScaleStatefulSetWithPVC"
   - title: "Longhorn Metrics in Rancher Monitoring Interoperability"
     description: "Verify Longhorn metrics collection and visualization through Rancher's Prometheus and Grafana monitoring stack."
-    automation: 0
+    automation: 2
     steps:
     - action: "Install Rancher monitoring stack from Apps catalog if not already installed"
       data: ""
