@@ -44,6 +44,18 @@ func main() {
 		logrus.Fatalf("Failed to load package defaults: %v", err)
 	}
 
+	cattleConfig, err = defaults.LoadSecretsManagerDefaults(cattleConfig)
+	if err != nil {
+		logrus.Fatalf("Failed to load Secrets Manager defaults: %v", err)
+	}
+
+	err = defaults.VerifyCattleConfig(cattleConfig, nil)
+	if err != nil {
+		logrus.Fatalf("Cattle config verification failed: %v", err)
+	}
+
+	infraConfig.WriteConfigToFile(os.Getenv(config.ConfigEnvironmentKey), cattleConfig)
+
 	testSession := session.NewSession()
 
 	client, serverNodeOne, _, _, cattleConfig := setupstandard.SetupRancher(t, testSession, keypath.SanityKeyPath, cattleConfig)

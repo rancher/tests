@@ -1,17 +1,10 @@
 rancher:
-  host: "<required>"
+  host: "<required>.<HB_AWS_ROUTE_53_ZONE>"
   adminPassword: "<HB_RANCHER_ADMIN_PASSWORD>"
   insecure: true
   cleanup: true
 
-awsCredentials:
-  accessKey: "<required>"
-  secretKey: "<required>"
-
 terraform:
-  awsCredentials:
-    awsAccessKey: "<AWS_ACCESS_KEY_ID>"
-    awsSecretKey: "<AWS_SECRET_ACCESS_KEY>"
   cni: "<HB_CNI>"
   defaultClusterRoleForProjectMembers: "true"
   enableNetworkPolicy: false
@@ -19,6 +12,9 @@ terraform:
   downstreamClusterProvider: "<HB_PROVIDER>"
   privateKeyPath: "<HB_TFP_SSH_PRIVATE_KEY_PATH>"
   resourcePrefix: "<HB_HOSTNAME_PREFIX>"
+  awsCredentials:
+    awsAccessKey: "<AWS_ACCESS_KEY_ID>"
+    awsSecretKey: "<AWS_SECRET_ACCESS_KEY>"
   rancherConfig:
     awsConfig:
       ami: "<HB_AWS_DUALSTACK_AMI>"
@@ -46,7 +42,7 @@ terraform:
     certManagerVersion: "<HB_CERT_MANAGER_VERSION>"
     certType: "<HB_CERT_TYPE>"
     chartVersion: "<HB_RANCHER_CHART_VERSION>"
-    osUser: "<HB_DUAL_STACK_AWS_USER>"
+    osUser: "<HB_DUAL_STACK_OS_USER>"
     osGroup: "<HB_DUAL_STACK_OS_GROUP>"
     rancherChartRepository: "<HB_RANCHER_HELM_CHART_URL>"
     rancherHostname: "<HB_RANCHER_HOSTNAME>"

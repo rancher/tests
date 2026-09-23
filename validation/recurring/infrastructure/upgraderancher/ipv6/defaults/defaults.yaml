@@ -5,9 +5,6 @@ rancher:
   cleanup: true
 
 terraform:
-  awsCredentials:
-    awsAccessKey: "<AWS_ACCESS_KEY_ID>"
-    awsSecretKey: "<AWS_SECRET_ACCESS_KEY>"
   cni: "<HB_CNI>"
   defaultClusterRoleForProjectMembers: "true"
   enableNetworkPolicy: false
@@ -15,30 +12,32 @@ terraform:
   downstreamClusterProvider: "<HB_PROVIDER>"
   privateKeyPath: "<HB_TFP_SSH_PRIVATE_KEY_PATH>"
   resourcePrefix: "<HB_HOSTNAME_PREFIX>"
-  rancherConfig:
-    awsConfig:
-      ami: "<HB_AWS_IPV6_AMI>"
-      awsKeyName: "<HB_SSH_PRIVATE_KEY_NAME>"
-      awsInstanceType: "t3.xlarge"
-      awsVolumeType: "<HB_AWS_VOLUME_TYPE>"
-      region: "<HB_AWS_REGION>"
-      awsSecurityGroups: ["<HB_AWS_SECURITY_GROUPS_COMMUNITY>"]
-      awsSecurityGroupNames: ["<HB_AWS_SECURITY_GROUP_NAMES_COMMUNITY>"]
-      awsSubnetID: "<HB_AWS_SUBNET_ID>"
-      awsVpcID: "<HB_AWS_VPC_ID>"
-      awsZoneLetter: "<HB_IPV6_AWS_ZONE_LETTER>"
-      awsRootSize: "<HB_AWS_ROOT_SIZE>"
-      awsRoute53Zone: "<HB_AWS_ROUTE_53_ZONE>"
-      awsUser: "<HB_IPV6_AWS_USER>"
-      clusterCIDR: "<HB_IPV6_CLUSTER_CIDR>"
-      serviceCIDR: "<HB_IPV6_SERVICE_CIDR>"
-      enablePrimaryIPv6: true
-      httpProtocolIPv6: "enabled"
-      sshConnectionType: "<HB_SSH_CONNECTION_TYPE>"
-      timeout: "<HB_SSH_TIMEOUT>"
-      ipAddressType: "<HB_IPV6_ADDRESS_TYPE>"
-      loadBalancerType: "<HB_LOAD_BALANCER_DUALSTACK_TYPE>"
-      targetType: "<HB_TARGET_IPV6_TYPE>"
+  awsCredentials:
+    awsAccessKey: "<AWS_ACCESS_KEY_ID>"
+    awsSecretKey: "<AWS_SECRET_ACCESS_KEY>"
+  awsConfig:
+    ami: "<HB_AWS_IPV6_AMI>"
+    awsKeyName: "<HB_SSH_PRIVATE_KEY_NAME>"
+    awsInstanceType: "<HB_RANCHER_AWS_INSTANCE_TYPE>"
+    awsVolumeType: "<HB_AWS_VOLUME_TYPE>"
+    region: "<HB_AWS_REGION>"
+    awsSecurityGroups: ["<HB_AWS_SECURITY_GROUPS_COMMUNITY>"]
+    awsSecurityGroupNames: ["<HB_AWS_SECURITY_GROUP_NAMES_COMMUNITY>"]
+    awsSubnetID: "<HB_AWS_SUBNET_ID>"
+    awsVpcID: "<HB_AWS_VPC_ID>"
+    awsZoneLetter: "<HB_IPV6_AWS_ZONE_LETTER>"
+    awsRootSize: "<HB_AWS_ROOT_SIZE>"
+    awsRoute53Zone: "<HB_AWS_ROUTE_53_ZONE>"
+    awsUser: "<HB_IPV6_AWS_USER>"
+    clusterCIDR: "<HB_IPV6_CLUSTER_CIDR>"
+    serviceCIDR: "<HB_IPV6_SERVICE_CIDR>"
+    enablePrimaryIPv6: true
+    httpProtocolIPv6: "enabled"
+    sshConnectionType: "<HB_SSH_CONNECTION_TYPE>"
+    timeout: "<HB_SSH_TIMEOUT>"
+    ipAddressType: "<HB_IPV6_ADDRESS_TYPE>"
+    loadBalancerType: "<HB_LOAD_BALANCER_DUALSTACK_TYPE>"
+    targetType: "<HB_TARGET_IPV6_TYPE>"
   standalone:
     bootstrapPassword: "<HB_RANCHER_ADMIN_PASSWORD>"
     certManagerVersion: "<HB_CERT_MANAGER_VERSION>"
@@ -50,8 +49,8 @@ terraform:
     rancherHostname: "<HB_RANCHER_HOSTNAME>"
     rancherImage: "<HB_RANCHER_IMAGE>"
     rancherTagVersion: "<HB_RELEASED_RANCHER_VERSION>"
-    registryPassword: "<HB_DOCKERHUB_PASSWORD>"
-    registryUsername: "<HB_DOCKERHUB_USERNAME>"
+    registryUsername: "<HB_PRIVATE_REGISTRY_USERNAME>"
+    registryPassword: "<HB_PRIVATE_REGISTRY_PASSWORD>"
     repo: "<HB_RANCHER_REPO>"
     rke2Version: "<HB_RKE2_VERSION>"
     upgradedRancherChartRepository: "<HB_UPGRADED_RANCHER_HELM_CHART_URL>"
@@ -59,3 +58,11 @@ terraform:
     upgradedRancherImage: "<HB_UPGRADED_RANCHER_IMAGE>"
     upgradedRancherRepo: "<HB_UPGRADED_RANCHER_REPO>"
     upgradedRancherTagVersion: "<HB_UPGRADED_RANCHER_VERSION>"
+
+terratest:
+  pathToRepo: "<HB_PATH_TO_TFP_REPO>"
+  standaloneLogging: false
+  tfLogging: false
+
+logging:
+  level: "<HB_LOGGING_LEVEL>"

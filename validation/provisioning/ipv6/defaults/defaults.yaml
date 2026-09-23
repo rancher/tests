@@ -16,7 +16,7 @@ awsMachineConfigs:
     instanceType: "<HB_AWS_INSTANCE_TYPE>"
     volumeType: "<HB_AWS_VOLUME_TYPE>"
     rootSize: "<HB_AWS_ROOT_SIZE>"
-    sshUser: "<HB_DUAL_STACK_AWS_USER>"
+    sshUser: "<HB_IPV6_AWS_USER>"
     vpcId: "<HB_AWS_VPC_ID>"
     zone: "<HB_IPV6_AWS_ZONE_LETTER>"
     subnetId: "<HB_AWS_IPV6_SUBNET_ID>"

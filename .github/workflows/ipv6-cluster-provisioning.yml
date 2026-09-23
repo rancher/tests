@@ -307,7 +307,7 @@ jobs:
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@5e8dbf3c6d9deaf4193ca7a8fb23f2ac83bb6c85 #v4
         with:
-          terraform_version: "${{ vars.TERRAFORM_VERSION }}"
+          terraform_version: "${{ fromJSON(env.HB_TERRAFORM_VERSION).value }}"
           terraform_wrapper: false
 
       - name: Creating Rancher server
