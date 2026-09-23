@@ -1,6 +1,6 @@
-//go:build validation || recurring || os
+//go:build os
 
-package rke2
+package os
 
 import (
 	"os"
@@ -8,6 +8,7 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/cloudcredentials"
+	"github.com/rancher/shepherd/extensions/clusters/kubernetesversions"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
@@ -18,20 +19,18 @@ import (
 	"github.com/rancher/tests/actions/qase"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
-	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
 
-type cniTest struct {
-	client             *rancher.Client
-	session            *session.Session
-	standardUserClient *rancher.Client
-	cattleConfig       map[string]any
+type rebootTest struct {
+	client       *rancher.Client
+	session      *session.Session
+	cattleConfig map[string]any
 }
 
-func cniSetup(t *testing.T) cniTest {
-	var r cniTest
+func rebootSetup(t *testing.T) rebootTest {
+	var r rebootTest
 	testSession := session.NewSession()
 	r.session = testSession
 
@@ -56,76 +55,86 @@ func cniSetup(t *testing.T) cniTest {
 	err = logging.SetLogger(loggingConfig)
 	require.NoError(t, err)
 
-	r.cattleConfig, err = defaults.SetK8sDefault(r.client, defaults.RKE2, r.cattleConfig)
-	require.NoError(t, err)
-
-	r.standardUserClient, _, _, err = standard.CreateStandardUser(r.client)
-	require.NoError(t, err)
-
 	return r
 }
 
-func TestCNI(t *testing.T) {
+func TestReboot(t *testing.T) {
 	t.Parallel()
-	r := cniSetup(t)
+	r := rebootSetup(t)
+	t.Cleanup(r.session.Cleanup)
 
 	tests := []struct {
-		name   string
-		client *rancher.Client
-		cni    string
+		name    string
+		k8sType string
 	}{
-		{"RKE2_Node_Driver|Calico", r.standardUserClient, "calico"},
-		{"RKE2_Node_Driver|Canal", r.standardUserClient, "canal"},
-		{"RKE2_Node_Driver|Cilium", r.standardUserClient, "cilium"},
-		{"RKE2_Node_Driver|Flannel", r.standardUserClient, "flannel"},
-		{"RKE2_Node_Driver|Multus_Calico", r.standardUserClient, "multus,calico"},
-		{"RKE2_Node_Driver|Multus_Canal", r.standardUserClient, "multus,canal"},
-		{"RKE2_Node_Driver|Multus_Cilium", r.standardUserClient, "multus,cilium"},
+		{"OS_RKE2_Reboot", defaults.RKE2},
+		{"OS_K3S_Reboot", defaults.K3S},
 	}
 
 	for _, tt := range tests {
-		var err error
-		t.Cleanup(func() {
-			logrus.Infof("Running cleanup (%s)", tt.name)
-			r.session.Cleanup()
-		})
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
+			testSession := session.NewSession()
+			t.Cleanup(func() {
+				logrus.Infof("Running fallback cleanup (%s)", tt.name)
+				testSession.Cleanup()
+			})
+
+			testClient, err := r.client.WithSession(testSession)
+			require.NoError(t, err)
+
 			clusterConfig := new(clusters.ClusterConfig)
 			operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
+
+			versions, err := kubernetesversions.Default(testClient, tt.k8sType, nil)
+			require.NoError(t, err)
+			clusterConfig.KubernetesVersion = versions[0]
+
 			require.NotNil(t, clusterConfig.Provider)
-
-			clusterConfig.CNI = tt.cni
-
 			provider := provisioning.CreateProvider(clusterConfig.Provider)
 			credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
 			machineConfigSpec := provider.LoadMachineConfigFunc(r.cattleConfig)
 
-			logrus.Info("Provisioning cluster")
-			cluster, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
+			logrus.Infof("Provisioning cluster for reboot test (%s)", tt.name)
+			cluster, err := provisioning.CreateProvisioningCluster(testClient, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
-			err = provisioning.VerifyClusterReady(r.client, cluster)
+			err = provisioning.VerifyClusterReady(testClient, cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
-			err = deployment.VerifyClusterDeployments(tt.client, cluster)
+			err = deployment.VerifyClusterDeployments(testClient, cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
-			err = pods.VerifyClusterPods(r.client, cluster)
+			err = pods.VerifyClusterPods(testClient, cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying service account token secret (%s)", cluster.Name)
-			err = clusters.VerifyServiceAccountTokenSecret(r.client, cluster.Name)
+			err = clusters.VerifyServiceAccountTokenSecret(testClient, cluster.Name)
+			require.NoError(t, err)
+
+			logrus.Infof("Rebooting one node of each role (%s)", cluster.Name)
+			err = rebootNodeRoles(testClient, cluster)
+			require.NoError(t, err)
+
+			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
+			err = provisioning.VerifyClusterReady(testClient, cluster)
+			require.NoError(t, err)
+
+			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
+			err = deployment.VerifyClusterDeployments(testClient, cluster)
+			require.NoError(t, err)
+
+			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
+			err = pods.VerifyClusterPods(testClient, cluster)
 			require.NoError(t, err)
 		})
 
-		params := provisioning.GetProvisioningSchemaParams(tt.client, r.cattleConfig)
-		err = qase.UpdateSchemaParameters(tt.name, params)
+		params := provisioning.GetProvisioningSchemaParams(r.client, r.cattleConfig)
+		err := qase.UpdateSchemaParameters(tt.name, params)
 		if err != nil {
 			logrus.Warningf("Failed to upload schema parameters %s", err)
 		}

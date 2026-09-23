@@ -1,7 +1,9 @@
 package ec2
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -11,18 +13,16 @@ import (
 	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/extensions/defaults/providers"
-	"github.com/rancher/shepherd/extensions/defaults/stevestates"
-	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
-	"github.com/rancher/shepherd/extensions/steve"
 	"github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/nodes"
-	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh"
+	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
 const (
 	nodeBaseName      = "rancher-automation"
 	fleetNamespace    = "fleet-default"
+	nodeBootIDCommand = "cat /proc/sys/kernel/random/boot_id"
 	nodeRebootCommand = "sudo reboot"
 )
 
@@ -382,22 +382,30 @@ func getSSHKeyName(sshKeyName string) string {
 	return stringSlice[0]
 }
 
-// RebootNode reboots a node and waits for the cluster to begin updating
-func RebootNode(client *rancher.Client, node nodes.Node, clusterID string) error {
-	logrus.Infof("Rebooting node %s", node.PublicIPAddress)
+// RebootNode reboots a node and waits for its boot ID to change.
+func RebootNode(client *rancher.Client, node nodes.Node, provisioningClusterID, clusterID string) error {
+	previousBootID, err := node.ExecuteCommand(nodeBootIDCommand)
+	if err != nil {
+		return fmt.Errorf("failed to get node boot ID before reboot: %w", err)
+	}
+	previousBootID = strings.TrimSpace(previousBootID)
+
 	output, err := node.ExecuteCommand(nodeRebootCommand)
 	if err != nil && !errors.Is(err, &ssh.ExitMissingError{}) {
 		return errors.New(err.Error() + output)
 	}
 
-	cluster, err := client.Steve.SteveType(stevetypes.Provisioning).ByID(clusterID)
-	if err != nil {
-		return err
-	}
+	err = kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.TenMinuteTimeout, true, func(ctx context.Context) (bool, error) {
+		currentBootID, err := node.ExecuteCommand(nodeBootIDCommand)
+		if err != nil {
+			return false, nil
+		}
 
-	err = steve.WaitForResourceState(client.Steve, cluster, stevestates.Updating, defaults.FiveSecondTimeout, defaults.FiveMinuteTimeout)
+		currentBootID = strings.TrimSpace(currentBootID)
+		return currentBootID != "" && currentBootID != previousBootID, nil
+	})
 	if err != nil {
-		return err
+		return fmt.Errorf("node boot ID did not change after reboot: %w", err)
 	}
 
 	return nil

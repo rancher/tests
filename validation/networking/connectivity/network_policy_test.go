@@ -4,14 +4,12 @@ package connectivity
 
 import (
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
 	client "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/clusters"
-	extdaemonsetapi "github.com/rancher/shepherd/extensions/kubeapi/workloads/daemonsets"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
@@ -20,8 +18,6 @@ import (
 	"github.com/rancher/tests/actions/networking"
 	projectsapi "github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/workloads"
-	"github.com/rancher/tests/actions/workloads/daemonset"
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	corev1 "k8s.io/api/core/v1"
@@ -89,19 +85,7 @@ func (n *NetworkPolicyTestSuite) TestPingPodsFromCPNode() {
 			workloadConfigs := new(workloads.Workloads)
 			operations.LoadObjectFromMap(workloads.WorkloadsConfigurationFileKey, n.cattleConfig, workloadConfigs)
 
-			workloadConfigs.DaemonSet.ObjectMeta.Namespace = n.namespace.Name
-			workloadConfigs.DaemonSet.ObjectMeta.GenerateName = strings.ToLower(networkPolicyTest.name)
-
-			logrus.Infof("Creating daemonset with name prefix: %s", workloadConfigs.DaemonSet.ObjectMeta.GenerateName)
-			testDaemonset, err := daemonset.CreateDaemonSetFromConfig(n.downstreamClient, n.cluster.ID, workloadConfigs.DaemonSet)
-			require.NoError(n.T(), err)
-
-			logrus.Infof("Verifying daemonset %s is running", testDaemonset.Name)
-			err = extdaemonsetapi.WaitForDaemonSetReady(n.client, n.cluster.ID, n.namespace.Name, testDaemonset.Name)
-			require.NoError(n.T(), err)
-
-			logrus.Infof("Verifying network policy by pinging pods from control plane node")
-			err = networking.VerifyNetworkPolicy(n.client, n.cluster.ID, n.namespace.Name)
+			err := networking.VerifyPodConnectivity(n.client, n.downstreamClient, n.cluster.ID, n.namespace.Name, networkPolicyTest.name, workloadConfigs)
 			require.NoError(n.T(), err)
 		})
 	}
