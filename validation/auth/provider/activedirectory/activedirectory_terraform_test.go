@@ -34,11 +34,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const (
-	activeDirectoryPort  = 389
-	workspacePermissions = 0o700
-)
-
 type ActiveDirectoryTerraformSuite struct {
 	suite.Suite
 	session          *session.Session
@@ -110,7 +105,7 @@ func (a *ActiveDirectoryTerraformSuite) SetupSuite() {
 	adConfig.Port = int64(activeDirectory.Port)
 
 	if adConfig.Port == 0 {
-		adConfig.Port = activeDirectoryPort
+		adConfig.Port = authactions.AuthProviderPort
 	}
 
 	adConfig.TLS = &activeDirectory.TLS
@@ -127,7 +122,7 @@ func (a *ActiveDirectoryTerraformSuite) SetupSuite() {
 	a.terratestConfig.PathToRepo = filepath.Join(a.terratestConfig.PathToRepo, authproviders.AD)
 
 	_, a.keyPath = rancher2.SetKeyPath(keypath.RancherKeyPath, a.terratestConfig.PathToRepo, "")
-	require.NoError(a.T(), os.MkdirAll(a.keyPath, workspacePermissions), "Failed to create the terraform workspace directory "+a.keyPath)
+	require.NoError(a.T(), os.MkdirAll(a.keyPath, authactions.TerraformWorkspacePermissions), "Failed to create the terraform workspace directory "+a.keyPath)
 
 	a.terraformOptions = framework.Setup(a.T(), a.terraformConfig, a.terratestConfig, a.keyPath)
 }

@@ -39,6 +39,8 @@ const (
 	AccessModeFieldError                 = "fieldName=accessMode"
 	PermissionDeniedError                = "PermissionDenied"
 	LocalPrincipalPrefix                 = "local://"
+	TerraformWorkspacePermissions        = 0o700
+	AuthProviderPort                     = 389
 )
 
 var samlProviders = map[string]saml.Provider{

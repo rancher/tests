@@ -148,6 +148,30 @@ func SetupKeycloakSAML(client *rancher.Client, keycloakClient *keycloak.Client) 
 	return fixture, nil
 }
 
+// EnsureKeycloakSAMLKeyPair settles the service provider signing pair on the Keycloak SAML config, generating one when neither half is named in the config
+func EnsureKeycloakSAMLKeyPair(client *rancher.Client) error {
+	providerConfig := client.Auth.KeycloakSAML.Config
+
+	if providerConfig.SpCert != "" && providerConfig.SpKey != "" {
+		return nil
+	}
+
+	if providerConfig.SpCert != "" || providerConfig.SpKey != "" {
+		return fmt.Errorf("only one of spCert and spKey is set under the %s config key, set both to use your "+
+			"own pair or neither to have one generated", saml.KeycloakSAML.ConfigKey)
+	}
+
+	keyPair, err := saml.NewKeyPair(saml.KeycloakSAML.Name)
+	if err != nil {
+		return err
+	}
+
+	providerConfig.SpCert = keyPair.Certificate
+	providerConfig.SpKey = keyPair.PrivateKey
+
+	return nil
+}
+
 func enableKeycloakSAML(client *rancher.Client) error {
 	providerConfig := client.Auth.KeycloakSAML.Config
 	if providerConfig.Users == nil || providerConfig.Users.Admin == nil {

@@ -22,6 +22,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -128,6 +129,11 @@ func (k *KeycloakSAMLAuthProviderSuite) TestKeycloakSAMLDisableAndReenableProvid
 	err = k.client.Auth.KeycloakSAML.Disable()
 	require.NoError(k.T(), err, "Failed to disable Keycloak SAML")
 
+	subSession.RegisterCleanupFunc(func() error {
+		logrus.Info("Re-enabling Keycloak SAML so that a failure below does not leave the provider disabled for later tests")
+		return authactions.EnsureAuthProviderEnabled(k.client, authactions.KeycloakSAML)
+	})
+
 	keycloakConfig, err := authactions.WaitForAuthProviderAnnotationUpdate(k.client, authactions.KeycloakSAML, authactions.AuthProvCleanupAnnotationValLocked)
 	require.NoError(k.T(), err, "Failed waiting for annotation update")
 
@@ -140,10 +146,28 @@ func (k *KeycloakSAMLAuthProviderSuite) TestKeycloakSAMLDisableAndReenableProvid
 		metav1.GetOptions{},
 	)
 	require.Error(k.T(), err, "Signing key secret should be removed when the provider is disabled")
-	require.Contains(k.T(), err.Error(), "not found", "Should return not found error")
+	require.True(k.T(), apierrors.IsNotFound(err), "expected NotFound error, got: %v", err)
 
+	logrus.Info("Re-enabling Keycloak SAML through an admin login to confirm a disable leaves nothing behind that blocks it")
 	err = authactions.EnsureAuthProviderEnabled(k.client, authactions.KeycloakSAML)
 	require.NoError(k.T(), err, "Failed to re-enable Keycloak SAML")
+
+	reenabledConfig, err := k.client.Management.AuthConfig.ByID(authactions.KeycloakSAML)
+	require.NoError(k.T(), err, "Failed to retrieve Keycloak SAML config after re-enabling")
+	require.True(k.T(), reenabledConfig.Enabled, "Keycloak SAML should be enabled again")
+	require.Equal(k.T(), authactions.AuthProvCleanupAnnotationValUnlocked, reenabledConfig.Annotations[authactions.AuthProvCleanupAnnotationKey], "Annotation should be unlocked again")
+
+	reenabledSecret, err := k.client.WranglerContext.Core.Secret().Get(
+		rbac.GlobalDataNS,
+		authactions.KeycloakSAMLKeySecretID,
+		metav1.GetOptions{},
+	)
+	require.NoError(k.T(), err, "Re-enabling should recreate the service provider signing key secret that disabling removed")
+	require.NotEmpty(k.T(), reenabledSecret.Data, "Recreated signing key secret should hold the key")
+
+	logrus.Info("Logging in as a Keycloak SAML user to confirm the provider authenticates after the disable and re-enable cycle")
+	err = authactions.VerifyUserLogins(k.client, authactions.KeycloakSAML, []authactions.User{k.authConfig.Users[0]}, "provider re-enabled after a disable", true)
+	require.NoError(k.T(), err, "Keycloak SAML users should be able to login after the provider is re-enabled")
 }
 
 func (k *KeycloakSAMLAuthProviderSuite) TestKeycloakSAMLAdminLogin() {
