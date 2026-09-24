@@ -40,10 +40,11 @@ node("harvester-vpn-1") {
     if ("${env.TEST_REPO}" != "null" && "${env.TEST_REPO}" != "") {
         testRepo = [[url: "${env.TEST_REPO}"]]
     }
-    def timeout = "${env.TIMEOUT}"
+    def goTestTimeout = "${env.TIMEOUT}"
     if ("${env.TIMEOUT}" != "null" && "${env.TIMEOUT}" != "") {
-        timeout = "${env.TIMEOUT}"
+        goTestTimeout = "${env.TIMEOUT}"
     }
+    timeout(time: 5, unit: 'HOURS') {
     wrap([$class: 'AnsiColorBuildWrapper', 'colorMapName': 'XTerm', 'defaultFg': 2, 'defaultBg': 1]) {
         withFolderProperties {
             paramsMap = []
@@ -59,7 +60,8 @@ node("harvester-vpn-1") {
                 string(credentialsId: 'AWS_SSH_RSA_KEY', variable: 'AWS_SSH_RSA_KEY'),
                 string(credentialsId: 'AWS_RSA_KEY_NAME', variable: 'AWS_RSA_KEY_NAME'),
                 string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME'),
-                string(credentialsId: 'ADMIN_PASSWORD', variable: 'ADMIN_PASSWORD')
+                string(credentialsId: 'ADMIN_PASSWORD', variable: 'ADMIN_PASSWORD'),
+                string(credentialsId: 'SEEDER_KUBECONFIG', variable: 'SEEDER_KUBECONFIG')
             ]) {
                 withEnv(paramsMap) {
                     stage('Setup Harvester Environment') {
@@ -69,74 +71,109 @@ node("harvester-vpn-1") {
                             def decodedRsa = new String(AWS_SSH_RSA_KEY.decodeBase64())
                             writeFile file: AWS_RSA_KEY_NAME, text: decodedRsa
                         }
-                        writeFile file: 'seeder.yaml', text: SEEDER_KUBECONFIG
+                        writeFile file: 'seeder.yaml', text: new String(env.SEEDER_KUBECONFIG.decodeBase64())
                         // need to inject sshKey into clusterConfig object of nodeManifest so that passwordless SSH works
                         writeFile file: 'node_manifest.yaml', text: NODE_MANIFEST
                         // will only work for single node clusters unless we write a loop
                         sh "yq e '.spec.nodes.[0].inventoryReference.name = \"${HARVESTER_INVENTORY_NODE}\"' -i node_manifest.yaml"
                         sh "yq e '.metadata.name = \"${HARVESTER_CLUSTER_NAME}\"' -i node_manifest.yaml"
                         sh "yq e '.spec.version = \"${HARVESTER_VERSION}\"' -i node_manifest.yaml"
+                        if (env.HARVESTER_IMAGE_URL?.trim()) {
+                            sh "yq e '.spec.imageURL = \"${env.HARVESTER_IMAGE_URL}\"' -i node_manifest.yaml"
+                        }
+                        sh "yq e '.spec.imageURL' node_manifest.yaml"
                         sh "chmod 600 .ssh/${AWS_SSH_KEY_NAME}"
                         def publicSSHKey = sh(script: "ssh-keygen -f .ssh/${AWS_SSH_KEY_NAME} -y", returnStdout: true).trim()
                         sh "yq e '.spec.clusterConfig.sshKeys.[0] = \"${publicSSHKey}\"' -i node_manifest.yaml"
 
                         // install harvester onto baremetal using seeder
                         sh '''#!/bin/bash
-                        export inode="${EXISTING_HARVESTER_IP}"
+                        set -euo pipefail
+
+                        EXISTING_HARVESTER_IP="${EXISTING_HARVESTER_IP:-}"
+                        SSH_OPTS="-n -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=15"
+                        inode="$EXISTING_HARVESTER_IP"
+                        inode2=""
+
+                        wait_for() {
+                            local desc="$1" timeout="$2" interval="$3"
+                            local deadline=$(( SECONDS + timeout ))
+                            shift 3
+                            until "$@"; do
+                                if (( SECONDS >= deadline )); then
+                                    echo "FATAL: timed out after ${timeout}s waiting for: ${desc}" >&2
+                                    return 1
+                                fi
+                                sleep "$interval"
+                            done
+                            echo "ready: ${desc}"
+                        }
+
+                        get_pxe_address() {
+                            inode=$(kubectl get -n tink-system "inventories/$HARVESTER_INVENTORY_NODE" -o jsonpath='{.status.pxeBootConfig.address}')
+                            [[ -n "$inode" ]]
+                        }
+
+                        fetch_harvester_kubeconfig() {
+                            timeout 60 ssh $SSH_OPTS -i ".ssh/$AWS_SSH_KEY_NAME" "rancher@$inode" \
+                                'sudo cat /etc/rancher/rke2/rke2.yaml' > harvester.yaml 2>/dev/null
+                            [[ -s harvester.yaml ]]
+                        }
+
+                        get_vip() {
+                            inode2=$(timeout 60 ssh $SSH_OPTS -i ".ssh/$AWS_SSH_KEY_NAME" "rancher@$inode" \
+                                'ip a | grep "/32" | grep -v flannel | head -1' | awk '{print $2}' | cut -d / -f 1)
+                            [[ -n "$inode2" ]]
+                        }
+
                         if [[ -z "$EXISTING_HARVESTER_IP" ]]; then
                             export KUBECONFIG=seeder.yaml
-                            export inode=$(kubectl get -n tink-system inventories/$HARVESTER_INVENTORY_NODE -o jsonpath='{.status.pxeBootConfig.address}')
-                            kubectl delete clusters.metal/$HARVESTER_CLUSTER_NAME -n tink-system || true
-                            while ping -c 1 "$HOST" >/dev/null 2>&1; do
-                                sleep 5
-                            done
+
+                            if [[ ! -s "$KUBECONFIG" ]]; then
+                                echo "FATAL: seeder.yaml is empty; the SEEDER_KUBECONFIG credential is missing or not valid base64" >&2
+                                exit 1
+                            fi
+                            if ! kubectl get namespace tink-system >/dev/null 2>&1; then
+                                echo "FATAL: cannot reach the seeder cluster using the supplied kubeconfig" >&2
+                                kubectl get namespace tink-system || true
+                                exit 1
+                            fi
+                            if ! kubectl get -n tink-system "inventories/$HARVESTER_INVENTORY_NODE" >/dev/null 2>&1; then
+                                echo "FATAL: inventory $HARVESTER_INVENTORY_NODE does not exist in tink-system" >&2
+                                exit 1
+                            fi
+                            echo "seeder reachable; inventory $HARVESTER_INVENTORY_NODE present"
+
+                            if kubectl get "clusters.metal/$HARVESTER_CLUSTER_NAME" -n tink-system >/dev/null 2>&1; then
+                                echo "deleting existing clusters.metal/$HARVESTER_CLUSTER_NAME (blocks on the seeder finalizer while the node is wiped)"
+                            fi
+                            kubectl delete "clusters.metal/$HARVESTER_CLUSTER_NAME" -n tink-system --ignore-not-found --wait=true --timeout=30m
                             sleep 180
 
                             kubectl apply -f node_manifest.yaml
-                            export inode=""
-                            while [[ -z "$inode" ]]; do
-                                export inode=$(kubectl get -n tink-system inventories/$HARVESTER_INVENTORY_NODE -o jsonpath='{.status.pxeBootConfig.address}')
-                                sleep 2
-                            done
+                            wait_for "PXE address on inventories/$HARVESTER_INVENTORY_NODE" 1800 10 get_pxe_address
                         fi
-                            
-                        echo "harvester IP address"
-                        echo $inode
 
+                        echo "harvester IP address"
+                        echo "$inode"
 
                         if [[ -z "$EXISTING_HARVESTER_IP" ]]; then
                             sleep 230
                         fi
 
-                        until ping -c1 -W1 $inode; do sleep 2; done
-                        echo "able to ping node, moving on to get harvester kubeconfig"
-
+                        wait_for "ping response from $inode" 1800 5 ping -c1 -W2 "$inode"
 
                         if [[ -z "$EXISTING_HARVESTER_IP" ]]; then
                             sleep 660
-                            until timeout 60 ssh -n -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i .ssh/$AWS_SSH_KEY_NAME rancher@$inode 'sudo cat /etc/rancher/rke2/rke2.yaml'; do sleep 5; done
-                            sleep 180
-                            echo "ssh shows rke2.yaml is up, downloaded ^^"
                         fi
-                        
-                        
-                        ssh -n -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i .ssh/$AWS_SSH_KEY_NAME rancher@$inode 'sudo cat /etc/rancher/rke2/rke2.yaml' > harvester.yaml
+
+                        wait_for "harvester kubeconfig over ssh from $inode" 2400 15 fetch_harvester_kubeconfig
 
                         if [[ -z "$EXISTING_HARVESTER_IP" ]]; then
-                            sleep 300
+                            sleep 480
                         fi
 
-                        while true; do
-                            inode2=$(ssh -n -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-                                -i ".ssh/$AWS_SSH_KEY_NAME" rancher@"$inode" \
-                                'ip a | grep "/32" | grep -v flannel | head -1' \
-                                | awk '{print $2}' | cut -d / -f 1)
-
-                            if [[ -n "$inode2" ]]; then
-                                break
-                            fi
-                            sleep 5
-                        done
+                        wait_for "harvester VIP on $inode" 900 5 get_vip
 
                         echo "$inode2" > host.txt
 
@@ -145,8 +182,8 @@ node("harvester-vpn-1") {
                         export KUBECONFIG=harvester.yaml
 
                         kubectl get pods -A
-                        kubectl rollout status deployment -n harvester-system harvester
-                        kubectl rollout status deployment -n cattle-system rancher
+                        kubectl rollout status deployment -n harvester-system harvester --timeout=20m
+                        kubectl rollout status deployment -n cattle-system rancher --timeout=20m
                         '''
 
                         config = config.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY)
@@ -159,34 +196,58 @@ node("harvester-vpn-1") {
 
                         // extract user info from harvester using v3 user api
                         sh '''#!/bin/bash
-                        export inode=$(cat host.txt)
+                        set -euo pipefail
 
-                        until [[ "$(curl -s -L --insecure -o /dev/null -w "%{http_code}\n" "https://$inode/v3-public/localproviders/local")" == "200" ]]; do sleep 5; done; echo "https://$inode is healthy"
-                        
-                        jsonOutput=""
+                        EXISTING_HARVESTER_IP="${EXISTING_HARVESTER_IP:-}"
+                        inode=$(cat host.txt)
+
+                        deadline=$(( SECONDS + 1800 ))
+                        until [[ "$(curl -s -L --insecure --max-time 30 -o /dev/null -w "%{http_code}" "https://$inode/v3-public/localproviders/local")" == "200" ]]; do
+                            if (( SECONDS >= deadline )); then
+                                echo "FATAL: https://$inode did not become healthy within 1800s" >&2
+                                exit 1
+                            fi
+                            sleep 5
+                        done
+                        echo "https://$inode is healthy"
 
                         if [[ -z "$EXISTING_HARVESTER_IP" ]]; then
                             sleep 120
-
-                            jsonOutput=$(curl --insecure -d '{"username" : "admin", "password" : "admin", "responseType" : "json"}'  "https://$inode/v3-public/localproviders/local?action=login")
-                        else
-                            jsonOutput=$(curl --insecure -d '{"username" : "admin", "password" : "password1234", "responseType" : "json"}'  "https://$inode/v3-public/localproviders/local?action=login")
                         fi
 
-                        echo $jsonOutput
+                        token=""
+                        usedPassword=""
+                        for pw in "password1234" "admin"; do
+                            loginBody=$(jq -n --arg p "$pw" '{username:"admin", password:$p, responseType:"json"}')
+                            jsonOutput=$(curl -s --insecure --max-time 60 -d "$loginBody" "https://$inode/v3-public/localproviders/local?action=login" || true)
+                            token=$(echo "$jsonOutput" | jq -cr .token 2>/dev/null || echo "")
+                            if [[ -n "$token" && "$token" != "null" ]]; then
+                                usedPassword="$pw"
+                                break
+                            fi
+                        done
 
-                        token=$(echo $jsonOutput | jq -cr .token)
+                        if [[ -z "$token" || "$token" == "null" ]]; then
+                            echo "FATAL: could not log in to harvester at https://$inode with any known credential" >&2
+                            echo "$jsonOutput" >&2
+                            exit 1
+                        fi
+                        echo "authenticated to harvester at https://$inode"
 
-                        jsonOutput=$(curl --insecure -X GET  -H "Accept: application/json" -H "Content-Type: application/json"  -H "Authorization: Bearer $token"  "https://$inode/v3/users?me=true")
+                        jsonOutput=$(curl --insecure --max-time 60 -X GET  -H "Accept: application/json" -H "Content-Type: application/json"  -H "Authorization: Bearer $token"  "https://$inode/v3/users?me=true")
 
-                        echo $jsonOutput
-
-                        userID=$(echo $jsonOutput | jq -cr .data[0].id)
+                        userID=$(echo "$jsonOutput" | jq -cr .data[0].id)
+                        if [[ -z "$userID" || "$userID" == "null" ]]; then
+                            echo "FATAL: could not resolve admin user id from harvester v3 api" >&2
+                            echo "$jsonOutput" >&2
+                            exit 1
+                        fi
 
                         jsonData=$( jq -n --arg password "password1234" '{"newPassword" : $password}')
 
-                        if [[ -z "$EXISTING_HARVESTER_IP" ]]; then
-                            curl --insecure --user "$token" -X POST -H 'Accept: application/json' -H 'Content-Type: application/json' -d "$jsonData" "https://$inode/v3/users/$userID?action=setpassword"
+                        if [[ "$usedPassword" != "password1234" ]]; then
+                            echo "rotating harvester admin password to the expected value"
+                            curl --insecure --max-time 60 --user "$token" -X POST -H 'Accept: application/json' -H 'Content-Type: application/json' -d "$jsonData" "https://$inode/v3/users/$userID?action=setpassword"
                         fi
 
                         echo "$token" > login.token
@@ -374,11 +435,12 @@ node("harvester-vpn-1") {
                     }
                     stage('Connect Rancher -> Harvester') {
                         if (env.CONNECT_HARVESTER_AND_RANCHER == "true") {
+                            def hvstStatus = 0
                             try {
                                 // this test also writes harvesterCloudCredentials to the config
-                                sh( script: """
+                                hvstStatus = sh( script: """
                             sleep 60
-                            docker run -v ${validationVolume}:/root --name hvst${golangTestContainer} -t  ${imageName}${TOFU_VERSION}${HARVESTER_PROVIDER_VERSION}${RANCHER2_PROVIDER_VERSION}-${commitIDTest}:${commitIDInfra} sh -c "cp "\$CATTLE_TEST_CONFIG" . && export CATTLE_TEST_CONFIG="\$CATTLE_TEST_CONFIG" && /root/go/bin/gotestsum --format standard-verbose --packages=${golangHvstDir} --junitfile ${testResultsOut} -- -tags=harvester ${hvstTestCase} -timeout=${timeout} -v "
+                            docker run -v ${validationVolume}:/root --name hvst${golangTestContainer} -t  ${imageName}${TOFU_VERSION}${HARVESTER_PROVIDER_VERSION}${RANCHER2_PROVIDER_VERSION}-${commitIDTest}:${commitIDInfra} sh -c "cp "\$CATTLE_TEST_CONFIG" . && export CATTLE_TEST_CONFIG="\$CATTLE_TEST_CONFIG" && /root/go/bin/gotestsum --format standard-verbose --packages=${golangHvstDir} --junitfile ${testResultsOut} -- -tags=harvester ${hvstTestCase} -timeout=${goTestTimeout} -v "
                             """, returnStatus: true)
                             } catch (err) {
                                 echo "${err} Unable to connect harvester to new rancher setup. Aborting"
@@ -386,6 +448,14 @@ node("harvester-vpn-1") {
                                 error err
                             }
                             sh "docker cp hvst${golangTestContainer}:\$CATTLE_TEST_CONFIG ${filename}"
+                            if (hvstStatus != 0) {
+                                error "TestHarvesterTestSuite failed with exit code ${hvstStatus}; harvester was not imported into rancher"
+                            }
+                            def importedClusterId = sh(script: "yq '.harvesterCredentials.clusterId' ${filename}", returnStdout: true).trim()
+                            if (!importedClusterId || importedClusterId == "null" || importedClusterId == "") {
+                                error "harvesterCredentials.clusterId is empty after the import suite; downstream provisioning cannot proceed"
+                            }
+                            echo "harvester imported into rancher as ${importedClusterId}"
                         }
                     }
                     stage('Create Downstream Cluster for Testing') {
@@ -412,7 +482,6 @@ node("harvester-vpn-1") {
                                     // multiline is different
                                     sh """
 # Remove existing block
-echo "${IMPORTED_HVST_KUBECONFIG}"
 sed -i '/harvester_kubeconfig_content = <<EOF/,/EOF/d' "${tfvars_filepath}"
 
 cat >> "${tfvars_filepath}" <<'EOF'
@@ -428,7 +497,7 @@ echo "}\\n" >> "${tfvars_filepath}"
                                     // run the test with tofu
                                     sh """
                                 
-                                cat ${tfvars_filepath}
+                                sed '/harvester_kubeconfig_content = <<EOT/,/^EOT/d' ${tfvars_filepath}
                                 docker cp ${tfvars_filepath} hvst${golangTestContainer}:/root/go/src/github.com/rancher/qa-infra-automation/tofu/rancher/cluster/
                                 docker stop hvst${golangTestContainer} || true; docker rm hvst${golangTestContainer}
 
@@ -438,6 +507,7 @@ echo "}\\n" >> "${tfvars_filepath}"
                                 '
 
                                 docker cp ${testContainer}-ds:/root/go/src/github.com/rancher/qa-infra-automation/config.yml mid_config.yml
+                                yq e '.upgradeInput.clusters[0].name = .rancher.clusterName' -i mid_config.yml
                             
                                 docker stop ${testContainer}-ds || true; docker rm ${testContainer}-ds
                                 sleep 90
@@ -460,7 +530,7 @@ echo "}\\n" >> "${tfvars_filepath}"
                                     def configYaml = readFile(file: "${mainRancherConfigPath}")
 
                                     def goProvisioningParams = [
-                                    string(name: 'TIMEOUT', value: timeout),
+                                    string(name: 'TIMEOUT', value: goTestTimeout),
                                     text(name: 'CONFIG', value: configYaml),
                                     string(name: 'REPO', value: "${env.TEST_REPO}"),
                                     string(name: 'BRANCH', value: "${testBranch}"),
@@ -476,6 +546,7 @@ echo "}\\n" >> "${tfvars_filepath}"
 
                             } catch (err) {
                                 echo "${err} Test had failures.."
+                                currentBuild.result = 'UNSTABLE'
                             }
                             dir("infra-repo") {
                                 def r_host = sh (
@@ -504,7 +575,7 @@ echo "}\\n" >> "${tfvars_filepath}"
                     stage('Cleanup terraform resources') {
                         if (env.CLEANUP == "true") {
                             dir ("./") {
-                                writeFile file: 'seeder.yaml', text: SEEDER_KUBECONFIG
+                                writeFile file: 'seeder.yaml', text: new String(env.SEEDER_KUBECONFIG.decodeBase64())
                                 sh """#!/bin/bash
                             export KUBECONFIG=seeder.yaml
                             kubectl delete clusters.metal/${HARVESTER_CLUSTER_NAME} -n tink-system || true
@@ -516,4 +587,5 @@ echo "}\\n" >> "${tfvars_filepath}"
             } //credentials
         } //folder properties
     } //wrap
+    }
 } // node

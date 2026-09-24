@@ -3,6 +3,7 @@
 package harvester
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	extensioncharts "github.com/rancher/shepherd/extensions/charts"
 	"github.com/rancher/shepherd/extensions/cloudcredentials"
+	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/pkg/config"
 	shepherdConfig "github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/session"
@@ -20,6 +22,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
 const (
@@ -69,7 +72,11 @@ func (h *HarvesterTestSuite) SetupSuite() {
 	require.NoError(h.T(), err)
 
 	if !uiExtensionObject.IsAlreadyInstalled {
-		latestUIPluginVersion, err := h.client.Catalog.GetLatestChartVersion(interoperablecharts.HarvesterExtensionName, interoperablecharts.HarvesterExtensionName)
+		var latestUIPluginVersion string
+		_ = kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.FiveMinuteTimeout, true, func(context.Context) (bool, error) {
+			latestUIPluginVersion, err = h.client.Catalog.GetLatestChartVersion(interoperablecharts.HarvesterExtensionName, interoperablecharts.HarvesterExtensionName)
+			return err == nil, nil
+		})
 		require.NoError(h.T(), err)
 
 		extensionOptions := &uiplugins.ExtensionOptions{
