@@ -215,7 +215,6 @@ jobs:
             cni: "${{ vars.CNI }}"
             defaultClusterRoleForProjectMembers: "true"
             enableNetworkPolicy: false
-            generateV3Token: ${{ matrix.version == '13' }}
             localCluster: "${{ env.LOCAL_CLUSTER_TYPE }}"
             provider: "${{ vars.PROVIDER_AMAZON }}"
             privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
