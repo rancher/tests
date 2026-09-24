@@ -22,6 +22,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -183,7 +184,7 @@ func (a *OpenLDAPAuthProviderSuite) TestOpenLDAPDisableAndReenableProvider() {
 		metav1.GetOptions{},
 	)
 	require.Error(a.T(), err, "Password secret should not exist")
-	require.Contains(a.T(), err.Error(), "not found", "Should return not found error")
+	require.True(a.T(), apierrors.IsNotFound(err), "expected NotFound error, got: %v", err)
 	err = authactions.EnsureAuthProviderEnabled(a.client, authactions.OpenLdap)
 	require.NoError(a.T(), err, "Failed to re-enable OpenLDAP")
 }
