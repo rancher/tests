@@ -70,6 +70,23 @@ type KeycloakSAMLFixture struct {
 	RancherAPIHost   string
 }
 
+type samlKeycloakFixtureSpec struct {
+	providerName   string
+	configKey      string
+	metadataFormat string
+	acsFormat      string
+	adminPrefix    string
+	config         *saml.Config
+}
+
+type samlKeycloakFixture struct {
+	Admin            User
+	AdminPrincipalID string
+	AuthInput        *SAMLAuthConfig
+	EntityID         string
+	RancherAPIHost   string
+}
+
 // NewKeycloakClient constructs a Keycloak admin client from the Keycloak SAML config key
 func NewKeycloakClient(testSession *session.Session) (*keycloak.Client, error) {
 	return keycloak.NewClientFromConfigKey(saml.KeycloakSAML.ConfigKey, testSession)
@@ -77,14 +94,36 @@ func NewKeycloakClient(testSession *session.Session) (*keycloak.Client, error) {
 
 // SetupKeycloakSAML prepares the realm, the Rancher SAML client, and the accounts and groups a run needs
 func SetupKeycloakSAML(client *rancher.Client, keycloakClient *keycloak.Client) (*KeycloakSAMLFixture, error) {
+	fixture, err := setupSAMLKeycloakFixture(client, keycloakClient, samlKeycloakFixtureSpec{
+		providerName:   KeycloakSAML,
+		configKey:      saml.KeycloakSAML.ConfigKey,
+		metadataFormat: keycloakSAMLMetadataPathFormat,
+		acsFormat:      keycloakSAMLACSPathFormat,
+		adminPrefix:    keycloakAdminPrefix,
+		config:         client.Auth.KeycloakSAML.Config,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &KeycloakSAMLFixture{
+		Admin:            fixture.Admin,
+		AdminPrincipalID: fixture.AdminPrincipalID,
+		AuthInput:        fixture.AuthInput,
+		EntityID:         fixture.EntityID,
+		RancherAPIHost:   fixture.RancherAPIHost,
+	}, nil
+}
+
+func setupSAMLKeycloakFixture(client *rancher.Client, keycloakClient *keycloak.Client, spec samlKeycloakFixtureSpec) (*samlKeycloakFixture, error) {
 	rancherAPIHost := rancherAPIHostFromConfig(client)
 	if rancherAPIHost == "" {
-		return nil, fmt.Errorf("the rancher config names no host, Keycloak issues assertions for it so it " +
+		return nil, fmt.Errorf("the rancher config names no host, the identity provider issues assertions for it so it " +
 			"must be set")
 	}
 
-	entityID := fmt.Sprintf(keycloakSAMLMetadataPathFormat, rancherAPIHost)
-	acsURL := fmt.Sprintf(keycloakSAMLACSPathFormat, rancherAPIHost)
+	entityID := fmt.Sprintf(spec.metadataFormat, rancherAPIHost)
+	acsURL := fmt.Sprintf(spec.acsFormat, rancherAPIHost)
 
 	created, err := keycloakClient.EnsureRealm()
 	if err != nil {
@@ -95,13 +134,13 @@ func SetupKeycloakSAML(client *rancher.Client, keycloakClient *keycloak.Client) 
 		logrus.Infof("Created the %s realm, which the Keycloak server did not have", keycloakClient.Realm())
 	}
 
-	providerConfig := client.Auth.KeycloakSAML.Config
+	providerConfig := spec.config
 	if providerConfig.Users == nil {
 		providerConfig.Users = new(saml.Users)
 	}
 
-	logrus.Infof("Registering the Rancher SAML client %s in the %s realm", entityID, keycloakClient.Realm())
-	samlClient, err := newKeycloakSAMLClient(entityID, rancherAPIHost, acsURL, providerConfig)
+	logrus.Infof("Registering the Rancher %s client %s in the %s realm", spec.providerName, entityID, keycloakClient.Realm())
+	samlClient, err := newKeycloakSAMLClient(entityID, rancherAPIHost, acsURL, providerConfig, spec.configKey)
 	if err != nil {
 		return nil, err
 	}
@@ -110,21 +149,21 @@ func SetupKeycloakSAML(client *rancher.Client, keycloakClient *keycloak.Client) 
 		return nil, err
 	}
 
-	fixture := &KeycloakSAMLFixture{
+	fixture := &samlKeycloakFixture{
 		AuthInput:      new(SAMLAuthConfig),
 		EntityID:       entityID,
 		RancherAPIHost: rancherAPIHost,
 	}
 
-	fixture.Admin, err = keycloakSAMLAdmin(keycloakClient, providerConfig)
+	fixture.Admin, err = keycloakSAMLAdminAccount(keycloakClient, providerConfig, spec.adminPrefix, spec.configKey)
 	if err != nil {
 		return nil, err
 	}
 
-	fixture.AdminPrincipalID = GetUserPrincipalID(KeycloakSAML, PrincipalNameOf(fixture.Admin), "", "")
+	fixture.AdminPrincipalID = GetUserPrincipalID(spec.providerName, PrincipalNameOf(fixture.Admin), "", "")
 
-	logrus.Infof("Settling the group and accounts the %s access mode tests sign in with", KeycloakSAML)
-	if err := setupKeycloakSAMLAccounts(keycloakClient, providerConfig, fixture.AuthInput); err != nil {
+	logrus.Infof("Settling the group and accounts the %s access mode tests sign in with", spec.providerName)
+	if err := setupKeycloakSAMLAccounts(keycloakClient, providerConfig, fixture.AuthInput, spec.configKey); err != nil {
 		return nil, err
 	}
 
@@ -185,23 +224,23 @@ func enableKeycloakSAML(client *rancher.Client) error {
 	)
 }
 
-func keycloakSAMLAdmin(keycloakClient *keycloak.Client, providerConfig *saml.Config) (User, error) {
+func keycloakSAMLAdminAccount(keycloakClient *keycloak.Client, providerConfig *saml.Config, adminPrefix string, configKey string) (User, error) {
 	admin := providerConfig.Users.Admin
 	if admin != nil && admin.Username != "" && admin.Password != "" {
 		logrus.Infof("Using the %s account named in the config to enable the provider", admin.Username)
 
-		return keycloakSAMLUser(keycloakClient, admin.Username, admin.Password, providerConfig.UIDField)
+		return keycloakSAMLUser(keycloakClient, admin.Username, admin.Password, providerConfig.UIDField, configKey)
 	}
 
 	logrus.Info("Creating the Keycloak account that enables the provider and becomes the Rancher administrator")
 
-	created, _, err := createKeycloakSAMLUser(keycloakClient, keycloakAdminPrefix, providerConfig.UIDField)
+	created, _, err := createKeycloakSAMLUser(keycloakClient, adminPrefix, providerConfig.UIDField, configKey)
 
 	return created, err
 }
 
-func setupKeycloakSAMLAccounts(keycloakClient *keycloak.Client, providerConfig *saml.Config, authInput *SAMLAuthConfig) error {
-	group, err := keycloakSAMLGroup(keycloakClient, providerConfig)
+func setupKeycloakSAMLAccounts(keycloakClient *keycloak.Client, providerConfig *saml.Config, authInput *SAMLAuthConfig, configKey string) error {
+	group, err := keycloakSAMLGroup(keycloakClient, providerConfig, configKey)
 	if err != nil {
 		return err
 	}
@@ -209,7 +248,7 @@ func setupKeycloakSAMLAccounts(keycloakClient *keycloak.Client, providerConfig *
 	authInput.Group = group.Name
 
 	authInput.Users, err = keycloakSAMLGroupMembers(keycloakClient, group, providerConfig.Users.Members,
-		keycloakMemberPrefix, providerConfig.UIDField, keycloakGroupMemberCount)
+		keycloakMemberPrefix, providerConfig.UIDField, keycloakGroupMemberCount, configKey)
 	if err != nil {
 		return err
 	}
@@ -222,7 +261,7 @@ func setupKeycloakSAMLAccounts(keycloakClient *keycloak.Client, providerConfig *
 	authInput.NestedGroup = nestedGroup.Name
 
 	authInput.NestedUsers, err = keycloakSAMLGroupMembers(keycloakClient, nestedGroup, providerConfig.Users.NestedMembers,
-		keycloakNestedMemberPrefix, providerConfig.UIDField, keycloakNestedMemberCount)
+		keycloakNestedMemberPrefix, providerConfig.UIDField, keycloakNestedMemberCount, configKey)
 	if err != nil {
 		return err
 	}
@@ -235,19 +274,19 @@ func setupKeycloakSAMLAccounts(keycloakClient *keycloak.Client, providerConfig *
 	authInput.DoubleNestedGroup = doubleNestedGroup.Name
 
 	authInput.DoubleNestedUsers, err = keycloakSAMLGroupMembers(keycloakClient, doubleNestedGroup, providerConfig.Users.DoubleNestedMembers,
-		keycloakDoubleNestedMemberPrefix, providerConfig.UIDField, keycloakNestedMemberCount)
+		keycloakDoubleNestedMemberPrefix, providerConfig.UIDField, keycloakNestedMemberCount, configKey)
 	if err != nil {
 		return err
 	}
 
 	namedOutsiders := providerConfig.Users.Outsiders
 	if len(namedOutsiders) > 0 {
-		authInput.ExcludedUsers, err = keycloakSAMLNamedUsers(keycloakClient, namedOutsiders, providerConfig.UIDField)
+		authInput.ExcludedUsers, err = keycloakSAMLNamedUsers(keycloakClient, namedOutsiders, providerConfig.UIDField, configKey)
 		if err != nil {
 			return err
 		}
 	} else {
-		outsider, _, err := createKeycloakSAMLUser(keycloakClient, keycloakOutsiderPrefix, providerConfig.UIDField)
+		outsider, _, err := createKeycloakSAMLUser(keycloakClient, keycloakOutsiderPrefix, providerConfig.UIDField, configKey)
 		if err != nil {
 			return err
 		}
@@ -287,7 +326,7 @@ func setupKeycloakSAMLAccounts(keycloakClient *keycloak.Client, providerConfig *
 		},
 	}
 
-	if err := verifyKeycloakSAMLFixture(keycloakClient, tiers); err != nil {
+	if err := verifyKeycloakSAMLFixture(keycloakClient, tiers, configKey); err != nil {
 		return err
 	}
 
@@ -305,7 +344,7 @@ type keycloakSAMLTier struct {
 	forbidden       []*keycloak.GroupRepresentation
 }
 
-func verifyKeycloakSAMLFixture(keycloakClient *keycloak.Client, tiers []keycloakSAMLTier) error {
+func verifyKeycloakSAMLFixture(keycloakClient *keycloak.Client, tiers []keycloakSAMLTier, configKey string) error {
 	for _, tier := range tiers {
 		for _, user := range tier.users {
 			account, err := keycloakClient.GetUser(user.Username)
@@ -328,7 +367,7 @@ func verifyKeycloakSAMLFixture(keycloakClient *keycloak.Client, tiers []keycloak
 					"Name an account that is a member under the %s config, or leave the entry out to have one created "+
 					"and joined for the run",
 					user.Username, tier.group.Path, tier.description, keycloakGroupPaths(memberships),
-					saml.KeycloakSAML.ConfigKey)
+					configKey)
 			}
 
 			for _, forbidden := range tier.forbidden {
@@ -454,15 +493,15 @@ func writeKeycloakGroupPathMode(keycloakClient *keycloak.Client, clientUUID stri
 }
 
 func keycloakSAMLGroupMembers(keycloakClient *keycloak.Client, group *keycloak.GroupRepresentation,
-	named []saml.User, prefix, uidField string, count int) ([]User, error) {
+	named []saml.User, prefix, uidField string, count int, configKey string) ([]User, error) {
 	if len(named) > 0 {
-		return keycloakSAMLNamedUsers(keycloakClient, named, uidField)
+		return keycloakSAMLNamedUsers(keycloakClient, named, uidField, configKey)
 	}
 
 	members := make([]User, 0, count)
 
 	for range count {
-		member, account, err := createKeycloakSAMLUser(keycloakClient, prefix, uidField)
+		member, account, err := createKeycloakSAMLUser(keycloakClient, prefix, uidField, configKey)
 		if err != nil {
 			return nil, err
 		}
@@ -499,7 +538,7 @@ func keycloakSAMLChildGroup(keycloakClient *keycloak.Client, parent *keycloak.Gr
 	return group, nil
 }
 
-func keycloakSAMLGroup(keycloakClient *keycloak.Client, providerConfig *saml.Config) (*keycloak.GroupRepresentation, error) {
+func keycloakSAMLGroup(keycloakClient *keycloak.Client, providerConfig *saml.Config, configKey string) (*keycloak.GroupRepresentation, error) {
 	if providerConfig.Group == "" {
 		return keycloakClient.CreateGroup(namegenerator.AppendRandomString(keycloakGroupPrefix))
 	}
@@ -512,7 +551,7 @@ func keycloakSAMLGroup(keycloakClient *keycloak.Client, providerConfig *saml.Con
 	if group == nil {
 		return nil, fmt.Errorf("the %s realm holds no group named %s, name one it has under group in the %s "+
 			"config or leave that out to have a group created",
-			keycloakClient.Realm(), providerConfig.Group, saml.KeycloakSAML.ConfigKey)
+			keycloakClient.Realm(), providerConfig.Group, configKey)
 	}
 
 	logrus.Infof("Using the %s group named in the config", group.Name)
@@ -520,11 +559,11 @@ func keycloakSAMLGroup(keycloakClient *keycloak.Client, providerConfig *saml.Con
 	return group, nil
 }
 
-func keycloakSAMLNamedUsers(keycloakClient *keycloak.Client, named []saml.User, uidField string) ([]User, error) {
+func keycloakSAMLNamedUsers(keycloakClient *keycloak.Client, named []saml.User, uidField string, configKey string) ([]User, error) {
 	users := make([]User, 0, len(named))
 
 	for _, entry := range named {
-		user, err := keycloakSAMLUser(keycloakClient, entry.Username, entry.Password, uidField)
+		user, err := keycloakSAMLUser(keycloakClient, entry.Username, entry.Password, uidField, configKey)
 		if err != nil {
 			return nil, err
 		}
@@ -535,10 +574,10 @@ func keycloakSAMLNamedUsers(keycloakClient *keycloak.Client, named []saml.User, 
 	return users, nil
 }
 
-func keycloakSAMLUser(keycloakClient *keycloak.Client, username, password, uidField string) (User, error) {
+func keycloakSAMLUser(keycloakClient *keycloak.Client, username, password, uidField string, configKey string) (User, error) {
 	if username == "" || password == "" {
 		return User{}, fmt.Errorf("an account named in the %s config is missing its username or password, "+
-			"both are needed to sign it in", saml.KeycloakSAML.ConfigKey)
+			"both are needed to sign it in", configKey)
 	}
 
 	existing, err := keycloakClient.GetUser(username)
@@ -549,14 +588,14 @@ func keycloakSAMLUser(keycloakClient *keycloak.Client, username, password, uidFi
 	if existing == nil {
 		return User{}, fmt.Errorf("the %s realm holds no account named %s, name one it has in the %s config "+
 			"or leave the entry out to have accounts created",
-			keycloakClient.Realm(), username, saml.KeycloakSAML.ConfigKey)
+			keycloakClient.Realm(), username, configKey)
 	}
 
-	return keycloakSAMLUserFrom(existing, password, uidField)
+	return keycloakSAMLUserFrom(existing, password, uidField, configKey)
 }
 
-func keycloakSAMLUserFrom(account *keycloak.UserRepresentation, password, uidField string) (User, error) {
-	principalName, err := keycloakPrincipalName(account, uidField)
+func keycloakSAMLUserFrom(account *keycloak.UserRepresentation, password, uidField string, configKey string) (User, error) {
+	principalName, err := keycloakPrincipalName(account, uidField, configKey)
 	if err != nil {
 		return User{}, err
 	}
@@ -564,7 +603,7 @@ func keycloakSAMLUserFrom(account *keycloak.UserRepresentation, password, uidFie
 	return User{Username: account.Username, Password: password, PrincipalName: principalName}, nil
 }
 
-func createKeycloakSAMLUser(keycloakClient *keycloak.Client, prefix, uidField string) (User, *keycloak.UserRepresentation, error) {
+func createKeycloakSAMLUser(keycloakClient *keycloak.Client, prefix, uidField string, configKey string) (User, *keycloak.UserRepresentation, error) {
 	name := namegenerator.AppendRandomString(prefix)
 	email := name + "@" + keycloakClient.Config.UserEmailDomain
 
@@ -585,7 +624,7 @@ func createKeycloakSAMLUser(keycloakClient *keycloak.Client, prefix, uidField st
 		return User{}, nil, err
 	}
 
-	user, err := keycloakSAMLUserFrom(account, keycloakUserPassword, uidField)
+	user, err := keycloakSAMLUserFrom(account, keycloakUserPassword, uidField, configKey)
 	if err != nil {
 		return User{}, nil, err
 	}
@@ -593,8 +632,8 @@ func createKeycloakSAMLUser(keycloakClient *keycloak.Client, prefix, uidField st
 	return user, account, nil
 }
 
-func keycloakPrincipalName(user *keycloak.UserRepresentation, uidField string) (string, error) {
-	attribute, err := findKeycloakAttributeField(uidField)
+func keycloakPrincipalName(user *keycloak.UserRepresentation, uidField string, configKey string) (string, error) {
+	attribute, err := findKeycloakAttributeField(uidField, configKey)
 	if err != nil {
 		return "", err
 	}
@@ -620,8 +659,8 @@ func keycloakPrincipalName(user *keycloak.UserRepresentation, uidField string) (
 	return name, nil
 }
 
-func newKeycloakSAMLClient(clientID, rancherAPIHost, acsURL string, providerConfig *saml.Config) (*keycloak.ClientRepresentation, error) {
-	mappers, err := newKeycloakSAMLMappers(providerConfig)
+func newKeycloakSAMLClient(clientID, rancherAPIHost, acsURL string, providerConfig *saml.Config, configKey string) (*keycloak.ClientRepresentation, error) {
+	mappers, err := newKeycloakSAMLMappers(providerConfig, configKey)
 	if err != nil {
 		return nil, err
 	}
@@ -647,7 +686,7 @@ func newKeycloakSAMLClient(clientID, rancherAPIHost, acsURL string, providerConf
 	}, nil
 }
 
-func newKeycloakSAMLMappers(providerConfig *saml.Config) ([]keycloak.ProtocolMapperRepresentation, error) {
+func newKeycloakSAMLMappers(providerConfig *saml.Config, configKey string) ([]keycloak.ProtocolMapperRepresentation, error) {
 	mappers := []keycloak.ProtocolMapperRepresentation{
 		{
 			Name:           "role list",
@@ -688,7 +727,7 @@ func newKeycloakSAMLMappers(providerConfig *saml.Config) ([]keycloak.ProtocolMap
 
 		registered[field] = true
 
-		mapper, err := newKeycloakAttributeMapper(field)
+		mapper, err := newKeycloakAttributeMapper(field, configKey)
 		if err != nil {
 			return nil, err
 		}
@@ -699,8 +738,8 @@ func newKeycloakSAMLMappers(providerConfig *saml.Config) ([]keycloak.ProtocolMap
 	return mappers, nil
 }
 
-func newKeycloakAttributeMapper(field string) (keycloak.ProtocolMapperRepresentation, error) {
-	attribute, err := findKeycloakAttributeField(field)
+func newKeycloakAttributeMapper(field string, configKey string) (keycloak.ProtocolMapperRepresentation, error) {
+	attribute, err := findKeycloakAttributeField(field, configKey)
 	if err != nil {
 		return keycloak.ProtocolMapperRepresentation{}, err
 	}
@@ -731,7 +770,7 @@ func newKeycloakAttributeMapper(field string) (keycloak.ProtocolMapperRepresenta
 	}, nil
 }
 
-func findKeycloakAttributeField(field string) (keycloakAttributeField, error) {
+func findKeycloakAttributeField(field string, configKey string) (keycloakAttributeField, error) {
 	names := make([]string, 0, len(keycloakAttributeFields))
 
 	for _, known := range keycloakAttributeFields {
@@ -744,7 +783,7 @@ func findKeycloakAttributeField(field string) (keycloakAttributeField, error) {
 
 	return keycloakAttributeField{}, fmt.Errorf("no Keycloak account property answers the %q attribute field, "+
 		"name one of %s in the %s config or add a mapper for it to the realm by hand",
-		field, strings.Join(names, ", "), saml.KeycloakSAML.ConfigKey)
+		field, strings.Join(names, ", "), configKey)
 }
 
 func rancherAPIHostFromConfig(client *rancher.Client) string {

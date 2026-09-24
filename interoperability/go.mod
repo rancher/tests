@@ -68,7 +68,7 @@ require (
 	github.com/rancher/norman v0.10.0
 	github.com/rancher/qa-infra-automation v0.0.0-20260514152023-976143409dc3
 	github.com/rancher/rancher/pkg/apis v0.0.0
-	github.com/rancher/shepherd v0.0.0-20260921153737-8e09fea6aaaf
+	github.com/rancher/shepherd v0.0.0-20261002144048-2ae83452a53e
 	github.com/rancher/tests/actions v0.0.0-20260925190906-17002625ce49
 	github.com/rancher/tfp-automation v0.0.0-20260929210548-eb089558bee3
 	github.com/sirupsen/logrus v1.10.2
@@ -160,10 +160,10 @@ require (
 	github.com/prometheus/common v0.70.0 // indirect
 	github.com/prometheus/procfs v0.21.1 // indirect
 	github.com/rancher/aks-operator v1.15.0-rc.1 // indirect
-	github.com/rancher/ali-operator v1.14.0-rc.1 // indirect
+	github.com/rancher/ali-operator v1.14.1-rc.1 // indirect
 	github.com/rancher/apiserver v0.9.6 // indirect
 	github.com/rancher/eks-operator v1.15.0-rc.1 // indirect
-	github.com/rancher/gke-operator v1.15.0-rc.1 // indirect
+	github.com/rancher/gke-operator v1.15.3 // indirect
 	github.com/rancher/lasso v0.2.9 // indirect
 	github.com/rancher/rancher v0.0.0-20260527150105-ae26ccbc3fed // indirect
 	github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20260519183600-f1362a3fe1a8 // indirect
@@ -177,8 +177,8 @@ require (
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/xlab/treeprint v1.2.0 // indirect
 	github.com/zclconf/go-cty v1.19.0 // indirect
-	go.opentelemetry.io/otel v1.43.0 // indirect
-	go.opentelemetry.io/otel/trace v1.43.0 // indirect
+	go.opentelemetry.io/otel v1.44.0 // indirect
+	go.opentelemetry.io/otel/trace v1.44.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/mod v0.41.0 // indirect
