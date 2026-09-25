@@ -95,7 +95,6 @@ jobs:
           AWS_SUBNET_B: ${{ secrets.AWS_SUBNET_B }}
           AWS_SUBNET_C: ${{ secrets.AWS_SUBNET_C }}
           AWS_AMI: ${{ secrets.AWS_AMI }}
-          AWS_SUBNET_ID: ${{ secrets.AWS_SUBNET_ID }}
           AWS_SECURITY_GROUP_ID: ${{ secrets.AWS_SECURITY_GROUP_ID }}
           AWS_PEM_KEY_NAME: ${{ secrets.AWS_PEM_KEY_NAME }}
           AWS_ROUTE53_FQDN: ${{ secrets.AWS_ROUTE53_FQDN }}
@@ -134,7 +133,7 @@ jobs:
             aws_subnet_b: "${AWS_SUBNET_B}"
             aws_subnet_c: "${AWS_SUBNET_C}"
             aws_ami: "${AWS_AMI}"
-            aws_subnet_id: "${AWS_SUBNET_ID}"
+            aws_subnet_id: "${AWS_SUBNET_A}"
             aws_security_group_id: "${AWS_SECURITY_GROUP_ID}"
             aws_pem_key_name: "${AWS_PEM_KEY_NAME}"
             aws_route53_fqdn: "${AWS_ROUTE53_FQDN}"
