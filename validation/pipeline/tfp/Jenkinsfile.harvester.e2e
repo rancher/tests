@@ -1,4 +1,12 @@
 #!groovy
+def decodeSeederKubeconfig() {
+    try {
+        return new String(env.SEEDER_KUBECONFIG.decodeBase64())
+    } catch (err) {
+        error "SEEDER_KUBECONFIG credential must be a base64-encoded kubeconfig: ${err.message}"
+    }
+}
+
 node("harvester-vpn-1") {
     def rootPath = "/root/go/src/github.com/rancher/infra-repo/"
     def homePath = "/home/ubuntu/jenkins/workspace/rancher_qa/caleb-harvester-e2e2"
@@ -44,7 +52,6 @@ node("harvester-vpn-1") {
     if ("${env.TIMEOUT}" != "null" && "${env.TIMEOUT}" != "") {
         goTestTimeout = "${env.TIMEOUT}"
     }
-    timeout(time: 5, unit: 'HOURS') {
     wrap([$class: 'AnsiColorBuildWrapper', 'colorMapName': 'XTerm', 'defaultFg': 2, 'defaultBg': 1]) {
         withFolderProperties {
             paramsMap = []
@@ -64,6 +71,8 @@ node("harvester-vpn-1") {
                 string(credentialsId: 'SEEDER_KUBECONFIG', variable: 'SEEDER_KUBECONFIG')
             ]) {
                 withEnv(paramsMap) {
+                    try {
+                    timeout(time: 5, unit: 'HOURS') {
                     stage('Setup Harvester Environment') {
                         dir(".ssh") {
                             def decoded = new String(env.AWS_SSH_PEM_KEY.decodeBase64())
@@ -71,7 +80,7 @@ node("harvester-vpn-1") {
                             def decodedRsa = new String(AWS_SSH_RSA_KEY.decodeBase64())
                             writeFile file: AWS_RSA_KEY_NAME, text: decodedRsa
                         }
-                        writeFile file: 'seeder.yaml', text: new String(env.SEEDER_KUBECONFIG.decodeBase64())
+                        writeFile file: 'seeder.yaml', text: decodeSeederKubeconfig()
                         // need to inject sshKey into clusterConfig object of nodeManifest so that passwordless SSH works
                         writeFile file: 'node_manifest.yaml', text: NODE_MANIFEST
                         // will only work for single node clusters unless we write a loop
@@ -92,8 +101,8 @@ node("harvester-vpn-1") {
 
                         EXISTING_HARVESTER_IP="${EXISTING_HARVESTER_IP:-}"
                         SSH_OPTS="-n -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=15"
-                        inode="$EXISTING_HARVESTER_IP"
-                        inode2=""
+                        harvester_node_ip="$EXISTING_HARVESTER_IP"
+                        harvester_vip=""
 
                         wait_for() {
                             local desc="$1" timeout="$2" interval="$3"
@@ -110,20 +119,20 @@ node("harvester-vpn-1") {
                         }
 
                         get_pxe_address() {
-                            inode=$(kubectl get -n tink-system "inventories/$HARVESTER_INVENTORY_NODE" -o jsonpath='{.status.pxeBootConfig.address}')
-                            [[ -n "$inode" ]]
+                            harvester_node_ip=$(kubectl get -n tink-system "inventories/$HARVESTER_INVENTORY_NODE" -o jsonpath='{.status.pxeBootConfig.address}')
+                            [[ -n "$harvester_node_ip" ]]
                         }
 
                         fetch_harvester_kubeconfig() {
-                            timeout 60 ssh $SSH_OPTS -i ".ssh/$AWS_SSH_KEY_NAME" "rancher@$inode" \
+                            timeout 60 ssh $SSH_OPTS -i ".ssh/$AWS_SSH_KEY_NAME" "rancher@$harvester_node_ip" \
                                 'sudo cat /etc/rancher/rke2/rke2.yaml' > harvester.yaml 2>/dev/null
                             [[ -s harvester.yaml ]]
                         }
 
                         get_vip() {
-                            inode2=$(timeout 60 ssh $SSH_OPTS -i ".ssh/$AWS_SSH_KEY_NAME" "rancher@$inode" \
+                            harvester_vip=$(timeout 60 ssh $SSH_OPTS -i ".ssh/$AWS_SSH_KEY_NAME" "rancher@$harvester_node_ip" \
                                 'ip a | grep "/32" | grep -v flannel | head -1' | awk '{print $2}' | cut -d / -f 1)
-                            [[ -n "$inode2" ]]
+                            [[ -n "$harvester_vip" ]]
                         }
 
                         if [[ -z "$EXISTING_HARVESTER_IP" ]]; then
@@ -134,7 +143,7 @@ node("harvester-vpn-1") {
                                 exit 1
                             fi
                             if ! kubectl get namespace tink-system >/dev/null 2>&1; then
-                                echo "FATAL: cannot reach the seeder cluster using the supplied kubeconfig" >&2
+                                echo "FATAL: cannot reach the seeder cluster; check that the SEEDER_KUBECONFIG credential is a valid base64-encoded kubeconfig" >&2
                                 kubectl get namespace tink-system || true
                                 exit 1
                             fi
@@ -155,29 +164,29 @@ node("harvester-vpn-1") {
                         fi
 
                         echo "harvester IP address"
-                        echo "$inode"
+                        echo "$harvester_node_ip"
 
                         if [[ -z "$EXISTING_HARVESTER_IP" ]]; then
                             sleep 230
                         fi
 
-                        wait_for "ping response from $inode" 1800 5 ping -c1 -W2 "$inode"
+                        wait_for "ping response from $harvester_node_ip" 1800 5 ping -c1 -W2 "$harvester_node_ip"
 
                         if [[ -z "$EXISTING_HARVESTER_IP" ]]; then
                             sleep 660
                         fi
 
-                        wait_for "harvester kubeconfig over ssh from $inode" 2400 15 fetch_harvester_kubeconfig
+                        wait_for "harvester kubeconfig over ssh from $harvester_node_ip" 2400 15 fetch_harvester_kubeconfig
 
                         if [[ -z "$EXISTING_HARVESTER_IP" ]]; then
                             sleep 480
                         fi
 
-                        wait_for "harvester VIP on $inode" 900 5 get_vip
+                        wait_for "harvester VIP on $harvester_node_ip" 900 5 get_vip
 
-                        echo "$inode2" > host.txt
+                        echo "$harvester_vip" > host.txt
 
-                        sed -i "s#server: https://127.0.0.1:6443#server: https://$inode2:6443#g" harvester.yaml
+                        sed -i "s#server: https://127.0.0.1:6443#server: https://$harvester_vip:6443#g" harvester.yaml
 
                         export KUBECONFIG=harvester.yaml
 
@@ -199,17 +208,17 @@ node("harvester-vpn-1") {
                         set -euo pipefail
 
                         EXISTING_HARVESTER_IP="${EXISTING_HARVESTER_IP:-}"
-                        inode=$(cat host.txt)
+                        harvester_vip=$(cat host.txt)
 
                         deadline=$(( SECONDS + 1800 ))
-                        until [[ "$(curl -s -L --insecure --max-time 30 -o /dev/null -w "%{http_code}" "https://$inode/v3-public/localproviders/local")" == "200" ]]; do
+                        until [[ "$(curl -s -L --insecure --max-time 30 -o /dev/null -w "%{http_code}" "https://$harvester_vip/v3-public/localproviders/local")" == "200" ]]; do
                             if (( SECONDS >= deadline )); then
-                                echo "FATAL: https://$inode did not become healthy within 1800s" >&2
+                                echo "FATAL: https://$harvester_vip did not become healthy within 1800s" >&2
                                 exit 1
                             fi
                             sleep 5
                         done
-                        echo "https://$inode is healthy"
+                        echo "https://$harvester_vip is healthy"
 
                         if [[ -z "$EXISTING_HARVESTER_IP" ]]; then
                             sleep 120
@@ -219,7 +228,7 @@ node("harvester-vpn-1") {
                         usedPassword=""
                         for pw in "password1234" "admin"; do
                             loginBody=$(jq -n --arg p "$pw" '{username:"admin", password:$p, responseType:"json"}')
-                            jsonOutput=$(curl -s --insecure --max-time 60 -d "$loginBody" "https://$inode/v3-public/localproviders/local?action=login" || true)
+                            jsonOutput=$(curl -s --insecure --max-time 60 -d "$loginBody" "https://$harvester_vip/v3-public/localproviders/local?action=login" || true)
                             token=$(echo "$jsonOutput" | jq -cr .token 2>/dev/null || echo "")
                             if [[ -n "$token" && "$token" != "null" ]]; then
                                 usedPassword="$pw"
@@ -228,13 +237,13 @@ node("harvester-vpn-1") {
                         done
 
                         if [[ -z "$token" || "$token" == "null" ]]; then
-                            echo "FATAL: could not log in to harvester at https://$inode with any known credential" >&2
+                            echo "FATAL: could not log in to harvester at https://$harvester_vip with any known credential" >&2
                             echo "$jsonOutput" >&2
                             exit 1
                         fi
-                        echo "authenticated to harvester at https://$inode"
+                        echo "authenticated to harvester at https://$harvester_vip"
 
-                        jsonOutput=$(curl --insecure --max-time 60 -X GET  -H "Accept: application/json" -H "Content-Type: application/json"  -H "Authorization: Bearer $token"  "https://$inode/v3/users?me=true")
+                        jsonOutput=$(curl --insecure --max-time 60 -X GET  -H "Accept: application/json" -H "Content-Type: application/json"  -H "Authorization: Bearer $token"  "https://$harvester_vip/v3/users?me=true")
 
                         userID=$(echo "$jsonOutput" | jq -cr .data[0].id)
                         if [[ -z "$userID" || "$userID" == "null" ]]; then
@@ -247,7 +256,7 @@ node("harvester-vpn-1") {
 
                         if [[ "$usedPassword" != "password1234" ]]; then
                             echo "rotating harvester admin password to the expected value"
-                            curl --insecure --max-time 60 --user "$token" -X POST -H 'Accept: application/json' -H 'Content-Type: application/json' -d "$jsonData" "https://$inode/v3/users/$userID?action=setpassword"
+                            curl --insecure --max-time 60 --user "$token" -X POST -H 'Accept: application/json' -H 'Content-Type: application/json' -d "$jsonData" "https://$harvester_vip/v3/users/$userID?action=setpassword"
                         fi
 
                         echo "$token" > login.token
@@ -565,17 +574,14 @@ echo "}\\n" >> "${tfvars_filepath}"
                                 ).trim()
                                 currentBuild.description = "https://${r_host}<br>${r_pass}<br>https://${h_host}"
                             }
-
-                            sh """
-                            docker stop ${golangTestContainer} || true
-                            docker rm ${golangTestContainer} || true                        
-                            """
                         }
                     }
+                    }
+                    } finally {
                     stage('Cleanup terraform resources') {
                         if (env.CLEANUP == "true") {
                             dir ("./") {
-                                writeFile file: 'seeder.yaml', text: new String(env.SEEDER_KUBECONFIG.decodeBase64())
+                                writeFile file: 'seeder.yaml', text: decodeSeederKubeconfig()
                                 sh """#!/bin/bash
                             export KUBECONFIG=seeder.yaml
                             kubectl delete clusters.metal/${HARVESTER_CLUSTER_NAME} -n tink-system || true
@@ -583,9 +589,9 @@ echo "}\\n" >> "${tfvars_filepath}"
                             }
                         }
                     } //cleanup
+                    }
                 } //params
             } //credentials
         } //folder properties
     } //wrap
-    }
 } // node

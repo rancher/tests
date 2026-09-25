@@ -73,11 +73,12 @@ func (h *HarvesterTestSuite) SetupSuite() {
 
 	if !uiExtensionObject.IsAlreadyInstalled {
 		var latestUIPluginVersion string
-		_ = kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.FiveMinuteTimeout, true, func(context.Context) (bool, error) {
-			latestUIPluginVersion, err = h.client.Catalog.GetLatestChartVersion(interoperablecharts.HarvesterExtensionName, interoperablecharts.HarvesterExtensionName)
-			return err == nil, nil
+		var chartVersionErr error
+		err = kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.FiveMinuteTimeout, true, func(context.Context) (bool, error) {
+			latestUIPluginVersion, chartVersionErr = h.client.Catalog.GetLatestChartVersion(interoperablecharts.HarvesterExtensionName, interoperablecharts.HarvesterExtensionName)
+			return chartVersionErr == nil, nil
 		})
-		require.NoError(h.T(), err)
+		require.NoError(h.T(), err, "harvester UI extension chart version never became available: %v", chartVersionErr)
 
 		extensionOptions := &uiplugins.ExtensionOptions{
 			ChartName:   interoperablecharts.HarvesterExtensionName,
