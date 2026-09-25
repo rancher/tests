@@ -88,10 +88,6 @@ func TestRemotedialerProxy(t *testing.T) {
 	cred := cloudcredentials.LoadCloudCredential(string(provider.Name))
 	machineCfg := provider.LoadMachineConfigFunc(r.cattleConfig)
 
-	rdpVersionSetting, err := r.client.Management.Setting.ByID("remotedialer-proxy-version")
-	require.NoError(t, err)
-	logrus.Infof("Remotedialer Proxy Version: %s", rdpVersionSetting.Value)
-
 	logrus.Info("Provisioning downstream cluster...")
 	cluster, err := provisioning.CreateProvisioningCluster(
 		r.standardUserClient,
