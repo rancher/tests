@@ -42,6 +42,9 @@ func ProvisionClustersPreUpgrade(t *testing.T, client *rancher.Client, cattleCon
 	nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
 
 	rancher, terraform, terratest, _ := tfpConfig.LoadTFPConfigs(cattleConfig)
+	if terraform.RancherConfig != nil {
+		terraform.AWSConfig = terraform.RancherConfig.AWSConfig
+	}
 
 	clusterConfig.MachinePools = nodeRolesStandard
 

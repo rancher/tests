@@ -1,21 +1,14 @@
 rancher:
-  host: "<required>"
-  adminPassword: "<required>"
+  host: "<required>.<HB_AWS_ROUTE_53_ZONE>"
+  adminPassword: "<HB_RANCHER_ADMIN_PASSWORD>"
   insecure: true
   cleanup: true
 
-awsCredentials:
-  accessKey: "<required>"
-  secretKey: "<required>"
-
 terraform:
-  awsCredentials:
-    awsAccessKey: "<required>"
-    awsSecretKey: "<required>"
   cni: "<HB_CNI>"
   defaultClusterRoleForProjectMembers: "true"
   enableNetworkPolicy: false
-  provider: "<HB_PROVIDER_AMAZON>"
+  provider: "<HB_PROVIDER>"
   privateKeyPath: "<HB_TFP_SSH_PRIVATE_KEY_PATH>"
   resourcePrefix: "<HB_HOSTNAME_PREFIX>"
   proxy:
@@ -52,16 +45,24 @@ terraform:
     chartVersion: "<HB_RELEASED_RANCHER_CHART_VERSION>"
     osUser: "<HB_OS_USER>"
     osGroup: "<HB_OS_GROUP>"
-    rancherChartRepository: "<HB_RANCHER_HELM_CHART_URL>"
+    rancherChartRepository: "<HB_PRIME_HELM_CHART_URL>"
     rancherHostname: "<HB_RANCHER_HOSTNAME>"
-    rancherImage: "<HB_RANCHER_IMAGE>"
+    rancherImage: "<HB_PRIME_RANCHER_IMAGE>"
     rancherTagVersion: "<HB_RELEASED_RANCHER_VERSION>"
-    registryPassword: "<HB_DOCKERHUB_PASSWORD>"
-    registryUsername: "<HB_DOCKERHUB_USERNAME>"
-    repo: "<HB_RANCHER_REPO>"
+    registryUsername: "<HB_PRIVATE_REGISTRY_USERNAME>"
+    registryPassword: "<HB_PRIVATE_REGISTRY_PASSWORD>"
+    repo: "<HB_PRIME_RANCHER_REPO>"
     rke2Version: "<HB_RKE2_VERSION>"
-    upgradedRancherChartRepository: "<HB_UPGRADED_RANCHER_HELM_CHART_URL>"
-    upgradedRancherChartVersion: "<HB_UPGRADED_RANCHER_CHART_VERSION>"
-    upgradedRancherImage: "<HB_UPGRADED_RANCHER_IMAGE>"
-    upgradedRancherRepo: "<HB_UPGRADED_RANCHER_REPO>"
-    upgradedRancherTagVersion: "<HB_UPGRADED_RANCHER_VERSION>"
+    upgradedRancherChartRepository: "<HB_UPGRADED_PRIME_HEAD_HELM_CHART_URL>"
+    upgradedRancherChartVersion: "<required>"
+    upgradedRancherImage: "<HB_UPGRADED_PRIME_HEAD_RANCHER_IMAGE>"
+    upgradedRancherRepo: "<HB_UPGRADED_PRIME_HEAD_REPO>"
+    upgradedRancherTagVersion: "<required>"
+
+terratest:
+  pathToRepo: "<HB_PATH_TO_TFP_REPO>"
+  standaloneLogging: false
+  tfLogging: false
+
+logging:
+  level: "<HB_LOGGING_LEVEL>"

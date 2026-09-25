@@ -35,16 +35,6 @@ on:
         required: false
         default: true
         type: boolean
-  workflow_call:
-    inputs:
-      rancher_version:
-        description: "Rancher tag version provided from check-rancher-tag workflow"
-        required: false
-        type: string
-      rancher_chart_version:
-        description: "Rancher chart version provided from check-rancher-tag workflow"
-        required: false
-        type: string
 
 permissions:
   id-token: write
@@ -61,14 +51,12 @@ env:
   REPORTING_ENABLED: >-
         ${{
           github.event_name == 'schedule' ||
-          github.event_name == 'workflow_call' ||
           github.actor == 'github-actions[bot]' ||
           (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
         }}
   CLEANUP_ENABLED: >-
     ${{
       github.event_name == 'schedule' ||
-      github.event_name == 'workflow_call' ||
       github.actor == 'github-actions[bot]' ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.environment_cleanup == 'true' )
     }}
