@@ -34,11 +34,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const (
-	openLDAPPort         = 389
-	workspacePermissions = 0o700
-)
-
 type OpenLDAPTerraformSuite struct {
 	suite.Suite
 	session          *session.Session
@@ -108,7 +103,7 @@ func (a *OpenLDAPTerraformSuite) SetupSuite() {
 
 	openLDAPConfig.Servers = []string{server}
 	if openLDAPConfig.Port == 0 {
-		openLDAPConfig.Port = openLDAPPort
+		openLDAPConfig.Port = authactions.AuthProviderPort
 	}
 
 	openLDAPConfig.ServiceAccountDistinguisedName = openLDAP.ServiceAccount.DistinguishedName
@@ -123,7 +118,7 @@ func (a *OpenLDAPTerraformSuite) SetupSuite() {
 	a.terratestConfig.PathToRepo = filepath.Join(a.terratestConfig.PathToRepo, authproviders.OpenLDAP)
 
 	_, a.keyPath = rancher2.SetKeyPath(keypath.RancherKeyPath, a.terratestConfig.PathToRepo, "")
-	require.NoError(a.T(), os.MkdirAll(a.keyPath, workspacePermissions), "Failed to create the terraform workspace directory "+a.keyPath)
+	require.NoError(a.T(), os.MkdirAll(a.keyPath, authactions.TerraformWorkspacePermissions), "Failed to create the terraform workspace directory "+a.keyPath)
 
 	a.terraformOptions = framework.Setup(a.T(), a.terraformConfig, a.terratestConfig, a.keyPath)
 }
