@@ -1,6 +1,9 @@
-name: Hosted/Tenant Rancher E2E
+name: Remotedialer Proxy Rancher E2E
 
 on:
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       rancher_version:
@@ -26,7 +29,7 @@ env:
   RUNWAY_CLEANUP_TEST_FUNC: "TestHACleanup"
 
 jobs:
-  hosted-tenant-e2e:
+  remotedialer-proxy-e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     environment: fw-hosted-tenant
@@ -82,11 +85,20 @@ jobs:
             AWS_ACCESS_KEY, ${{ secrets.AWS_ACCESS_KEY_ID }}
             AWS_SECRET_KEY, ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
+      - name: Set up SSH Keys
+        uses: ./.github/actions/setup-ssh-keys
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          ssh-private-key-name: ${{ secrets.SSH_PRIVATE_KEY_NAME }}
+          windows-ssh-private-key: ${{ secrets.WINDOWS_SSH_PRIVATE_KEY }}
+          windows-ssh-private-key-name: ${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}
+
       - name: Write tool-config.yml
         working-directory: runway
         env:
-          HOST_VERSION: ${{ github.event.inputs.rancher_version }}
-          TENANT_VERSION: ${{ github.event.inputs.rancher_version }}
+          # HOST_VERSION: ${{ github.event.inputs.rancher_version }}
+          HOST_VERSION: "2.15.2-717f00a-head"
+          STAGING_REGISTRY: ${{ secrets.STAGING_REGISTRY }}
           BOOTSTRAP_PASSWORD: ${{ secrets.RANCHER_BOOTSTRAP_PASSWORD }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
           AWS_PREFIX: ${{ secrets.AWS_PREFIX }}
@@ -107,19 +119,24 @@ jobs:
             mode: "auto"
             versions:
               - "${HOST_VERSION}"
-              - "${TENANT_VERSION}"
             distro: "auto"
-            webhook_image: ""
             bootstrap_password: "${BOOTSTRAP_PASSWORD}"
             auto_approve: true
+            preferred_image_registries:
+              - "${STAGING_REGISTRY}"
+              - "docker.io"
 
           deployment:
-            type: "hosted-tenant-k3s"
+            type: "ha-rke2"
 
           k3s:
-            preload_images: true
+            preload_images: false
 
-          total_rancher_instances: 2
+          rke2:
+            preload_images: false
+            server_count: 3
+
+          total_has: 1
 
           user:
             first_name: "automation"
@@ -144,7 +161,7 @@ jobs:
           yq eval '.' tool-config.yml > /dev/null
           echo "tool-config.yml written and parsed OK"
 
-      - name: Provision hosted/tenant Rancher
+      - name: Provision HA RKE2 Rancher
         working-directory: runway
         env:
           TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
@@ -158,65 +175,80 @@ jobs:
             | tee provision.log \
             | sed -E 's#(https://)[a-zA-Z0-9.-]+#\1[REDACTED]#g'
 
-      - name: Grab Rancher URLs
+      - name: Grab Rancher URL
         id: urls
         working-directory: runway
         run: |
           set -euo pipefail
 
           host_url="$(terraform -chdir=modules/aws output -json flat_outputs \
-            | jq -er '.hosted_1_rancher_url | rtrimstr(".")' || true)"
-          tenant_url="$(terraform -chdir=modules/aws output -json flat_outputs \
-            | jq -er '.hosted_2_rancher_url | rtrimstr(".")' || true)"
+            | jq -er '.ha_1_rancher_url' || true)"
 
-          if [ -z "$host_url" ] || [ "$host_url" = "null" ] || \
-             [ -z "$tenant_url" ] || [ "$tenant_url" = "null" ]; then
-            echo "::error::Could not read 'hosted_1_rancher_url' / 'hosted_2_rancher_url' from terraform output (modules/aws)."
+          if [ -z "$host_url" ] || [ "$host_url" = "null" ]; then
+            echo "::error::Could not read 'ha_1_rancher_url' from terraform output (modules/aws)."
             exit 1
           fi
 
           echo "::add-mask::$host_url"
-          echo "::add-mask::$tenant_url"
 
-          {
-            echo "host_url=${host_url}"
-            echo "tenant_url=${tenant_url}"
-          } >> "$GITHUB_OUTPUT"
+          echo "host_url=${host_url}" >> "$GITHUB_OUTPUT"
 
-      - name: Create admin tokens
+      - name: Create admin token
         id: tokens
         env:
           BOOTSTRAP_PASSWORD: ${{ secrets.RANCHER_BOOTSTRAP_PASSWORD }}
           HOST_URL: ${{ steps.urls.outputs.host_url }}
-          TENANT_URL: ${{ steps.urls.outputs.tenant_url }}
         run: |
           set -euo pipefail
 
           create_token() {
             local url="$1"
             local login_payload login_response login_token token_response token
+            local max_attempts=30
+            local delay=15
 
             echo "Creating admin token for Rancher endpoint: ${url}" >&2
 
-            login_payload="$(jq -n --arg pw "$BOOTSTRAP_PASSWORD"               '{username:"admin", password:$pw, responseType:"json"}')"
-            login_response="$(curl -skS --fail-with-body -X POST               "https://${url}/v3-public/localProviders/local?action=login"               -H 'Content-Type: application/json'               -d "$login_payload")"
+            login_payload="$(jq -n --arg pw "$BOOTSTRAP_PASSWORD" \
+              '{username:"admin", password:$pw, responseType:"json"}')"
 
-            if ! login_token="$(jq -er '.token // empty' <<< "$login_response")"; then
-              echo "::error::Rancher login returned an unexpected response for ${url}." >&2
-              echo "::error::Response was not valid Rancher JSON with a token." >&2
+            for ((attempt=1; attempt<=max_attempts; attempt++)); do
+              echo "Attempt $attempt/$max_attempts: Attempting login to Rancher..." >&2
+
+              login_response_raw="$(curl -skS -w "\n%{http_code}" -X POST \
+                "https://${url}/v3-public/localProviders/local?action=login" \
+                -H 'Content-Type: application/json' \
+                -d "$login_payload" || true)"
+
+              http_code="$(echo "$login_response_raw" | tail -n1)"
+              login_response="$(echo "$login_response_raw" | sed '$d')"
+
+              if [ "$http_code" -eq 200 ] || [ "$http_code" -eq 201 ]; then
+                if login_token="$(jq -er '.token // empty' <<< "$login_response" 2>/dev/null)"; then
+                  if [ -n "$login_token" ] && [ "$login_token" != "null" ]; then
+                    echo "Successfully logged in!" >&2
+                    break
+                  fi
+                fi
+              fi
+
+              echo "Rancher not ready yet (HTTP status: ${http_code}), waiting ${delay}s..." >&2
+              sleep "$delay"
+            done
+
+            if [ -z "${login_token:-}" ] || [ "$login_token" = "null" ]; then
+              echo "::error::Rancher failed to become ready or returned an unexpected response after $((max_attempts * delay)) seconds." >&2
               exit 1
             fi
 
-            if [ -z "$login_token" ] || [ "$login_token" = "null" ]; then
-              echo "::error::Rancher login response did not contain a token for ${url}." >&2
-              exit 1
-            fi
-
-            token_response="$(curl -skS --fail-with-body -X POST               "https://${url}/v3/token"               -H "Authorization: Bearer ${login_token}"               -H 'Content-Type: application/json'               -d '{"type":"token","description":"gha-hosted-tenant-rbac"}')"
+            token_response="$(curl -skS --fail-with-body -X POST \
+              "https://${url}/v3/token" \
+              -H "Authorization: Bearer ${login_token}" \
+              -H 'Content-Type: application/json' \
+              -d '{"type":"token","description":"gha-ha-rke2-remotedialer"}')"
 
             if ! token="$(jq -er '.token // empty' <<< "$token_response")"; then
               echo "::error::Rancher token creation returned an unexpected response for ${url}." >&2
-              echo "::error::Response was not valid Rancher JSON with a token." >&2
               exit 1
             fi
 
@@ -229,27 +261,78 @@ jobs:
           }
 
           host_token="$(create_token "$HOST_URL")"
-          tenant_token="$(create_token "$TENANT_URL")"
 
           echo "::add-mask::$host_token"
-          echo "::add-mask::$tenant_token"
 
           {
             echo "host_token<<TOKEN_EOF"
             echo "$host_token"
             echo "TOKEN_EOF"
-            echo "tenant_token<<TOKEN_EOF"
-            echo "$tenant_token"
-            echo "TOKEN_EOF"
           } >> "$GITHUB_OUTPUT"
+
+      - name: Verify Rancher Readiness
+        working-directory: runway
+        env:
+          HOST_URL: ${{ steps.urls.outputs.host_url }}
+          HOST_TOKEN: ${{ steps.tokens.outputs.host_token }}
+        run: |
+          set -euo pipefail
+          echo "Waiting for Rancher core components in cattle-system..."
+
+          deployments=("rancher-webhook" "system-upgrade-controller")
+
+          for dep in "${deployments[@]}"; do
+            echo "Checking deployment: ${dep}..."
+            ready=false
+            
+            for i in {1..50}; do
+              # Directly check if the deployment's 'Available' condition is True
+              available_status=$(kubectl get deployment "${dep}" -n cattle-system -o jsonpath='{.status.conditions[?(@.type=="Available")].status}' 2>/dev/null || echo "False")
+
+              if [ "$available_status" = "True" ]; then
+                echo "-> ${dep} is ready (Available condition is True)."
+                ready=true
+                break
+              fi
+
+              echo "-> ${dep} not ready yet (status: ${available_status}), retrying in 15s (${i}/50)..."
+              sleep 15
+            done
+
+            if [ "$ready" = false ]; then
+              echo "::error::Deployment '${dep}' failed to become ready in time."
+              exit 1
+            fi
+          done
+
+          echo "All core Rancher components are up and running!"
 
       - name: Write cattle-config.yaml
         id: cattle_config
         env:
           HOST_URL: ${{ steps.urls.outputs.host_url }}
-          TENANT_URL: ${{ steps.urls.outputs.tenant_url }}
           HOST_TOKEN: ${{ steps.tokens.outputs.host_token }}
-          TENANT_TOKEN: ${{ steps.tokens.outputs.tenant_token }}
+          PROVIDER_AMAZON: ${{ secrets.PROVIDER_AMAZON }}
+          NODE_PROVIDER_AMAZON: ${{ secrets.NODE_PROVIDER_AMAZON }}
+          DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
+          DOCKER_REGISTRY_USER: ${{ secrets.DOCKER_REGISTRY_USER }}
+          DOCKER_REGISTRY_PASSWORD: ${{ secrets.DOCKER_REGISTRY_PASSWORD }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          IAM_PROFILE: ${{ secrets.IAM_PROFILE }}
+          AWS_VPC: ${{ secrets.AWS_VPC }}
+          AWS_SUBNET_A: ${{ secrets.AWS_SUBNET_A }}
+          AWS_AMI: ${{ secrets.AWS_AMI }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          AWS_VOLUME_TYPE: ${{ secrets.AWS_VOLUME_TYPE }}
+          AWS_ZONE: ${{ vars.AWS_ZONE }}
+          AWS_ROOT_SIZE: ${{ secrets.AWS_ROOT_SIZE }}
+          AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
+          AWS_SECRET_KEY: ${{ secrets.AWS_SECRET_KEY }}
+          AWS_SECURITY_GROUP_ID: ${{ secrets.AWS_SECURITY_GROUP_ID }}
+          AWS_PEM_KEY_NAME: ${{ secrets.AWS_PEM_KEY_NAME }}
+          PATH_TO_REPO: ${{ github.workspace }}
+          SSH_PRIVATE_KEY_PATH: ${{ secrets.SSH_PRIVATE_KEY_PATH }}
+          AWS_TAG: ${{ secrets.AWS_TAG }}
         run: |
           set -euo pipefail
           cat > cattle-config.yaml <<EOF
@@ -258,15 +341,64 @@ jobs:
             adminToken: "${HOST_TOKEN}"
             cleanup: true
             insecure: true
-            clusterName: "imported-tenant-1"
 
-          tenantRanchers:
-            clients:
-              - host: "${TENANT_URL}"
-                adminToken: "${TENANT_TOKEN}"
-                cleanup: true
-                insecure: true
-                clusterName: "local"
+          clusterConfig:
+            kubernetesVersion: ""
+            provider: "${PROVIDER_AMAZON}"
+            nodeProvider: "${NODE_PROVIDER_AMAZON}"
+            hardened: false
+            psact: ""
+            pathToRepo: "${PATH_TO_REPO}"
+            registries:
+              rke2Registries:
+                mirrors:
+                  "docker.io":
+                    endpoint: ["https://${DOCKER_REGISTRY}"]
+                configs:
+                  "${DOCKER_REGISTRY}":
+                    "auth":
+                      username: "${DOCKER_REGISTRY_USER}"
+                      password: "${DOCKER_REGISTRY_PASSWORD}"
+
+          awsMachineConfigs:
+            region: "${AWS_REGION}"
+            awsMachineConfig:
+              - roles: ["etcd", "controlplane", "worker"]
+                iamInstanceProfile: "${IAM_PROFILE}"
+                ami: "${AWS_AMI}"
+                sshUser: "${SSH_USER}"
+                vpcId: "${AWS_VPC}"
+                subnetId: "${AWS_SUBNET_A}"
+                volumeType: "${AWS_VOLUME_TYPE}"
+                zone: "${AWS_ZONE}"
+                retries: "5"
+                rootSize: "${AWS_ROOT_SIZE}"
+
+          awsEC2Configs:
+            region: "${AWS_REGION}"
+            awsSecretAccessKey: "${AWS_SECRET_KEY}"
+            awsAccessKeyID: "${AWS_ACCESS_KEY}"
+            awsEC2Config:
+              - awsRegionAZ: ""
+                awsAMI: "${AWS_AMI}"
+                awsSecurityGroups: ["${AWS_SECURITY_GROUP_ID}"]
+                awsSSHKeyName: "${AWS_PEM_KEY_NAME}.pem"
+                awsCICDInstanceTag: "${AWS_TAG}"
+                awsIAMProfile: ""
+                awsUser: "${SSH_USER}"
+                volumeSize: ${AWS_ROOT_SIZE}
+                roles: ["etcd", "controlplane", "worker"]
+
+          awsCredentials:
+            secretKey: "${AWS_SECRET_KEY}"
+            accessKey: "${AWS_ACCESS_KEY}"
+            defaultRegion: "${AWS_REGION}"
+
+          sshPath:
+            sshPath: "${SSH_PRIVATE_KEY_PATH}"
+
+          logging:
+            level: "info"
           EOF
 
           yq eval '.' cattle-config.yaml > /dev/null
@@ -284,7 +416,8 @@ jobs:
         if: inputs.qase_test_run_id == ''
         run: |
           set -euo pipefail
-          version="${{ github.event.inputs.rancher_version }}"
+          # version="${{ github.event.inputs.rancher_version }}"
+          version="2.15.2-717f00a-head"
           base="${version%%-*}"
           echo "version=v${base}" >> "$GITHUB_OUTPUT"
 
@@ -293,7 +426,8 @@ jobs:
         if: inputs.qase_test_run_id == ''
         uses: ./.github/actions/create-qase-test-run
         with:
-          test_run_name: "Hosted/Tenant - v${{ github.event.inputs.rancher_version }}"
+          # test_run_name: "Remotedialer_Proxy - v${{ github.event.inputs.rancher_version }}"
+          test_run_name: "Remotedialer_Proxy - v2.15.2-717f00a-head"
           qase_project_id: ${{ secrets.QASE_PROJECT_ID }}
           qase_token: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           qase_milestone: ${{ steps.qase_milestone.outputs.version }}
@@ -314,7 +448,7 @@ jobs:
 
           echo "id=$run_id" >> "$GITHUB_OUTPUT"
 
-      - name: Run hosted-tenant suite and report to Qase
+      - name: Run RDP suite and report to Qase
         uses: ./.github/actions/run-test-suite
         env:
           CATTLE_TEST_CONFIG: ${{ steps.cattle_config.outputs.path }}
@@ -322,11 +456,11 @@ jobs:
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_PROJECT_ID: ${{ secrets.QASE_PROJECT_ID }}
         with:
-          package: "hostedtenant/rbac"
+          package: "remotedialerproxy"
           reporting: "true"
           tag: "validation"
-          test-suite: "^TestHostedRancherTestSuite$"
-          timeout: "30m"
+          test-suite: "^TestRemotedialerProxy$"
+          timeout: "60m"
 
       - name: Close Qase test run
         if: env.test_exit_code == '0'
@@ -342,15 +476,17 @@ jobs:
           echo "::warning::Qase run ${{ steps.qase-run.outputs.id }} left open due to test failure (exit code: ${test_exit_code:-unknown})."
 
       - name: Refetch AWS credentials for cleanup
-        if: always() && github.event.inputs.cleanup == 'true'
+        # if: always() && github.event.inputs.cleanup == 'true'
+        if: always()
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
         with:
           role-to-assume: ${{ secrets.IAM_ROLE }}
           aws-region: ${{ vars.AWS_REGION }}
 
       - name: Cleanup infrastructure
-        if: always() && github.event.inputs.cleanup == 'true'
-        working-directory: runway/modules/aws/modules/k3s-tenant-ha
+        # if: always() && github.event.inputs.cleanup == 'true'
+        if: always()
+        working-directory: runway/modules/aws/modules/rke2-ha
         env:
           TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
           TF_STATE_LOCK_TABLE: ${{ secrets.TF_STATE_LOCK_TABLE }}
@@ -367,6 +503,8 @@ jobs:
           TF_VAR_aws_subnet_a: "${{ secrets.AWS_SUBNET_A }}"
           TF_VAR_aws_subnet_b: "${{ secrets.AWS_SUBNET_B }}"
           TF_VAR_aws_subnet_c: "${{ secrets.AWS_SUBNET_C }}"
+          TF_VAR_aws_pem_key_name: "${{ secrets.AWS_PEM_KEY_NAME }}"
+          TF_VAR_common_tags: '{"Environment": "${{ secrets.AWS_TAG }}"}'
         run: |
           set -euo pipefail
           cat <<EOF > backend.tf
@@ -375,6 +513,7 @@ jobs:
           }
           EOF
 
+          echo "Initializing Terraform Backend"
           terraform init \
             -backend-config="bucket=${TF_STATE_BUCKET}" \
             -backend-config="key=${TF_STATE_KEY}" \
