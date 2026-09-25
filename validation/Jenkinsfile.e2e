@@ -522,6 +522,11 @@ insecure = true'''
             defaultValue: '',
             description: 'Schema file prefix for Qase operations, for example hostbusters or pit'
         )
+        string(
+            name: 'QASE_TEST_RUN_CUSTOM_NAME',
+            defaultValue: '',
+            description: 'Optional custom name for the created Qase test run (if Qase reporting is enabled). If disabled the run will be determined automatically by the downstream job.'
+        )
     }
 
     environment {
@@ -1069,6 +1074,7 @@ except Exception as e:
                             string(name: 'TEST_PACKAGE', value: params.TEST_PACKAGE),
                             string(name: 'GOTEST_TESTCASE', value: params.GOTEST_TESTCASE_PROVISIONING),
                             string(name: 'TAGS', value: params.PROVISIONING_TAGS),
+                            string(name: 'QASE_TEST_RUN_CUSTOM_NAME', value: params.QASE_TEST_RUN_CUSTOM_NAME),
                         ]
                         jobs['test-provisioning'] = { build job: params.INDIVIDUAL_JOB, parameters: goProvisioningParams }
                     }
@@ -1084,6 +1090,7 @@ except Exception as e:
                             string(name: 'TEST_PACKAGE', value: params.TEST_PACKAGE),
                             string(name: 'GOTEST_TESTCASE', value: "${params.GOTEST_TESTCASE_VALIDATION} -p 1"),
                             string(name: 'TAGS', value: params.VALIDATION_TEST_TAGS),
+                            string(name: 'QASE_TEST_RUN_CUSTOM_NAME', value: params.QASE_TEST_RUN_CUSTOM_NAME),
                         ]
                         jobs['test-validation'] = { build job: params.INDIVIDUAL_JOB, parameters: goValidationParams }
                     }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	upstream "github.com/qase-tms/qase-go/qase-api-client"
 	"github.com/sirupsen/logrus"
@@ -23,6 +24,7 @@ type Service struct {
 
 const (
 	schemas        = "schemas.yaml"
+	failStatus     = "failed"
 	requestLimit   = 100
 	runSourceID    = 16
 	recurringRunID = 1
@@ -251,4 +253,75 @@ func (q *Service) CompleteTestRun(projectIDEnvVar string, testRunID int32) error
 	}
 
 	return nil
+}
+
+// GetLatestTestRuns returns a number of the most recently started Test Runs whose title matches the
+// provided title, within a specified Qase Project and from a provided start time.
+// If limit is negative, all the found runs will be returned.
+func (q *Service) GetLatestTestRuns(project string, title string, from time.Time, limit int) ([]upstream.Run, error) {
+	if limit == 0 {
+		return []upstream.Run{}, nil
+	}
+
+	logrus.Debugf("Getting up to %d runs named \"%s\" in project %s from %s\n", limit, title, project, from)
+
+	runRequest := q.Client.RunsAPI.GetRuns(context.Background(), project)
+	runRequest = runRequest.Search(title)
+	runRequest = runRequest.FromStartTime(from.Unix())
+
+	runResponse, _, err := runRequest.Execute()
+	if err != nil {
+		return nil, err
+	}
+
+	runs := runResponse.Result.Entities
+
+	if limit < 0 || len(runs) <= limit {
+		return runs, nil
+	}
+
+	return runs[len(runs)-int(limit):], nil // Older runs appear first, so this cuts the previous.
+}
+
+// GetFailedTestsForRun returns the failed test titles results for a given Test Run.
+// This returns two identically lengthed slices, the first containing the case titles and the second containing qase-api-client.Result.
+func (q *Service) GetFailedTestsForRun(project string, runID int32) ([]string, []upstream.Result, error) {
+	logrus.Debugf("Getting failed results for run %d in project %s\n", runID, project)
+
+	resultRequest := q.Client.ResultsAPI.GetResults(context.Background(), project)
+	resultRequest = resultRequest.Run(fmt.Sprintf("%d", runID))
+	resultRequest = resultRequest.Status(failStatus)
+
+	resultResponse, _, err := resultRequest.Execute()
+	if err != nil {
+		return nil, nil, err
+	}
+	results := resultResponse.Result.Entities
+
+	caseTitles := make([]string, len(results))
+	for i, result := range results {
+		caseTitles[i], err = q.getCaseTitle(project, *result.CaseId)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	return caseTitles, results, nil
+}
+
+// getCaseTitle returns the title of a Test Case by its id within a specified Qase Project.
+func (q *Service) getCaseTitle(project string, caseID int64) (string, error) {
+	logrus.Debugf("Getting case titles for test case %d in project %s\n", caseID, project)
+
+	caseRequest := q.Client.CasesAPI.GetCase(context.Background(), project, int32(caseID))
+	resp, _, err := caseRequest.Execute()
+	if err != nil {
+		return "", err
+	}
+
+	if resp.Result == nil || resp.Result.Title == nil {
+		return "", fmt.Errorf("test case %d has no title in project %s", caseID, project)
+	}
+
+	return *resp.Result.Title, nil
 }

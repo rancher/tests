@@ -94,6 +94,11 @@ pipeline {
             defaultValue: '',
             description: 'Schema file prefix for Qase operations, for example hostbusters or pit'
         )
+        string(
+            name: 'QASE_TEST_RUN_CUSTOM_NAME',
+            defaultValue: '',
+            description: 'Optional custom name for the created Qase test run (if Qase reporting is enabled). If disabled the run will be determined automatically by this job.'
+        )
         text(
             name: 'ENV_VARIABLE',
             defaultValue: '',
@@ -304,13 +309,18 @@ pipeline {
                         if (params.ENV_VARIABLE?.trim()) {
                             envLines += params.ENV_VARIABLE.trim()
                         }
-                        def isPitJob = env.JOB_NAME.contains('go-pit')
-                        if (isPitJob) {
+
+                        def testRunName = params.QASE_TEST_RUN_CUSTOM_NAME.trim()
+                        if (env.JOB_NAME.contains('go-pit')) {
                             envLines += "QASE_PROJECT_ID=RANCHERINT"
-                            def testRunName = "${params.TAGS} ${env.RANCHER_HOSTNAME} Test Run"
-                            envLines += "TEST_RUN_NAME=${testRunName}"
                             envLines += "QASE_TEST_RUN_COMPLETE=true"
+                            if (!testRunName?.trim()) {
+                                def timestamp = new Date().format("yyyy-MM-dd HH:mm:ss")
+                                testRunName = "Custom PIT Test Run - ${timestamp}"
+                            }
                         }
+                        envLines += "TEST_RUN_NAME=${testRunName}"
+
                         writeFile file: '.go_test_env', text: envLines.join('\n') + '\n'
 
                         // ── Start image capturer ──────────────────────

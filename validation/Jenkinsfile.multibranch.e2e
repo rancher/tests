@@ -38,6 +38,28 @@ pipeline {
             defaultValue: 'recurringdaily',
             description: 'Base hostname prefix — version suffix is appended automatically'
         )
+        text(
+            name: 'RUN_MATRIX',
+            defaultValue: "",
+            description: '''Line-based matrix of entries to trigger in parallel, one per line, with three
+pipe-separated (|) fields:
+
+    imageTag | validationTags | rke2Version
+
+For example:
+
+    v2.15-head | pit.weekly | ${RKE2_VERSION}
+    v2.14-head | pit.daily  | ${RKE2_VERSION}
+    v2.13-head | pit.daily  | v1.34.9+rke2r1
+
+Where:
+  - imageTag:        Rancher image tag to test (e.g. "v2.15-head" or "head")
+  - validationTags:  validation suite to run for that tag (e.g. "pit.daily", "pit.weekly")
+  - rke2Version:     RKE2 version to deploy for that tag (${RKE2_VERSION} expands to the RKE2_VERSION param)
+
+Blank lines are ignored. When left empty, VALIDATION_TEST_TAGS is applied uniformly
+across RANCHER_IMAGE_TAGS using RKE2_VERSION.'''
+        )
 
         // ── Repository parameters ────────────────────────────────
         string(
@@ -391,63 +413,80 @@ insecure = true'''
             defaultValue: '',
             description: 'Schema file prefix for Qase operations, for example hostbusters or pit'
         )
+        string(
+            name: 'QASE_TEST_RUN_CUSTOM_NAME',
+            defaultValue: '',
+            description: 'Optional custom name for the created Qase test run (if Qase reporting is enabled). If disabled the run will be determined automatically by the downstream job.'
+        )
     }
 
     stages {
         stage('Trigger Per-Version Jobs') {
             steps {
                 script {
-                    def isPitJob = env.JOB_NAME.contains('go-pit')
                     def recurringJob = params.RECURRING_JOB
                     def individualJob = params.INDIVIDUAL_JOB
-                    def hostnamePrefix = params.HOSTNAME_PREFIX
-                    if (isPitJob) {
-                        recurringJob = 'go-pit-setup-job'
-                        individualJob = 'go-pit-validation-job'
-                        hostnamePrefix = "pit-${hostnamePrefix}"
-                        if (env.JOB_NAME.contains('weekly')) {
-                            hostnamePrefix = "pit-recurringweekly"
+                    def commonPrefix = params.HOSTNAME_PREFIX
+                    def qaseTestRunCustomName = params.QASE_TEST_RUN_CUSTOM_NAME
+
+                    // Determine the effective Qase test run name and hostname prefix. When QASE_TEST_RUN_CUSTOM_NAME
+                    // is empty, fall back to  some value depending on the job's triigger and environment.
+                    if (env.JOB_NAME.contains('go-pit')) {
+                        def cadence = env.JOB_NAME.contains('daily') ? 'daily' : env.JOB_NAME.contains('weekly') ? 'weekly' : 'custom'
+
+                        if (commonPrefix?.trim()) {
+                            commonPrefix = "pit-${cadence}"
+                        }
+
+                        if (!qaseTestRunCustomName?.trim()) {
+                            def triggeredByTimer = !currentBuild.getBuildCauses(
+                                'hudson.triggers.TimerTrigger$TimerTriggerCause'
+                            ).isEmpty()
+
+                            if (triggeredByTimer) {
+                                qaseTestRunCustomName = "PIT ${cadence} Test Run"
+                            } else {
+                                qaseTestRunCustomName = "PIT manual Test Run"
+                            }
+
+                            if (!(env.JENKINS_URL ?: '').contains('baler')) {
+                                qaseTestRunCustomName = "PIT staging Test Run"
+                            }
                         }
                     }
 
-                    // Matrix of (imageTag, validationTags) pairs to trigger per cadence.
-                    // Weekly run covers the latest version against the weekly suite plus
-                    // the two prior minor versions against the daily suite. Daily run only
-                    // covers the latest version against the daily suite.
-                    def runMatrixByJob = [
-                        'go-pit-weekly-multibranch-job': [
-                            [imageTag: 'v2.15-head', validationTags: 'pit.weekly', rke2Version: params.RKE2_VERSION],
-                            [imageTag: 'v2.14-head', validationTags: 'pit.daily', rke2Version: params.RKE2_VERSION],
-                            [imageTag: 'v2.13-head', validationTags: 'pit.daily', rke2Version: 'v1.34.9+rke2r1']
-                        ],
-                        'go-pit-daily-multibranch-job': [
-                            [imageTag: 'v2.15-head', validationTags: 'pit.daily', rke2Version: params.RKE2_VERSION]
-                        ]
-                    ]
-
                     // Fallback for manual "Build with Parameters" runs (or jobs not in the
                     // map above): apply VALIDATION_TEST_TAGS uniformly across RANCHER_IMAGE_TAGS.
-                    def defaultMatrix = params.RANCHER_IMAGE_TAGS.split(',').collect {
-                        [imageTag: it.trim(), validationTags: params.VALIDATION_TEST_TAGS, rke2Version: params.RKE2_VERSION]
+                    def runMatrix
+                    if (params.RUN_MATRIX?.trim()) {
+                        // Substitute ${RKE2_VERSION} (and any other envVars) into the raw text,
+                        // then parse each non-blank line into an
+                        // [imageTag, validationTags, rke2Version] map. Each line has three
+                        // pipe-separated fields: "imageTag | validationTags | rke2Version".
+                        def resolvedMatrix = infrastructure.parseAndSubstituteVars(
+                            content: params.RUN_MATRIX,
+                            envVars: ['RKE2_VERSION': params.RKE2_VERSION]
+                        )
+                        runMatrix = resolvedMatrix.readLines()
+                            .findAll { it?.trim() }
+                            .collect { line ->
+                                def fields = line.split('\\|', -1).collect { it.trim() }
+                                if (fields.size() != 3) {
+                                    error "Invalid RUN_MATRIX line (expected 'imageTag | validationTags | rke2Version'): ${line}"
+                                }
+                                [imageTag: fields[0], validationTags: fields[1], rke2Version: fields[2]]
+                            }
+                    } else {
+                        runMatrix = params.RANCHER_IMAGE_TAGS.split(',').collect {
+                            [imageTag: it.trim(), validationTags: params.VALIDATION_TEST_TAGS, rke2Version: params.RKE2_VERSION]
+                        }
                     }
 
-                    // Match against env.JOB_NAME via contains() since folder/multibranch
-                    // jobs prefix JOB_NAME with the folder path (e.g. "folder/go-pit-daily-multibranch-job").
-                    def matchedJobKey = runMatrixByJob.keySet().find { env.JOB_NAME.contains(it) }
-                    def runMatrix = matchedJobKey ? runMatrixByJob[matchedJobKey] : defaultMatrix
-
-                    // Map image tags to hostname suffixes for unique DNS entries
-                    def hostnameSuffixMap = [
-                        'v2.8-head': 'v28',
-                        'v2.9-head': 'v29',
-                        'v2.10-head': 'v210',
-                        'v2.11-head': 'v211',
-                        'v2.12-head': 'v212',
-                        'v2.13-head': 'v213',
-                        'v2.14-head': 'v214',
-                        'v2.15-head': 'v215',
-                        'head': 'main'
-                    ]
+                    // Map image tags to hostname suffixes for unique DNS entries.
+                    // e.g. 'v2.8-head' -> 'v28', 'v2.15-head' -> 'v215', 'head' -> 'head'.
+                    def hostnameSuffix = { tag ->
+                        tag == 'head' ? 'main' : tag.replaceAll('-head$', '').replaceAll('[^a-zA-Z0-9]', '')
+                    }
 
                     // Map image tags to Rancher chart versions
                     def tagChartMap = [
@@ -462,27 +501,24 @@ insecure = true'''
                         'head': 'latest'
                     ]
 
-                    // Tags that should use the prime chart repo
-                    def primeChartTags = ['head', 'v2.9-head']
-
                     def jobs = [:]
 
                     for (entry in runMatrix) {
                         def tag = entry.imageTag // capture for closure
                         def validationTags = entry.validationTags
-                        def suffix = hostnameSuffixMap.get(tag, tag.replaceAll('[^a-zA-Z0-9]', ''))
-                        def hostname = "${hostnamePrefix}${suffix}"
+                        def suffix = hostnameSuffix(tag)
+                        def hostnamePrefix = "${commonPrefix}${suffix}"
                         def rancherVersion = tagChartMap.get(tag, entry.imageTag)
 
                         // Render per-tag hostname into TERRAFORM_CONFIG and CATTLE_TEST_CONFIG
                         def tfConfig = infrastructure.parseAndSubstituteVars(
                             content: params.TERRAFORM_CONFIG,
-                            envVars: ['HOSTNAME_PREFIX': hostname]
+                            envVars: ['HOSTNAME_PREFIX': hostnamePrefix]
                         )
 
                         def cattleConfig = infrastructure.parseAndSubstituteVars(
                             content: params.CATTLE_TEST_CONFIG,
-                            envVars: ['HOSTNAME_PREFIX': hostname]
+                            envVars: ['HOSTNAME_PREFIX': hostnamePrefix]
                         )
 
                         def jobParams = [
@@ -491,7 +527,7 @@ insecure = true'''
                             string(name: 'TESTS_BRANCH', value: params.TESTS_BRANCH),
                             string(name: 'QA_INFRA_REPO_URL', value: params.QA_INFRA_REPO_URL),
                             string(name: 'QA_INFRA_BRANCH', value: params.QA_INFRA_BRANCH),
-                            string(name: 'HOSTNAME_PREFIX', value: hostname),
+                            string(name: 'HOSTNAME_PREFIX', value: hostnamePrefix),
                             string(name: 'RKE2_VERSION', value: entry.rke2Version),
                             string(name: 'RANCHER_VERSION', value: rancherVersion),
                             string(name: 'RANCHER_IMAGE_TAG', value: tag),
@@ -517,6 +553,7 @@ insecure = true'''
                             string(name: 'TEST_TIMEOUT', value: params.TEST_TIMEOUT),
                             string(name: 'QASE_REPORTER_SCRIPT', value: params.QASE_REPORTER_SCRIPT),
                             string(name: 'QASE_SCHEMA_PREFIX', value: params.QASE_SCHEMA_PREFIX),
+                            string(name: 'QASE_TEST_RUN_CUSTOM_NAME', value: qaseTestRunCustomName),
                         ]
 
                         jobs["${tag}-${validationTags}"] = {
@@ -526,7 +563,7 @@ insecure = true'''
 
                     def matrixSummary = runMatrix.collect { "${it.imageTag} (${it.validationTags})" }.join(', ')
                     currentBuild.displayName = "#${env.BUILD_NUMBER} - ${matrixSummary}"
-                    currentBuild.description = "Testing: ${matrixSummary} on ${hostnamePrefix}"
+                    currentBuild.description = "Testing: ${matrixSummary}"
 
                     parallel jobs
                 }
