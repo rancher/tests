@@ -29,20 +29,26 @@ const (
 	OpenLdap                             = "openldap"
 	ActiveDirectory                      = "activedirectory"
 	KeycloakSAML                         = "keycloak"
+	GenericSAML                          = "genericsaml"
 	OpenLdapPasswordSecretID             = "openldapconfig-serviceaccountpassword"
 	ActiveDirectoryPasswordSecretID      = "activedirectoryconfig-serviceaccountpassword"
 	KeycloakSAMLKeySecretID              = "keycloakconfig-spkey"
+	GenericSAMLKeySecretID               = "genericsamlconfig-spkey"
 	PrincipalTypeUser                    = "user"
 	PrincipalTypeGroup                   = "group"
 	AccessModeMissingRequiredError       = "accessMode=MissingRequired"
 	NotNullableError                     = "code=NotNullable"
 	AccessModeFieldError                 = "fieldName=accessMode"
+	InvalidOptionError                   = "code=InvalidOption"
+	NameIDFormatFieldError               = "fieldName=nameIDFormat"
+	SignatureMethodFieldError            = "fieldName=signatureMethod"
 	PermissionDeniedError                = "PermissionDenied"
 	LocalPrincipalPrefix                 = "local://"
 )
 
 var samlProviders = map[string]saml.Provider{
 	KeycloakSAML: saml.KeycloakSAML,
+	GenericSAML:  saml.GenericSAML,
 }
 
 type User struct {
@@ -223,6 +229,8 @@ func EnsureAuthProviderEnabled(client *rancher.Client, providerName string) erro
 		err = client.Auth.ActiveDirectory.Enable()
 	case KeycloakSAML:
 		err = enableKeycloakSAML(client)
+	case GenericSAML:
+		err = enableGenericSAML(client)
 	default:
 		return fmt.Errorf("unsupported auth provider: %s", providerName)
 	}
@@ -271,8 +279,13 @@ func GetSAMLUserPrincipalID(providerName string, user User) string {
 
 // UpdateAccessMode updates the auth config to the specified access mode with optional allowed principal IDs
 func UpdateAccessMode(client *rancher.Client, providerName, accessMode string, allowedPrincipalIDs []string) (*v3.AuthConfig, error) {
-	if providerName == KeycloakSAML {
-		if err := client.Auth.KeycloakSAML.UpdateAccessMode(accessMode, allowedPrincipalIDs); err != nil {
+	if providerName == KeycloakSAML || providerName == GenericSAML {
+		samlClient := client.Auth.KeycloakSAML
+		if providerName == GenericSAML {
+			samlClient = client.Auth.GenericSAML
+		}
+
+		if err := samlClient.UpdateAccessMode(accessMode, allowedPrincipalIDs); err != nil {
 			return nil, fmt.Errorf("failed to update auth config to access mode %s: %w", accessMode, err)
 		}
 
