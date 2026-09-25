@@ -37,6 +37,14 @@ const (
 )
 
 func remotedialerProxyValidations(t *testing.T, client *rancher.Client, cluster *steveV1.SteveAPIObject) {
+	// Log remotedialer proxy version
+	t.Run("remotedialer_proxy_version", func(t *testing.T) {
+		rdpVersionSetting, err := client.Management.Setting.ByID("remotedialer-proxy-version")
+		require.NoError(t, err)
+		require.NotEmpty(t, rdpVersionSetting.Value)
+		logrus.Infof("Remotedialer Proxy Version: %s", rdpVersionSetting.Value)
+	})
+
 	// Verify apiservice is available
 	t.Run("apiservice_available", func(t *testing.T) {
 		kubeConfigPtr, err := kubeconfig.GetKubeconfig(client, "local")

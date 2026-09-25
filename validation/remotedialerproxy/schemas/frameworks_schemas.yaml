@@ -23,3 +23,38 @@
     custom_field:
       "14": Validation
       "18": Frameworks
+  - title: remotedialer_proxy_version
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+  - title: apiservice_available
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+  - title: pods_running
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+  - title: downstream_kube_access
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+  - title: exec_validation
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+  - title: watch_validation
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+  - title: portforward_validation
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
