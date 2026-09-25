@@ -7,6 +7,13 @@ rancher:
 
 #Required for all tests except template
 clusterConfig:
+  agentEnvVars:
+  - name: HTTP_PROXY
+    value: ""
+  - name: HTTPS_PROXY
+    value: ""
+  - name: NO_PROXY
+    value: localhost,127.0.0.0/8,10.0.0.0/8,172.0.0.0/8,192.168.0.0/16,.svc,.cluster.local,cattle-system.svc,169.254.169.254
   machinePools:
   - machinePoolConfig:
       etcd: true
@@ -24,48 +31,48 @@ clusterConfig:
       worker: true
       quantity: 3
   kubernetesVersion: ""
-  cni: "calico"
-  provider: "aws"
+  cni: "<HB_CNI>"
+  provider: "<HB_PROVIDER>"
   nodeProvider: "ec2"
 
 #Required for all tests
 awsCredentials:
   secretKey: "<required>"
   accessKey: "<required>"
-  defaultRegion: "us-east-2" 
+  defaultRegion: "<HB_AWS_REGION>"
 
 #Required for tests that utilize node driver clusters
 awsMachineConfigs:
-  region: "us-east-2"
+  region: "<HB_AWS_REGION>"
   awsMachineConfig:
   - roles: ["etcd","controlplane","worker"]
-    ami: "<required>"
-    instanceType: "t3a.xlarge"
-    volumeType: "<required>"
-    rootSize: "<required>"
-    sshUser: "<required>"
-    vpcId: "<required>"
+    ami: "<HB_DEFAULT_AMI>"
+    instanceType: "<HB_AWS_INSTANCE_TYPE>"
+    volumeType: "<HB_AWS_VOLUME_TYPE>"
+    rootSize: "<HB_AWS_ROOT_SIZE>"
+    sshUser: "<HB_AWS_OS_USER>"
+    vpcId: "<HB_AWS_VPC_ID>"
     retries: "5"
-    zone: "a"
+    zone: "<HB_AWS_ZONE_LETTER>"
 
 #Required for tests that utilize custom clusters
 awsEC2Configs:
-  region: "us-east-2"
-  awsSecretAccessKey: "<required>"
-  awsAccessKeyID: "<required>"
+  region: "<HB_AWS_REGION>"
+  awsSecretAccessKey: "<AWS_SECRET_ACCESS_KEY>"
+  awsAccessKeyID: "<AWS_ACCESS_KEY_ID>"
   awsEC2Config:
-    - instanceType: "t3.xlarge"
-      awsRegionAZ: ""
-      awsSSHKeyName: "<required>"
-      awsAMI: "<required>"
-      awsSecurityGroups: ["<required>"]
-      awsSSHKeyName: "<required>"
-      awsCICDInstanceTag: "<required>"
-      awsIAMProfile: ""
-      awsUser: "<required>"
-      volumeSize: 100
+    - instanceType: "<HB_AWS_INSTANCE_TYPE>"
+      awsRegionAZ: "<HB_AWS_REGION><HB_AWS_ZONE_LETTER>"
+      awsSSHKeyName: "<HB_SSH_PRIVATE_KEY_NAME>.pem"
+      awsAMI: "<HB_DEFAULT_AMI>"
+      awsSecurityGroups: ["<HB_AWS_SECURITY_GROUPS_PRIME>"]
+      awsCICDInstanceTag: "<HB_AWS_CICD_INSTANCE_TAG>"
+      awsIAMProfile: "<HB_AWS_IAM_PROFILE>"
+      awsUser: "<HB_AWS_OS_USER>"
+      volumeSize: "<HB_AWS_ROOT_SIZE>"
       roles: ["etcd", "controlplane", "worker"]
 
 terraform:
   proxy:
     proxyBastion: "<required>"
+
