@@ -3,6 +3,7 @@
 package rbac
 
 import (
+	"os"
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
@@ -10,8 +11,11 @@ import (
 	"github.com/rancher/shepherd/extensions/users"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/session"
+	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/hostedtenant"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
+	"github.com/rancher/tests/actions/provisioning"
+	"github.com/rancher/tests/actions/qase"
 	"github.com/rancher/tests/actions/rbac"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
@@ -113,6 +117,12 @@ func (h *HostedRancherTestSuite) TestGlobalRoleInheritedClusterRoles() {
 	cluster, err := userClient.Management.Cluster.ByID(tenantClusterIDAsDownstreamCluster)
 	require.NoError(h.T(), err)
 	require.NotNil(h.T(), cluster, "User should be able to access tenant cluster")
+
+	cattleConfig := config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
+	cattleConfig, err = defaults.LoadPackageDefaults(cattleConfig, "")
+
+	params := provisioning.GetProvisioningSchemaParams(h.tenantClient, cattleConfig)
+	_ = qase.UpdateSchemaParameters("TestGlobalRoleInheritedClusterRoles", params)
 }
 
 func TestHostedRancherTestSuite(t *testing.T) {
