@@ -3,6 +3,7 @@
 package harvester
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	extensioncharts "github.com/rancher/shepherd/extensions/charts"
 	"github.com/rancher/shepherd/extensions/cloudcredentials"
+	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/pkg/config"
 	shepherdConfig "github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/session"
@@ -20,6 +22,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
 const (
@@ -69,8 +72,13 @@ func (h *HarvesterTestSuite) SetupSuite() {
 	require.NoError(h.T(), err)
 
 	if !uiExtensionObject.IsAlreadyInstalled {
-		latestUIPluginVersion, err := h.client.Catalog.GetLatestChartVersion(interoperablecharts.HarvesterExtensionName, interoperablecharts.HarvesterExtensionName)
-		require.NoError(h.T(), err)
+		var latestUIPluginVersion string
+		var chartVersionErr error
+		err = kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.FiveMinuteTimeout, true, func(context.Context) (bool, error) {
+			latestUIPluginVersion, chartVersionErr = h.client.Catalog.GetLatestChartVersion(interoperablecharts.HarvesterExtensionName, interoperablecharts.HarvesterExtensionName)
+			return chartVersionErr == nil, nil
+		})
+		require.NoError(h.T(), err, "harvester UI extension chart version never became available: %v", chartVersionErr)
 
 		extensionOptions := &uiplugins.ExtensionOptions{
 			ChartName:   interoperablecharts.HarvesterExtensionName,
