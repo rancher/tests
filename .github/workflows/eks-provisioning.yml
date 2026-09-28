@@ -108,7 +108,8 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
         with:
-          role-to-assume: ${{ secrets.IAM_ROLE }}
+          aws-access-key-id: ${{ secrets.PQA_AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.PQA_AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ vars.AWS_REGION }}
 
       - name: Get AWS credentials from Secrets Manager
@@ -117,6 +118,34 @@ jobs:
           secret-ids: |
             AWS_ACCESS_KEY, ${{ secrets.AWS_ACCESS_KEY_ID }}
             AWS_SECRET_KEY, ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            HB_AWS_MANAGED_PREFIX_LIST_ID_PRIME, HB_AWS_MANAGED_PREFIX_LIST_ID_PRIME
+            HB_SSH_PRIVATE_KEY, HB_SSH_PRIVATE_KEY
+            HB_SSH_PRIVATE_KEY_NAME, HB_SSH_PRIVATE_KEY_NAME
+            HB_WINDOWS_SSH_PRIVATE_KEY, HB_WINDOWS_SSH_PRIVATE_KEY
+            HB_WINDOWS_SSH_PRIVATE_KEY_NAME, HB_WINDOWS_SSH_PRIVATE_KEY_NAME
+            HB_PRIVATE_FULL_CHAIN, HB_PRIVATE_FULL_CHAIN
+            HB_PRIVATE_FULL_CHAIN_NAME, HB_PRIVATE_FULL_CHAIN_NAME
+            HB_PRIVATE_CERT_KEY, HB_PRIVATE_CERT_KEY
+            HB_PRIVATE_CERT_KEY_NAME, HB_PRIVATE_CERT_KEY_NAME
+            HB_CLOUD_SSH_KEY, HB_CLOUD_SSH_KEY
+            HB_CLOUD_SSH_KEY_NAME, HB_CLOUD_SSH_KEY_NAME
+            HB_AWS_REGION, HB_AWS_REGION
+            HB_TERRAFORM_VERSION, HB_TERRAFORM_VERSION
+            HB_RANCHER_ADMIN_PASSWORD, HB_RANCHER_ADMIN_PASSWORD
+            HB_RANCHER_VERSION_2_16_HEAD, HB_RANCHER_VERSION_2_16_HEAD
+            HB_RANCHER_VERSION_2_15_HEAD, HB_RANCHER_VERSION_2_15_HEAD
+            HB_RANCHER_VERSION_2_14_HEAD, HB_RANCHER_VERSION_2_14_HEAD
+            HB_RELEASED_RANCHER_CHART_VERSION_2_15, HB_RELEASED_RANCHER_CHART_VERSION_2_15
+            HB_RELEASED_RANCHER_CHART_VERSION_2_14, HB_RELEASED_RANCHER_CHART_VERSION_2_14
+            HB_QASE_RECURRING_TEST_RUN_ID_2_16, HB_QASE_RECURRING_TEST_RUN_ID_2_16
+            HB_QASE_RECURRING_TEST_RUN_ID_2_15, HB_QASE_RECURRING_TEST_RUN_ID_2_15
+            HB_QASE_RECURRING_TEST_RUN_ID_2_14, HB_QASE_RECURRING_TEST_RUN_ID_2_14
+            HB_QA_PRIVATE_REGISTRY_NAME, HB_QA_PRIVATE_REGISTRY_NAME
+            HB_QASE_AUTOMATION_TOKEN, HB_QASE_AUTOMATION_TOKEN
+            HB_QASE_PROJECT_ID, HB_QASE_PROJECT_ID
+            HB_RANCHER_HELM_CHART_URL, HB_RANCHER_HELM_CHART_URL
+            HB_STAGING_RANCHER_HELM_CHART_URL, HB_STAGING_RANCHER_HELM_CHART_URL
+            HB_SLACK_WEBHOOK_URL, HB_SLACK_WEBHOOK_URL
 
       - name: Fetch and Set DockerHub Credentials
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 #v3
@@ -128,9 +157,20 @@ jobs:
       - name: Masking Secrets
         uses: ./.github/actions/mask-secrets
         with:
-          secrets: |
-            ${{ env.DOCKERHUB_USERNAME }}
-            ${{ env.DOCKERHUB_PASSWORD }}
+          secret-env-vars: |
+            DOCKERHUB_USERNAME
+            DOCKERHUB_PASSWORD
+            HB_QASE_AUTOMATION_TOKEN
+            HB_SSH_PRIVATE_KEY
+            HB_SSH_PRIVATE_KEY_NAME
+            HB_WINDOWS_SSH_PRIVATE_KEY
+            HB_WINDOWS_SSH_PRIVATE_KEY_NAME
+            HB_PRIVATE_FULL_CHAIN
+            HB_PRIVATE_FULL_CHAIN_NAME
+            HB_PRIVATE_CERT_KEY
+            HB_PRIVATE_CERT_KEY_NAME
+            HB_CLOUD_SSH_KEY
+            HB_CLOUD_SSH_KEY_NAME
 
       - name: Whitelist Runner IP
         uses: ./.github/actions/whitelist-runner-ip
@@ -139,21 +179,22 @@ jobs:
           region: "${{ vars.EKS_REGION }}"
 
       - name: Set up SSH Keys
+        id: setup-ssh-keys
         uses: ./.github/actions/setup-ssh-keys
         with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-          ssh-private-key-name: ${{ secrets.SSH_PRIVATE_KEY_NAME }}
-          windows-ssh-private-key: ${{ secrets.WINDOWS_SSH_PRIVATE_KEY }}
-          windows-ssh-private-key-name: ${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}
+          ssh-private-key: ${{ fromJSON(env.HB_SSH_PRIVATE_KEY).value }}
+          ssh-private-key-name: ${{ fromJSON(env.HB_SSH_PRIVATE_KEY_NAME).value }}
+          windows-ssh-private-key: ${{ fromJSON(env.HB_WINDOWS_SSH_PRIVATE_KEY).value }}
+          windows-ssh-private-key-name: ${{ fromJSON(env.HB_WINDOWS_SSH_PRIVATE_KEY_NAME).value }}
 
       - name: Set up certificates
         id: setup-certs
         uses: ./.github/actions/setup-certs
         with:
-          private-full-chain: ${{ secrets.PRIVATE_FULL_CHAIN }}
-          private-full-chain-name: ${{ vars.PRIVATE_FULL_CHAIN_NAME }}
-          private-cert-key: ${{ secrets.PRIVATE_CERT_KEY }}
-          private-cert-key-name: ${{ vars.PRIVATE_CERT_KEY_NAME }}
+          private-full-chain: ${{ fromJSON(env.HB_PRIVATE_FULL_CHAIN).value }}
+          private-full-chain-name: ${{ fromJSON(env.HB_PRIVATE_FULL_CHAIN_NAME).value }}
+          private-cert-key: ${{ fromJSON(env.HB_PRIVATE_CERT_KEY).value }}
+          private-cert-key-name: ${{ fromJSON(env.HB_PRIVATE_CERT_KEY_NAME).value }}
 
       - name: Uniquify hostname prefix
         uses: ./.github/actions/uniquify-hostname
@@ -307,7 +348,7 @@ jobs:
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@5e8dbf3c6d9deaf4193ca7a8fb23f2ac83bb6c85 #v4
         with:
-          terraform_version: "${{ vars.TERRAFORM_VERSION }}"
+          terraform_version: "${{ fromJSON(env.HB_TERRAFORM_VERSION).value }}"
           terraform_wrapper: false
 
       - name: Creating Rancher server
@@ -316,10 +357,10 @@ jobs:
       - name: Run Provisioning tests
         env:
           QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
-          QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
+          QASE_AUTOMATION_TOKEN: ${{ fromJSON(env.HB_QASE_AUTOMATION_TOKEN).value }}
           QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_SCHEMA_PREFIX: hostbusters
-          QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
+          QASE_PROJECT_ID: ${{ fromJSON(env.HB_QASE_PROJECT_ID).value }}
         uses: ./.github/actions/run-hostbusters-provisioning
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
@@ -329,7 +370,8 @@ jobs:
         if: always()
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
         with:
-          role-to-assume: ${{ secrets.IAM_ROLE }}
+          aws-access-key-id: ${{ secrets.PQA_AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.PQA_AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ vars.AWS_REGION }}
 
       - name: Cloud Provider Infrastructure Cleanup
@@ -361,7 +403,7 @@ jobs:
         with:
           rancher-version: ${{ env.RANCHER_VERSION }}
           job-status: ${{ steps.set-job-status.outputs.job_status }}
-          slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          slack-webhook-url: ${{ fromJSON(env.HB_SLACK_WEBHOOK_URL).value }}
 
       - name: Save test result weekly summary
         if: always() && github.event_name == 'schedule'

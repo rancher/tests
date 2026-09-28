@@ -121,7 +121,8 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
         with:
-          role-to-assume: ${{ secrets.IAM_ROLE }}
+          aws-access-key-id: ${{ secrets.PQA_AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.PQA_AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ vars.AWS_REGION }}
 
       - name: Get AWS credentials from Secrets Manager
@@ -154,7 +155,6 @@ jobs:
             HB_RKE2_VERSION_2_14, HB_RKE2_VERSION_2_14
             HB_K3S_VERSION_2_14, HB_K3S_VERSION_2_14
             HB_K3S_VERSION_SUFFIX, HB_K3S_VERSION_SUFFIX
-            HB_QASE_RELEASE_TEST_RUN_ID_2_16, HB_QASE_RELEASE_TEST_RUN_ID_2_16
             HB_QASE_RECURRING_TEST_RUN_ID_2_16, HB_QASE_RECURRING_TEST_RUN_ID_2_16
             HB_QASE_RECURRING_TEST_RUN_ID_2_15, HB_QASE_RECURRING_TEST_RUN_ID_2_15
             HB_QASE_RECURRING_TEST_RUN_ID_2_14, HB_QASE_RECURRING_TEST_RUN_ID_2_14
@@ -175,13 +175,18 @@ jobs:
       - name: Masking Secrets
         uses: ./.github/actions/mask-secrets
         with:
-          secrets: |
-            ${{ env.DOCKERHUB_USERNAME }}
-            ${{ env.DOCKERHUB_PASSWORD }}
-            ${{ fromJSON(env.HB_SSH_PRIVATE_KEY).value }}
-            ${{ fromJSON(env.HB_WINDOWS_SSH_PRIVATE_KEY).value }}
-            ${{ fromJSON(env.HB_PRIVATE_FULL_CHAIN).value }}
-            ${{ fromJSON(env.HB_PRIVATE_CERT_KEY).value }}
+          secret-env-vars: |
+            DOCKERHUB_USERNAME
+            DOCKERHUB_PASSWORD
+            HB_QASE_AUTOMATION_TOKEN
+            HB_SSH_PRIVATE_KEY
+            HB_SSH_PRIVATE_KEY_NAME
+            HB_WINDOWS_SSH_PRIVATE_KEY
+            HB_WINDOWS_SSH_PRIVATE_KEY_NAME
+            HB_PRIVATE_FULL_CHAIN
+            HB_PRIVATE_FULL_CHAIN_NAME
+            HB_PRIVATE_CERT_KEY
+            HB_PRIVATE_CERT_KEY_NAME
 
       - name: Whitelist Runner IP
         id: whitelist-runner-ip
@@ -372,8 +377,9 @@ jobs:
         if: always()
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
         with:
-          role-to-assume: ${{ secrets.IAM_ROLE }}
-          aws-region: ${{ fromJSON(env.HB_AWS_REGION).value }}
+          aws-access-key-id: ${{ secrets.PQA_AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.PQA_AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION }}
 
       - name: AWS Custodian Infrastructure Cleanup
         if: always() && env.CLEANUP_ENABLED == 'true'
