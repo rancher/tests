@@ -89,7 +89,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.prepare-matrix.outputs.matrix) }}
-    name: ${{ vars[format('RANCHER_VERSION_2_{0}_HEAD', matrix.version)] }}
+    name: ${{ vars[format('HB_RANCHER_VERSION_2_{0}_HEAD', matrix.version)] }}
     runs-on: ubuntu-latest
     environment: head
     env:
@@ -134,6 +134,7 @@ jobs:
             HB_PRIVATE_CERT_KEY, HB_PRIVATE_CERT_KEY
             HB_PRIVATE_CERT_KEY_NAME, HB_PRIVATE_CERT_KEY_NAME
             HB_AWS_REGION, HB_AWS_REGION
+            HB_TERRAFORM_VERSION, HB_TERRAFORM_VERSION
             HB_RANCHER_ADMIN_PASSWORD, HB_RANCHER_ADMIN_PASSWORD
             HB_RANCHER_REPO, HB_RANCHER_REPO
             HB_RANCHER_VERSION_2_16_HEAD, HB_RANCHER_VERSION_2_16_HEAD

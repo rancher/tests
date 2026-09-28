@@ -89,7 +89,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.prepare-matrix.outputs.matrix) }}
-    name: ${{ vars[format('RANCHER_VERSION_2_{0}_HEAD', matrix.version)] }}
+    name: ${{ vars[format('HB_RANCHER_VERSION_2_{0}_HEAD', matrix.version)] }}
     runs-on: ubuntu-latest
     environment: upgrade-community-prime-head
     env:
@@ -178,7 +178,7 @@ jobs:
             ${{ 
               github.event.inputs.rancher_version || 
               inputs.rancher_version || 
-              vars[format('RANCHER_VERSION_2_{0}_HEAD', matrix.version)] 
+              vars[format('HB_RANCHER_VERSION_2_{0}_HEAD', matrix.version)] 
             }}
 
       - name: Set upgraded Rancher chart version
@@ -189,7 +189,7 @@ jobs:
             ${{ 
               github.event.inputs.rancher_chart_version || 
               inputs.rancher_chart_version || 
-              vars[format('RELEASED_RANCHER_CHART_VERSION_2_{0}', matrix.version)]
+              vars[format('HB_RELEASED_RANCHER_CHART_VERSION_2_{0}', matrix.version)]
             }}
 
       - name: Get Qase ID
@@ -248,14 +248,14 @@ jobs:
             standalone:
               bootstrapPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
               certManagerVersion: "${{ vars.CERT_MANAGER_VERSION }}"
-              chartVersion: "${{ vars[format('RELEASED_RANCHER_CHART_VERSION_2_{0}', matrix.version)] }}"
+              chartVersion: "${{ vars[format('HB_RELEASED_RANCHER_CHART_VERSION_2_{0}', matrix.version)] }}"
               k3sVersion: "${{ vars[format('K3S_VERSION_2_{0}', matrix.version)] }}${{ vars.K3S_VERSION_SUFFIX }}"
               osUser: "${{ vars.OS_USER }}"
               osGroup: "${{ vars.OS_GROUP }}"
               rancherChartRepository: "${{ secrets.RANCHER_HELM_CHART_URL }}"
               rancherHostname: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
               rancherImage: "${{ secrets.RANCHER_IMAGE }}"
-              rancherTagVersion: "${{ vars[format('RELEASED_RANCHER_VERSION_2_{0}', matrix.version)] }}"
+              rancherTagVersion: "${{ vars[format('HB_RELEASED_RANCHER_VERSION_2_{0}', matrix.version)] }}"
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
               repo: "${{ secrets.RANCHER_REPO }}"
