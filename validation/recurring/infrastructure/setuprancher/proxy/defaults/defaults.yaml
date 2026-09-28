@@ -47,7 +47,6 @@ terraform:
     rancherHostname: "<required>"
     bootstrapPassword: "<HB_RANCHER_ADMIN_PASSWORD>"
     certManagerVersion: "<HB_CERT_MANAGER_VERSION>"
-    certType: "<HB_CERT_TYPE>"
     osUser: "<HB_AWS_OS_USER>"
     osGroup: "<HB_AWS_OS_GROUP>"
     registryPassword: "<HB_DOCKERHUB_PASSWORD>"

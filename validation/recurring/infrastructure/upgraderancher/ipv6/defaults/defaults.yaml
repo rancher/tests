@@ -41,7 +41,6 @@ terraform:
   standalone:
     bootstrapPassword: "<HB_RANCHER_ADMIN_PASSWORD>"
     certManagerVersion: "<HB_CERT_MANAGER_VERSION>"
-    certType: "<HB_CERT_TYPE>"
     chartVersion: "<HB_RELEASED_RANCHER_CHART_VERSION>"
     osUser: "<HB_IPV6_OS_USER>"
     osGroup: "<HB_IPV6_OS_GROUP>"
