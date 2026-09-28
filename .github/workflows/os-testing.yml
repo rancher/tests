@@ -158,7 +158,8 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
         with:
-          role-to-assume: ${{ secrets.IAM_ROLE }}
+          aws-access-key-id: ${{ secrets.PQA_AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.PQA_AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ vars.AWS_REGION }}
 
       - name: Get AWS credentials from Secrets Manager
@@ -201,16 +202,10 @@ jobs:
       - name: Masking Secrets
         uses: ./.github/actions/mask-secrets
         with:
-          secrets: |
-            ${{ env.DOCKERHUB_USERNAME }}
-            ${{ env.DOCKERHUB_PASSWORD }}
-            ${{ env.HB_SSH_PRIVATE_KEY }}
-            ${{ env.HB_WINDOWS_SSH_PRIVATE_KEY }}
-            ${{ env.HB_PRIVATE_FULL_CHAIN }}
-            ${{ env.HB_PRIVATE_CERT_KEY }}
-            ${{ github.events.input.ami}}
-            ${{ github.events.input.os_user }}
-            ${{ github.events.input.os_group }}
+          secret-env-vars: |
+            DOCKERHUB_USERNAME
+            DOCKERHUB_PASSWORD
+            HB_QASE_AUTOMATION_TOKEN
 
       - name: Whitelist Runner IP
         id: whitelist-runner-ip
@@ -434,8 +429,9 @@ jobs:
         if: always()
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6
         with:
-          role-to-assume: ${{ secrets.IAM_ROLE }}
-          aws-region: ${{ fromJSON(env.HB_AWS_REGION).value }}
+          aws-access-key-id: ${{ secrets.PQA_AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.PQA_AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION }}
 
       - name: AWS Custodian Infrastructure Cleanup
         if: always() && github.event.inputs.environment_cleanup == 'true'
