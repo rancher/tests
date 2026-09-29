@@ -79,6 +79,32 @@ func VerifyProjectRoleTemplateBindingForUser(client *rancher.Client, username st
 	return userPrtbs, nil
 }
 
+// GetProjectRoleTemplateBindingForUser polls until a ProjectRoleTemplateBinding for the user on the project exists and returns it
+func GetProjectRoleTemplateBindingForUser(client *rancher.Client, project *v3.Project, userID string) (*v3.ProjectRoleTemplateBinding, error) {
+	projectName := fmt.Sprintf("%s:%s", project.Namespace, project.Name)
+	prtbNamespace := GetProjectRoleTemplateBindingNamespace(project)
+
+	var found *v3.ProjectRoleTemplateBinding
+	err := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, true, func(ctx context.Context) (bool, error) {
+		prtbList, listErr := client.WranglerContext.Mgmt.ProjectRoleTemplateBinding().List(prtbNamespace, metav1.ListOptions{})
+		if listErr != nil {
+			return false, nil
+		}
+		for i := range prtbList.Items {
+			if prtbList.Items[i].UserName == userID && prtbList.Items[i].ProjectName == projectName {
+				found = &prtbList.Items[i]
+				return true, nil
+			}
+		}
+		return false, nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("no ProjectRoleTemplateBinding for user %s on project %s: %w", userID, projectName, err)
+	}
+
+	return found, nil
+}
+
 // VerifyRoleRules checks if the expected role rules match the actual rules.
 func VerifyRoleRules(expected, actual map[string][]string) error {
 	for resource, expectedVerbs := range expected {
