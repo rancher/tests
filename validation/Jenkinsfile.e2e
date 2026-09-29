@@ -127,33 +127,33 @@ pipeline {
         )
         string(
             name: 'RANCHER_VERSION',
-            defaultValue: '2.15.0',
+            defaultValue: ">=0.0.0-0",
             description: 'Rancher version to deploy'
         )
         string(
             name: 'RANCHER_IMAGE_TAG',
-            defaultValue: 'v2.15-head',
+            defaultValue: 'latest',
             description: 'Rancher container image tag (head for dev builds, version tag for stable)'
         )
         string(
             name: 'RANCHER_CHART_REPO_URL',
-            defaultValue: 'https://releases.rancher.com/server-charts/latest',
+            defaultValue: 'https://charts.optimus.rancher.io/server-charts/latest',
             description: 'Rancher Helm chart repository URL'
         )
         string(
             name: 'PRIVATE_REGISTRY_URL',
             defaultValue: '',
-            description: 'Private registry URL (kept for forward compatibility; not wired in default ENV flow)'
+            description: 'Rancher image repository override (e.g. stgregistry.suse.com/rancher/rancher for Prime head/pre-release builds). Empty = use the chart default (docker.io/rancher/rancher). Only applied when ENABLE_PRIVATE_REGISTRY is true'
         )
         string(
             name: 'PRIVATE_REGISTRY_USERNAME',
             defaultValue: '',
-            description: 'Private registry username (kept for forward compatibility)'
+            description: 'Username for PRIVATE_REGISTRY_URL, when it requires authentication'
         )
         password(
             name: 'PRIVATE_REGISTRY_PASSWORD',
             defaultValue: '',
-            description: 'Private registry password (kept for forward compatibility)'
+            description: 'Password for PRIVATE_REGISTRY_URL, when it requires authentication'
         )
         password(
             name: 'RANCHER_BOOTSTRAP_PASSWORD',
@@ -168,7 +168,7 @@ pipeline {
         booleanParam(
             name: 'ENABLE_PRIVATE_REGISTRY',
             defaultValue: false,
-            description: 'Enable private registry configuration (kept for forward compatibility; not wired in default ENV flow)'
+            description: 'Enable PRIVATE_REGISTRY_URL/USERNAME/PASSWORD to override the Rancher image repository (e.g. for Prime head/pre-release builds)'
         )
         booleanParam(
             name: 'DEPLOY_RANCHER',
@@ -628,7 +628,7 @@ insecure = true'''
                             // This can be overridden by explicitly setting RANCHER_CHART_REPO_URL.
                             def defaultChartRepoUrl = 'https://releases.rancher.com/server-charts/alpha'
                             if (params.RANCHER_VERSION && params.RANCHER_VERSION ==~ /v?\d+\.\d+\.\d+/) {
-                                defaultChartRepoUrl = 'https://releases.rancher.com/server-charts/latest'
+                                defaultChartRepoUrl = 'https://charts.optimus.rancher.io/server-charts/latest'
                             }
                             def rancherChartRepoUrlParam = params.RANCHER_CHART_REPO_URL ?: defaultChartRepoUrl
 
