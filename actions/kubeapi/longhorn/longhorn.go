@@ -16,6 +16,7 @@ import (
 	"github.com/rancher/tests/actions/charts"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
@@ -107,6 +108,19 @@ func CreateS3LonghornBackupTarget(client *rancher.Client, clusterID string, awsC
 	client.Session.RegisterCleanupFunc(func() error {
 		return backupTargetController.Client().Delete(context.Background(), charts.LonghornNamespace, targetName, metav1.DeleteOptions{})
 	})
+
+	var createdTarget longhorn.BackupTarget
+	err = wait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.FiveMinuteTimeout, true, func(context.Context) (bool, error) {
+		err := backupTargetController.Client().Get(context.Background(), charts.LonghornNamespace, targetName, &createdTarget, metav1.GetOptions{})
+		if err != nil {
+			return false, nil
+		}
+
+		return createdTarget.Status.Available, nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("backup target %s did not become available: %w; conditions: %+v", targetName, err, createdTarget.Status.Conditions)
+	}
 
 	return backupTarget, nil
 }
@@ -247,6 +261,29 @@ func RestoreLonghornVolumeFromBackup(client *rancher.Client, clusterID string, b
 	volumeSize, err := strconv.Atoi(backup.Status.VolumeSize)
 	if err != nil {
 		return fmt.Errorf("Failed to convert volume size %s to integer: %w", backup.Status.VolumeSize, err)
+	}
+
+	backupVolumeController, err := wrangler.ControllerFactory.ForKind(schema.GroupVersionKind{
+		Group:   longhorn.SchemeGroupVersion.Group,
+		Version: longhorn.SchemeGroupVersion.Version,
+		Kind:    longhornTypes.LonghornKindBackupVolume,
+	})
+	if err != nil {
+		return err
+	}
+
+	backupVolumeSelector := labels.SelectorFromSet(longhornTypes.GetBackupVolumeWithBackupTargetLabels(backup.Status.BackupTargetName, backup.Status.VolumeName))
+	err = wait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.FiveMinuteTimeout, true, func(context.Context) (bool, error) {
+		var backupVolumes longhorn.BackupVolumeList
+		err := backupVolumeController.Client().List(context.Background(), backup.Namespace, &backupVolumes, metav1.ListOptions{LabelSelector: backupVolumeSelector.String()})
+		if err != nil {
+			return false, nil
+		}
+
+		return len(backupVolumes.Items) > 0, nil
+	})
+	if err != nil {
+		return fmt.Errorf("backup volume for volume %s on backup target %s was not created: %w", backup.Status.VolumeName, backup.Status.BackupTargetName, err)
 	}
 
 	// This volume is based on the docs: https://longhorn.io/docs/1.11.1/snapshots-and-backups/backup-and-restore/restore-from-a-backup/
