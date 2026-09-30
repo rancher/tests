@@ -48,6 +48,10 @@ linters:
       - third_party$
       - builtin$
       - examples$
+    rules:
+      - path: ^scripts/
+        linters:
+          - forbidigo
 issues:
   max-issues-per-linter: 0
 formatters:
