@@ -9,35 +9,32 @@ awsCredentials:
   secretKey: "<required>"
 
 terraform:
-  awsCredentials:
-    awsAccessKey: "<required>"
-    awsSecretKey: "<required>"
-  cni: "<HB_CNI>"
-  defaultClusterRoleForProjectMembers: "true"
-  enableNetworkPolicy: false
-  provider: "<HB_PROVIDER_AMAZON>"
-  privateKeyPath: "<HB_TFP_SSH_PRIVATE_KEY_PATH>"
+  provider: "<HB_PROVIDER>"
   resourcePrefix: "<HB_HOSTNAME_PREFIX>"
-  privateRegistries:
-    url: "<HB_PRIVATE_REGISTRY_URL>"
+  localCluster: "rke2"
+  cni: "<HB_CNI>"
+  privateKeyPath: "<HB_TFP_SSH_PRIVATE_KEY_PATH>"
+  awsCredentials:
+    awsAccessKey: "<AWS_ACCESS_KEY_ID>"
+    awsSecretKey: "<AWS_SECRET_ACCESS_KEY>"
   awsConfig:
-    ami: "<HB_AIRGAP_AWS_AMI>"
+    ami: "<HB_DEFAULT_AMI>"
     awsKeyName: "<HB_SSH_PRIVATE_KEY_NAME>"
     awsInstanceType: "<HB_RANCHER_AWS_INSTANCE_TYPE>"
     awsVolumeType: "<HB_AWS_VOLUME_TYPE>"
     region: "<HB_AWS_REGION>"
     awsSecurityGroups: ["<HB_AIRGAP_AWS_SECURITY_GROUPS>"]
-    awsSecurityGroupNames: ["<HB_AIRGAP_AWS_SECURITY_GROUP_NAMES>"]
+    awsSecurityGroupNames: ["<HB_AIRGAP_AWS_SECURITY_GROUP_NAMES_PRIME>"]
     awsSubnetID: "<HB_AIRGAP_AWS_SUBNET_ID>"
     awsVpcID: "<HB_AIRGAP_AWS_VPC_ID>"
     awsVpcIP: "<HB_AIRGAP_AWS_VPC_IP>"
     awsZoneLetter: "<HB_AWS_ZONE_LETTER>"
     awsRootSize: "<HB_AWS_ROOT_SIZE>"
-    registryRootSize: "<HB_AWS_ROOT_SIZE_REGISTRY>"
+    registryRootSize: "<HB_AWS_REGISTRY_ROOT_SIZE>"
     awsRoute53Zone: "<HB_AWS_ROUTE_53_ZONE>"
-    awsUser: "<HB_AWS_USER>"
+    awsUser: "<HB_AWS_OS_USER>"
     sshConnectionType: "<HB_SSH_CONNECTION_TYPE>"
-    timeout: "<HB_TIMEOUT>"
+    timeout: "<HB_SSH_TIMEOUT>"
     ipAddressType: "<HB_IP_ADDRESS_TYPE>"
     loadBalancerType: "<HB_LOAD_BALANCER_TYPE>"
     targetType: "<HB_TARGET_TYPE>"
@@ -45,23 +42,31 @@ terraform:
     bootstrapPassword: "<HB_RANCHER_ADMIN_PASSWORD>"
     certManagerVersion: "<HB_CERT_MANAGER_VERSION>"
     chartVersion: "<HB_RELEASED_RANCHER_CHART_VERSION>"
-    certType: "<HB_CERT_TYPE>"
-    osUser: "<HB_OS_USER>"
-    osGroup: "<HB_OS_GROUP>"
-    rancherChartRepository: "<HB_RANCHER_HELM_CHART_URL>"
+    osUser: "<HB_AWS_OS_USER>"
+    osGroup: "<HB_AWS_OS_GROUP>"
+    rancherChartRepository: "<HB_PRIME_HELM_CHART_URL>"
     rancherHostname: "<HB_RANCHER_HOSTNAME>"
-    rancherImage: "<HB_RANCHER_IMAGE>"
+    rancherImage: "<HB_PRIME_RANCHER_IMAGE>"
     rancherTagVersion: "<HB_RELEASED_RANCHER_VERSION>"
     registryUsername: "<HB_PRIVATE_REGISTRY_USERNAME>"
     registryPassword: "<HB_PRIVATE_REGISTRY_PASSWORD>"
-    repo: "<HB_RANCHER_REPO>"
+    repo: "<HB_PRIME_RANCHER_REPO>"
     rke2Version: "<HB_RKE2_VERSION>"
-    upgradedRancherChartRepository: "<HB_UPGRADED_RANCHER_HELM_CHART_URL>"
-    upgradedRancherChartVersion: "<HB_UPGRADED_RANCHER_CHART_VERSION>"
-    upgradedRancherRepo: "<HB_UPGRADED_RANCHER_REPO>"
-    upgradedRancherImage: "<HB_UPGRADED_RANCHER_IMAGE>"
-    upgradedRancherTagVersion: "<HB_UPGRADED_RANCHER_VERSION>"
+    upgradedRancherChartRepository: "<HB_UPGRADED_PRIME_HEAD_HELM_CHART_URL>"
+    upgradedRancherChartVersion: "<required>"
+    upgradedRancherImage: "<HB_UPGRADED_PRIME_HEAD_RANCHER_IMAGE>"
+    upgradedRancherRepo: "<HB_UPGRADED_PRIME_HEAD_REPO>"
+    upgradedRancherTagVersion: "<required>"
   standaloneRegistry:
-    assetsPath: "<HB_ASSETS_PATH>"
+    assetsPath: "<HB_RELEASED_PRIME_ASSETS_PATH>"
     registryName: "<HB_HOSTNAME_PREFIX>"
-    upgradedAssetsPath: "<HB_UPGRADED_ASSETS_PATH>"
+    upgradedAssetsPath: "<HB_ASSETS_PATH_PRIME>"
+    useAuthGlobalRegistry: false
+
+terratest:
+  pathToRepo: "<HB_PATH_TO_TFP_REPO>"
+  standaloneLogging: false
+  tfLogging: false
+
+logging:
+  level: "<HB_LOGGING_LEVEL>"

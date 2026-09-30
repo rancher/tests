@@ -7,6 +7,9 @@ rancher:
 
 #Required for all tests
 clusterConfig:
+  bastionUser: "<HB_AWS_OS_USER>"
+  bastionWindowsUser: "<HB_AWS_WINDOWS_USER>"
+  cni: "<HB_CNI>"
   machinePools:
   - machinePoolConfig:
       etcd: true
@@ -24,9 +27,10 @@ clusterConfig:
       worker: true
       quantity: 3
   kubernetesVersion: ""
-  cni: "calico"
-  provider: "aws"
-  nodeProvider: "ec2"
+  cni: "<HB_CNI>"
+  provider: "<HB_PROVIDER>"
+  nodeProvider: "<HB_NODE_PROVIDER>"
+  pathToRepo: "<HB_PATH_TO_TESTS_REPO>"
   registries:
     rke2Registries:
       configs:
@@ -34,32 +38,35 @@ clusterConfig:
 
 #Required for tests that utilize custom clusters
 awsEC2Configs:
-  region: "us-east-2"
-  awsSecretAccessKey: "<required>"
-  awsAccessKeyID: "<required>"
+  region: "<HB_AWS_REGION>"
+  awsSecretAccessKey: "<AWS_SECRET_ACCESS_KEY>"
+  awsAccessKeyID: "<AWS_ACCESS_KEY_ID>"
   awsEC2Config:
     - instanceType: "t3.xlarge"
-      awsRegionAZ: ""
-      awsSSHKeyName: "<required>"
-      awsAMI: "<required>"
-      awsSecurityGroups: ["<required>"]
-      awsSSHKeyName: "<required>"
-      awsCICDInstanceTag: "<required>"
-      awsIAMProfile: ""
-      awsUser: "<required>"
-      volumeSize: 100
+      awsSSHKeyName: "<HB_SSH_PRIVATE_KEY_NAME>"
+      awsAMI: "<HB_DEFAULT_AMI>"
+      awsSecurityGroups: ["<HB_AIRGAP_AWS_SECURITY_GROUPS>"]
+      awsSubnetID: "<HB_AIRGAP_AWS_SUBNET_ID>"
+      awsCICDInstanceTag: "<HB_AWS_CICD_INSTANCE_TAG>"
+      awsIAMProfile: "<HB_AWS_IAM_PROFILE>"
+      awsUser: "<HB_AWS_OS_USER>"
+      volumeSize: "<HB_AWS_ROOT_SIZE>"
       roles: ["etcd", "controlplane", "worker"]
-    - instanceType: "t2.2xlarge"
-      awsRegionAZ: ""
-      awsSSHKeyName: "<required>"
-      awsAMI: "<required>"
-      awsSecurityGroups: ["<required>"]
-      awsSSHKeyName: "<required>"
-      awsCICDInstanceTag: "<required>"
-      awsIAMProfile: ""
-      awsUser: "<required>"
-      volumeSize: 100
+    - instanceType: "<HB_AWS_WINDOWS_INSTANCE_TYPE>"
+      awsSSHKeyName: "<HB_WINDOWS_SSH_PRIVATE_KEY_NAME>"
+      awsAMI: "<HB_WINDOWS_2022_AMI>"
+      awsSecurityGroups: ["<HB_AIRGAP_AWS_SECURITY_GROUPS>"]
+      awsCICDInstanceTag: "<HB_AWS_CICD_INSTANCE_TAG>"
+      awsIAMProfile: "<HB_AWS_IAM_PROFILE>"
+      awsUser: "<HB_AWS_WINDOWS_USER>"
+      volumeSize: "<HB_AWS_ROOT_SIZE>"
       roles: ["windows"]
 
 terraform:
   airgapBastion: "<required>"
+
+logging:
+  level: "<HB_LOGGING_LEVEL>"
+
+sshPath:
+  sshPath: "<HB_TESTS_SSH_DIR_PATH>"

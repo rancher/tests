@@ -17,7 +17,7 @@ replace (
 
 	github.com/rancher/tests/actions => ./actions
 	github.com/rancher/tests/interoperability => ./interoperability
-	github.com/rancher/tfp-automation => github.com/rancher/tfp-automation v0.0.0-20260923202911-66f965f186f9
+	github.com/rancher/tfp-automation => github.com/rancher/tfp-automation v0.0.0-20260929210548-eb089558bee3
 
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc => go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.53.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp => go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.53.0
@@ -85,9 +85,9 @@ require (
 	github.com/rancher/rancher v0.0.0-20260527150105-ae26ccbc3fed
 	github.com/rancher/rancher/pkg/apis v0.0.0
 	github.com/rancher/shepherd v0.0.0-20260921153737-8e09fea6aaaf
-	github.com/rancher/tests/actions v0.0.0-20260807182903-06ab37e1aeac
+	github.com/rancher/tests/actions v0.0.0-20260925190906-17002625ce49
 	github.com/rancher/tests/interoperability v0.0.0
-	github.com/rancher/tfp-automation v0.0.0-20260923202911-66f965f186f9
+	github.com/rancher/tfp-automation v0.0.0-20260929210548-eb089558bee3
 	github.com/rancher/wrangler/v3 v3.7.0
 	github.com/sirupsen/logrus v1.10.2
 	github.com/stretchr/testify v1.12.1
