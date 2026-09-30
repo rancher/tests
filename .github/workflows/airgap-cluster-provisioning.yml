@@ -217,8 +217,9 @@ jobs:
           value: |
             ${{ 
               github.event.inputs.rancher_version || 
-              inputs.rancher_version || 
-              vars[format('HB_RANCHER_VERSION_2_{0}_HEAD', matrix.version)] 
+              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version) || 
+              (github.event_name == 'schedule' && fromJSON(env[format('HB_RANCHER_VERSION_2_{0}_HEAD', matrix.version)]).value) ||
+              (github.event.inputs.run_all_versions == 'true' && fromJSON(env[format('HB_RANCHER_VERSION_2_{0}_HEAD', matrix.version)]).value)
             }}
 
       - name: Set Rancher chart version
@@ -228,8 +229,9 @@ jobs:
           value: |
             ${{ 
               github.event.inputs.rancher_chart_version || 
-              inputs.rancher_chart_version || 
-              vars[format('HB_RELEASED_RANCHER_CHART_VERSION_2_{0}', matrix.version)]
+              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version) || 
+              (github.event_name == 'schedule' && fromJSON(env[format('HB_RELEASED_RANCHER_CHART_VERSION_2_{0}', matrix.version)]).value) ||
+              (github.event.inputs.run_all_versions == 'true' && fromJSON(env[format('HB_RELEASED_RANCHER_CHART_VERSION_2_{0}', matrix.version)]).value)
             }}
 
       - name: Get Qase ID

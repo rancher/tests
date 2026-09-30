@@ -35,21 +35,15 @@ permissions:
 
 env:
   CLOUD_PROVIDER_VERSION: "6.50.0"
-  LOCAL_CLUSTER_TYPE: >-
-    ${{ 
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.local_cluster_type) || 
-      (github.event_name == 'schedule' && 'rke2') || 'rke2' 
-    }}
+  LOCAL_CLUSTER_TYPE: "${{ github.event_name == 'workflow_dispatch' && github.event.inputs.local_cluster_type }}"
   LOCALS_PROVIDER_VERSION: "${{ vars.LOCALS_PROVIDER_VERSION }}"
   REPORTING_ENABLED: >-
         ${{
-          github.event_name == 'schedule' ||
           github.actor == 'github-actions[bot]' ||
           (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
         }}
   CLEANUP_ENABLED: >-
     ${{
-      github.event_name == 'schedule' ||
       github.actor == 'github-actions[bot]' ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.environment_cleanup == 'true' )
     }}
@@ -175,8 +169,7 @@ jobs:
           value: |
             ${{ 
               github.event.inputs.rancher_version || 
-              inputs.rancher_version || 
-              (fromJSON(env[format('HB_RANCHER_VERSION_2_{0}_HEAD', matrix.version)]).value) 
+              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version)
             }}
 
       - name: Set upgraded Rancher chart version
@@ -186,8 +179,7 @@ jobs:
           value: |
             ${{ 
               github.event.inputs.rancher_chart_version || 
-              inputs.rancher_chart_version ||
-              (fromJSON(env[format('HB_RELEASED_RANCHER_CHART_VERSION_2_{0}', matrix.version)]).value)
+              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version)
             }}
 
       - name: Set upgraded Rancher repo
