@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 cd /root/go/src/github.com/rancher/qa-infra-automation/
 REPO_ROOT=$(pwd)
@@ -12,5 +13,9 @@ REPO_ROOT=$(pwd)
 tofu -chdir="tofu/rancher/cluster" init
 tofu -chdir="tofu/rancher/cluster" apply -auto-approve -var-file=$TFVARS_FILE -var-file=$GENERATED_TFVARS_FILE
 DOWNSTREAM_CLUSTER_NAME=$(tofu -chdir="tofu/rancher/cluster" output -raw name)
+if [[ -z "$DOWNSTREAM_CLUSTER_NAME" ]]; then
+    echo "Error: tofu/rancher/cluster has no name output; the downstream cluster was not created."
+    exit 1
+fi
 
 yq e ".rancher.clusterName = \"$DOWNSTREAM_CLUSTER_NAME\"" -i "$CONFIG_FILE"

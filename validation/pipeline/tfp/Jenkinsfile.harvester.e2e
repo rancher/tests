@@ -7,6 +7,18 @@ def decodeSeederKubeconfig() {
     }
 }
 
+@NonCPS
+def goDurationToMinutes(String duration) {
+    def matcher = duration =~ /^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/
+    if (!duration || !matcher.matches()) {
+        return null
+    }
+    def hours = matcher.group(1) ? matcher.group(1).toInteger() : 0
+    def minutes = matcher.group(2) ? matcher.group(2).toInteger() : 0
+    def seconds = matcher.group(3) ? matcher.group(3).toInteger() : 0
+    return hours * 60 + minutes + (seconds > 0 ? 1 : 0)
+}
+
 node("harvester-vpn-1") {
     def rootPath = "/root/go/src/github.com/rancher/infra-repo/"
     def homePath = "/home/ubuntu/jenkins/workspace/rancher_qa/caleb-harvester-e2e2"
@@ -24,6 +36,7 @@ node("harvester-vpn-1") {
     def golangTestContainer = "${job_name}${env.BUILD_NUMBER}_test2"
     def testContainer = "${job_name}${env.BUILD_NUMBER}_test"
     def imageName = "infra-validation"
+    def validationImage = ""
     def commitID = ""
     def testResultsOut = "results.xml"
     def testResultsJSON = "results.json"
@@ -71,8 +84,36 @@ node("harvester-vpn-1") {
                 string(credentialsId: 'SEEDER_KUBECONFIG', variable: 'SEEDER_KUBECONFIG')
             ]) {
                 withEnv(paramsMap) {
+                    def goTestTimeoutMinutes = goDurationToMinutes(goTestTimeout)
+                    if (goTestTimeoutMinutes == null) {
+                        error "TIMEOUT must be a Go duration such as 45m, 4h or 2h30m, got '${goTestTimeout}'"
+                    }
                     try {
                     timeout(time: 5, unit: 'HOURS') {
+                    stage("Parallel Checkout") {
+                        parallel(
+                            "Checkout Infrastructure Repo": {
+                                dir("infra-repo") {
+                                    checkout([
+                                        $class: 'GitSCM',
+                                        branches: [[name: "*/${infraBranch}"]],
+                                        extensions: scm.extensions + [[$class: 'CleanCheckout']],
+                                        userRemoteConfigs: infraRepo
+                                    ])
+                                }
+                            },
+                            "Checkout Test Repo": {
+                                dir("test-repo") {
+                                    checkout([
+                                        $class: 'GitSCM',
+                                        branches: [[name: "*/${testBranch}"]],
+                                        extensions: scm.extensions + [[$class: 'CleanCheckout']],
+                                        userRemoteConfigs: testRepo
+                                    ])
+                                }
+                            }
+                        )
+                    }
                     stage('Setup Harvester Environment') {
                         dir(".ssh") {
                             def decoded = new String(env.AWS_SSH_PEM_KEY.decodeBase64())
@@ -81,186 +122,10 @@ node("harvester-vpn-1") {
                             writeFile file: AWS_RSA_KEY_NAME, text: decodedRsa
                         }
                         writeFile file: 'seeder.yaml', text: decodeSeederKubeconfig()
-                        // need to inject sshKey into clusterConfig object of nodeManifest so that passwordless SSH works
                         writeFile file: 'node_manifest.yaml', text: NODE_MANIFEST
-                        // will only work for single node clusters unless we write a loop
-                        sh "yq e '.spec.nodes.[0].inventoryReference.name = \"${HARVESTER_INVENTORY_NODE}\"' -i node_manifest.yaml"
-                        sh "yq e '.metadata.name = \"${HARVESTER_CLUSTER_NAME}\"' -i node_manifest.yaml"
-                        sh "yq e '.spec.version = \"${HARVESTER_VERSION}\"' -i node_manifest.yaml"
-                        if (env.HARVESTER_IMAGE_URL?.trim()) {
-                            sh "yq e '.spec.imageURL = \"${env.HARVESTER_IMAGE_URL}\"' -i node_manifest.yaml"
-                        }
-                        sh "yq e '.spec.imageURL' node_manifest.yaml"
-                        sh "chmod 600 .ssh/${AWS_SSH_KEY_NAME}"
-                        def publicSSHKey = sh(script: "ssh-keygen -f .ssh/${AWS_SSH_KEY_NAME} -y", returnStdout: true).trim()
-                        sh "yq e '.spec.clusterConfig.sshKeys.[0] = \"${publicSSHKey}\"' -i node_manifest.yaml"
+                        sh "bash test-repo/validation/pipeline/scripts/setup_harvester.sh"
 
-                        // install harvester onto baremetal using seeder
-                        sh '''#!/bin/bash
-                        set -euo pipefail
-
-                        EXISTING_HARVESTER_IP="${EXISTING_HARVESTER_IP:-}"
-                        SSH_OPTS="-n -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=15"
-                        harvester_node_ip="$EXISTING_HARVESTER_IP"
-                        harvester_vip=""
-
-                        wait_for() {
-                            local desc="$1" timeout="$2" interval="$3"
-                            local deadline=$(( SECONDS + timeout ))
-                            shift 3
-                            until "$@"; do
-                                if (( SECONDS >= deadline )); then
-                                    echo "FATAL: timed out after ${timeout}s waiting for: ${desc}" >&2
-                                    return 1
-                                fi
-                                sleep "$interval"
-                            done
-                            echo "ready: ${desc}"
-                        }
-
-                        get_pxe_address() {
-                            harvester_node_ip=$(kubectl get -n tink-system "inventories/$HARVESTER_INVENTORY_NODE" -o jsonpath='{.status.pxeBootConfig.address}')
-                            [[ -n "$harvester_node_ip" ]]
-                        }
-
-                        fetch_harvester_kubeconfig() {
-                            timeout 60 ssh $SSH_OPTS -i ".ssh/$AWS_SSH_KEY_NAME" "rancher@$harvester_node_ip" \
-                                'sudo cat /etc/rancher/rke2/rke2.yaml' > harvester.yaml 2>/dev/null
-                            [[ -s harvester.yaml ]]
-                        }
-
-                        get_vip() {
-                            harvester_vip=$(timeout 60 ssh $SSH_OPTS -i ".ssh/$AWS_SSH_KEY_NAME" "rancher@$harvester_node_ip" \
-                                'ip a | grep "/32" | grep -v flannel | head -1' | awk '{print $2}' | cut -d / -f 1)
-                            [[ -n "$harvester_vip" ]]
-                        }
-
-                        if [[ -z "$EXISTING_HARVESTER_IP" ]]; then
-                            export KUBECONFIG=seeder.yaml
-
-                            if [[ ! -s "$KUBECONFIG" ]]; then
-                                echo "FATAL: seeder.yaml is empty; the SEEDER_KUBECONFIG credential is missing or not valid base64" >&2
-                                exit 1
-                            fi
-                            if ! kubectl get namespace tink-system >/dev/null 2>&1; then
-                                echo "FATAL: cannot reach the seeder cluster; check that the SEEDER_KUBECONFIG credential is a valid base64-encoded kubeconfig" >&2
-                                kubectl get namespace tink-system || true
-                                exit 1
-                            fi
-                            if ! kubectl get -n tink-system "inventories/$HARVESTER_INVENTORY_NODE" >/dev/null 2>&1; then
-                                echo "FATAL: inventory $HARVESTER_INVENTORY_NODE does not exist in tink-system" >&2
-                                exit 1
-                            fi
-                            echo "seeder reachable; inventory $HARVESTER_INVENTORY_NODE present"
-
-                            if kubectl get "clusters.metal/$HARVESTER_CLUSTER_NAME" -n tink-system >/dev/null 2>&1; then
-                                echo "deleting existing clusters.metal/$HARVESTER_CLUSTER_NAME (blocks on the seeder finalizer while the node is wiped)"
-                            fi
-                            kubectl delete "clusters.metal/$HARVESTER_CLUSTER_NAME" -n tink-system --ignore-not-found --wait=true --timeout=30m
-                            sleep 180
-
-                            kubectl apply -f node_manifest.yaml
-                            wait_for "PXE address on inventories/$HARVESTER_INVENTORY_NODE" 1800 10 get_pxe_address
-                        fi
-
-                        echo "harvester IP address"
-                        echo "$harvester_node_ip"
-
-                        if [[ -z "$EXISTING_HARVESTER_IP" ]]; then
-                            sleep 230
-                        fi
-
-                        wait_for "ping response from $harvester_node_ip" 1800 5 ping -c1 -W2 "$harvester_node_ip"
-
-                        if [[ -z "$EXISTING_HARVESTER_IP" ]]; then
-                            sleep 660
-                        fi
-
-                        wait_for "harvester kubeconfig over ssh from $harvester_node_ip" 2400 15 fetch_harvester_kubeconfig
-
-                        if [[ -z "$EXISTING_HARVESTER_IP" ]]; then
-                            sleep 480
-                        fi
-
-                        wait_for "harvester VIP on $harvester_node_ip" 900 5 get_vip
-
-                        echo "$harvester_vip" > host.txt
-
-                        sed -i "s#server: https://127.0.0.1:6443#server: https://$harvester_vip:6443#g" harvester.yaml
-
-                        export KUBECONFIG=harvester.yaml
-
-                        kubectl get pods -A
-                        kubectl rollout status deployment -n harvester-system harvester --timeout=20m
-                        kubectl rollout status deployment -n cattle-system rancher --timeout=20m
-                        '''
-
-                        config = config.replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY)
-                        config = config.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID)
                         writeFile file: filename, text: config
-                        def RANCHER_PASSWORD = sh (
-                            script: "yq '.rancher.adminPassword' ${filename}",
-                            returnStdout: true
-                        ).trim()
-
-                        // extract user info from harvester using v3 user api
-                        sh '''#!/bin/bash
-                        set -euo pipefail
-
-                        EXISTING_HARVESTER_IP="${EXISTING_HARVESTER_IP:-}"
-                        harvester_vip=$(cat host.txt)
-
-                        deadline=$(( SECONDS + 1800 ))
-                        until [[ "$(curl -s -L --insecure --max-time 30 -o /dev/null -w "%{http_code}" "https://$harvester_vip/v3-public/localproviders/local")" == "200" ]]; do
-                            if (( SECONDS >= deadline )); then
-                                echo "FATAL: https://$harvester_vip did not become healthy within 1800s" >&2
-                                exit 1
-                            fi
-                            sleep 5
-                        done
-                        echo "https://$harvester_vip is healthy"
-
-                        if [[ -z "$EXISTING_HARVESTER_IP" ]]; then
-                            sleep 120
-                        fi
-
-                        token=""
-                        usedPassword=""
-                        for pw in "password1234" "admin"; do
-                            loginBody=$(jq -n --arg p "$pw" '{username:"admin", password:$p, responseType:"json"}')
-                            jsonOutput=$(curl -s --insecure --max-time 60 -d "$loginBody" "https://$harvester_vip/v3-public/localproviders/local?action=login" || true)
-                            token=$(echo "$jsonOutput" | jq -cr .token 2>/dev/null || echo "")
-                            if [[ -n "$token" && "$token" != "null" ]]; then
-                                usedPassword="$pw"
-                                break
-                            fi
-                        done
-
-                        if [[ -z "$token" || "$token" == "null" ]]; then
-                            echo "FATAL: could not log in to harvester at https://$harvester_vip with any known credential" >&2
-                            echo "$jsonOutput" >&2
-                            exit 1
-                        fi
-                        echo "authenticated to harvester at https://$harvester_vip"
-
-                        jsonOutput=$(curl --insecure --max-time 60 -X GET  -H "Accept: application/json" -H "Content-Type: application/json"  -H "Authorization: Bearer $token"  "https://$harvester_vip/v3/users?me=true")
-
-                        userID=$(echo "$jsonOutput" | jq -cr .data[0].id)
-                        if [[ -z "$userID" || "$userID" == "null" ]]; then
-                            echo "FATAL: could not resolve admin user id from harvester v3 api" >&2
-                            echo "$jsonOutput" >&2
-                            exit 1
-                        fi
-
-                        jsonData=$( jq -n --arg password "password1234" '{"newPassword" : $password}')
-
-                        if [[ "$usedPassword" != "password1234" ]]; then
-                            echo "rotating harvester admin password to the expected value"
-                            curl --insecure --max-time 60 --user "$token" -X POST -H 'Accept: application/json' -H 'Content-Type: application/json' -d "$jsonData" "https://$harvester_vip/v3/users/$userID?action=setpassword"
-                        fi
-
-                        echo "$token" > login.token
-                        '''
 
                         def TOKEN = sh (
                             script: "cat login.token",
@@ -287,30 +152,6 @@ node("harvester-vpn-1") {
 
                         config = sh(script: "cat ${filename}", returnStdout: true).trim()
                     }
-                    stage("Parallel Checkout") {
-                        parallel(
-                            "Checkout Infrastructure Repo": {
-                                dir("infra-repo") {
-                                    checkout([
-                                        $class: 'GitSCM',
-                                        branches: [[name: "*/${infraBranch}"]],
-                                        extensions: scm.extensions + [[$class: 'CleanCheckout']],
-                                        userRemoteConfigs: infraRepo
-                                    ])
-                                }
-                            },
-                            "Checkout Test Repo": {
-                                dir("test-repo") {
-                                    checkout([
-                                        $class: 'GitSCM',
-                                        branches: [[name: "*/${testBranch}"]],
-                                        extensions: scm.extensions + [[$class: 'CleanCheckout']],
-                                        userRemoteConfigs: testRepo
-                                    ])
-                                }
-                            }
-                        )
-                    }
                     stage('Configure and Build Infra') {
                         dir("test-repo/.ssh") {
                             def decoded = new String(env.AWS_SSH_PEM_KEY.decodeBase64())
@@ -327,24 +168,20 @@ node("harvester-vpn-1") {
                             script: "cd test-repo && git rev-parse --short HEAD",
                             returnStdout: true
                         ).trim()
+                        validationImage = "${imageName}${TOFU_VERSION}${HARVESTER_PROVIDER_VERSION}${RANCHER2_PROVIDER_VERSION}-${commitIDTest}:${commitIDInfra}-${env.BUILD_NUMBER}"
 
-                        def exists = sh(
-                            script: "docker images -q ${imageName}${TOFU_VERSION}${HARVESTER_PROVIDER_VERSION}${RANCHER2_PROVIDER_VERSION}-${commitIDTest}:${commitIDInfra}",
-                            returnStdout: true
-                        ).trim()
-
-                        dir("infra-repo/ansible/k3s/default/roles/k3s_install/tasks/") {
-                            writeFile file: "k3s_registry.yaml", text: env.INTERNAL_MIRROR_CONFIG
+                        if (env.INTERNAL_MIRROR_CONFIG?.trim()) {
+                            dir("infra-repo/ansible/roles/k3s_install/files/") {
+                                writeFile file: "k3s_registry.yaml", text: env.INTERNAL_MIRROR_CONFIG
+                            }
                         }
-                        if (!exists) {
-                            sh "ln -s test-repo tests"
-                            sh "ln -s infra-repo qa-infra-automation"
-                            sh "docker build . -f ./tests/validation/Dockerfile.e2e \
-                                        --build-arg TOFU_VERSION=${TOFU_VERSION} \
-                                        --build-arg HARVESTER_PROVIDER_VERSION=${HARVESTER_PROVIDER_VERSION} \
-                                        --build-arg RANCHER2_PROVIDER_VERSION=${RANCHER2_PROVIDER_VERSION} \
-                                        -t ${imageName}${TOFU_VERSION}${HARVESTER_PROVIDER_VERSION}${RANCHER2_PROVIDER_VERSION}-${commitIDTest}:${commitIDInfra}"
-                        }
+                        sh "ln -sfn test-repo tests"
+                        sh "ln -sfn infra-repo qa-infra-automation"
+                        sh "docker build . -f ./tests/validation/Dockerfile.e2e \
+                                    --build-arg TOFU_VERSION=${TOFU_VERSION} \
+                                    --build-arg HARVESTER_PROVIDER_VERSION=${HARVESTER_PROVIDER_VERSION} \
+                                    --build-arg RANCHER2_PROVIDER_VERSION=${RANCHER2_PROVIDER_VERSION} \
+                                    -t ${validationImage}"
 
                         sh "docker volume create --name ${validationVolume}"
                         
@@ -378,7 +215,7 @@ node("harvester-vpn-1") {
                         sh returnStdout: true, script: "cp config.yml infra-repo/config.yml"
                         
                         sh """
-                        docker run -v ${validationVolume}:/root --name ${testContainer}-dev -t ${imageName}${TOFU_VERSION}${HARVESTER_PROVIDER_VERSION}${RANCHER2_PROVIDER_VERSION}-${commitIDTest}:${commitIDInfra} sh -c '
+                        docker run -v ${validationVolume}:/root --name ${testContainer}-dev -t ${validationImage} sh -c '
                         find . -name "*.tf" -exec sed -i "/harvester[[:space:]]*=[[:space:]]*{/,/}/ {
                           s|source *= *\\"harvester/harvester\\"|source = \\"terraform.local/harvester/harvester\\"|g
                           s|version *= *\\"[^\\"]*\\"|version = \\"0.0.0-dev\\"|g
@@ -405,7 +242,7 @@ node("harvester-vpn-1") {
                             docker stop ${testContainer}-dev || true
                             docker rm ${testContainer}-dev || true
 
-                            docker run -v ${validationVolume}:/root --name ${testContainer} -t ${imageName}${TOFU_VERSION}${HARVESTER_PROVIDER_VERSION}${RANCHER2_PROVIDER_VERSION}-${commitIDTest}:${commitIDInfra} sh -c '
+                            docker run -v ${validationVolume}:/root --name ${testContainer} -t ${validationImage} sh -c '
                                 eval \$(ssh-agent -s)
 
                                 echo "running setup"
@@ -416,9 +253,6 @@ node("harvester-vpn-1") {
                                     s|version *= *\\"[^\\"]*\\"|version = \\"0.0.0-dev\\"|g
                                     }" {} +
                                     cd tests
-                                    echo "running dev setup of provider"
-                                    rm -rf provider-clone
-                                    ./scripts/tofu/dev-provider.sh "harvester" "https://github.com/slickwarren/terraform-provider-harvester.git" "cwarren/test-harvester-changes"
                                 else
                                     echo "${HARVESTER_PROVIDER_VERSION}"
                                 fi
@@ -435,7 +269,7 @@ node("harvester-vpn-1") {
                             } catch (err) {
                                 sh "docker stop ${testContainer} || true; docker rm ${testContainer}"
                                 echo "Test run had failures. Collecting results... ${err}"
-                                error err
+                                throw err
                             }
                             // cleanup the container
                             sh "docker stop ${testContainer} || true; docker rm ${testContainer}"
@@ -449,12 +283,12 @@ node("harvester-vpn-1") {
                                 // this test also writes harvesterCloudCredentials to the config
                                 hvstStatus = sh( script: """
                             sleep 60
-                            docker run -v ${validationVolume}:/root --name hvst${golangTestContainer} -t  ${imageName}${TOFU_VERSION}${HARVESTER_PROVIDER_VERSION}${RANCHER2_PROVIDER_VERSION}-${commitIDTest}:${commitIDInfra} sh -c "cp "\$CATTLE_TEST_CONFIG" . && export CATTLE_TEST_CONFIG="\$CATTLE_TEST_CONFIG" && /root/go/bin/gotestsum --format standard-verbose --packages=${golangHvstDir} --junitfile ${testResultsOut} -- -tags=harvester ${hvstTestCase} -timeout=${goTestTimeout} -v "
+                            docker run -v ${validationVolume}:/root --name hvst${golangTestContainer} -t  ${validationImage} sh -c "cp "\$CATTLE_TEST_CONFIG" . && export CATTLE_TEST_CONFIG="\$CATTLE_TEST_CONFIG" && /root/go/bin/gotestsum --format standard-verbose --packages=${golangHvstDir} --junitfile ${testResultsOut} -- -tags=harvester ${hvstTestCase} -timeout=${goTestTimeout} -v "
                             """, returnStatus: true)
                             } catch (err) {
                                 echo "${err} Unable to connect harvester to new rancher setup. Aborting"
                                 sh "docker stop hvst${golangTestContainer} || true; docker rm hvst${golangTestContainer}"
-                                error err
+                                throw err
                             }
                             sh "docker cp hvst${golangTestContainer}:\$CATTLE_TEST_CONFIG ${filename}"
                             if (hvstStatus != 0) {
@@ -510,23 +344,31 @@ echo "}\\n" >> "${tfvars_filepath}"
                                 docker cp ${tfvars_filepath} hvst${golangTestContainer}:/root/go/src/github.com/rancher/qa-infra-automation/tofu/rancher/cluster/
                                 docker stop hvst${golangTestContainer} || true; docker rm hvst${golangTestContainer}
 
-                                docker run -v ${validationVolume}:/root --name ${testContainer}-ds -t ${imageName}${TOFU_VERSION}${HARVESTER_PROVIDER_VERSION}${RANCHER2_PROVIDER_VERSION}-${commitIDTest}:${commitIDInfra} sh -c '
+                                docker run -v ${validationVolume}:/root --name ${testContainer}-ds -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_REGION=us-east-2 -t ${validationImage} sh -c '
                                 . /root/playbook.env
                                 . ./validation/pipeline/scripts/register_downstream_cluster.sh
                                 '
 
                                 docker cp ${testContainer}-ds:/root/go/src/github.com/rancher/qa-infra-automation/config.yml mid_config.yml
+                                """
+                                    def downstreamClusterName = sh(script: "yq '.rancher.clusterName' mid_config.yml", returnStdout: true).trim()
+                                    if (!downstreamClusterName || downstreamClusterName == "null") {
+                                        error "rancher.clusterName is empty after registering the downstream cluster; tofu apply in tofu/rancher/cluster likely failed"
+                                    }
+                                    sh """
                                 yq e '.upgradeInput.clusters[0].name = .rancher.clusterName' -i mid_config.yml
-                            
+
                                 docker stop ${testContainer}-ds || true; docker rm ${testContainer}-ds
                                 sleep 90
                                 """
                             }
                         }
                     }
+                    }
                     stage('Run Validation Tests') {
                         
                         if (env.CONNECT_HARVESTER_AND_RANCHER == "true") {
+                            timeout(time: goTestTimeoutMinutes + 60, unit: 'MINUTES') {
                             try {
                                 
                                 jobs = [:]
@@ -563,21 +405,24 @@ echo "}\\n" >> "${tfvars_filepath}"
                                     returnStdout: true
                                 ).trim()
 
-                                def r_pass = sh (
-                                    script: "yq '.rancher.adminPassword' mid_config.yml",
-                                    returnStdout: true
-                                ).trim()
-
                                 def h_host = sh (
                                     script: "yq '.harvester.host' mid_config.yml",
                                     returnStdout: true
                                 ).trim()
-                                currentBuild.description = "https://${r_host}<br>${r_pass}<br>https://${h_host}"
+                                currentBuild.description = "https://${r_host}<br>https://${h_host}"
+                            }
                             }
                         }
                     }
-                    }
                     } finally {
+                    stage('Cleanup docker resources') {
+                        sh "docker rm -f ${testContainer}-dev ${testContainer} hvst${golangTestContainer} ${testContainer}-ds || true"
+                        sh "docker volume rm -f ${validationVolume} || true"
+                        if (validationImage) {
+                            sh "docker rmi ${validationImage} || true"
+                        }
+                        sh "docker builder prune -f --filter until=24h || true"
+                    }
                     stage('Cleanup terraform resources') {
                         if (env.CLEANUP == "true") {
                             dir ("./") {
