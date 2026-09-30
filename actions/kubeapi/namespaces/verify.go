@@ -91,7 +91,7 @@ func VerifyNamespaceHasNoResourceQuota(client *rancher.Client, clusterID, namesp
 func VerifyNamespaceResourceQuotaValidationStatus(client *rancher.Client, clusterID, namespaceName string,
 	expectedExistingLimits, expectedExtendedLimits map[string]string,
 	expectedStatus bool,
-	expectedErrorMessage string,
+	expectedErrorMessages ...string,
 ) error {
 	return kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (bool, error) {
 		annotationData, err := GetNamespaceAnnotation(client, clusterID, namespaceName, ResourceQuotaAnnotation)
@@ -153,7 +153,7 @@ func VerifyNamespaceResourceQuotaValidationStatus(client *rancher.Client, cluste
 			return false, nil
 		}
 
-		if expectedErrorMessage != "" && !strings.Contains(message, expectedErrorMessage) {
+		if !containsExpectedMessage(message, expectedErrorMessages...) {
 			return false, nil
 		}
 
@@ -183,7 +183,7 @@ func VerifyNamespacePodResourceQuota(client *rancher.Client, clusterID, namespac
 }
 
 // VerifyNamespacePodQuotaValidationStatus checks if the resource quota annotation in a namespace matches the expected pod limits and validation status.
-func VerifyNamespacePodQuotaValidationStatus(client *rancher.Client, clusterID, namespaceName, namespacePodLimit string, expectedStatus bool, expectedErrorMessage string) error {
+func VerifyNamespacePodQuotaValidationStatus(client *rancher.Client, clusterID, namespaceName, namespacePodLimit string, expectedStatus bool, expectedErrorMessages ...string) error {
 	return kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (bool, error) {
 		namespace, err := extnamespaceapi.GetNamespaceByName(client, clusterID, namespaceName)
 		if err != nil {
@@ -223,12 +223,22 @@ func VerifyNamespacePodQuotaValidationStatus(client *rancher.Client, clusterID, 
 			return false, nil
 		}
 
-		if expectedErrorMessage != "" && !strings.Contains(message, expectedErrorMessage) {
+		if !containsExpectedMessage(message, expectedErrorMessages...) {
 			return false, nil
 		}
 
 		return true, nil
 	})
+}
+
+func containsExpectedMessage(message string, expectedMessages ...string) bool {
+	for _, expectedMessage := range expectedMessages {
+		if expectedMessage == "" || strings.Contains(message, expectedMessage) {
+			return true
+		}
+	}
+
+	return len(expectedMessages) == 0
 }
 
 // VerifyLimitRange verifies that the LimitRange in the specified namespace matches the expected CPU and memory limits and requests.
