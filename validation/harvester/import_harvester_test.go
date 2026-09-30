@@ -3,18 +3,12 @@
 package harvester
 
 import (
-	"context"
-	"strings"
 	"testing"
-	"time"
 
-	catalogv1 "github.com/rancher/rancher/pkg/apis/catalog.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/harvester"
 	"github.com/rancher/shepherd/clients/rancher"
-	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	extensioncharts "github.com/rancher/shepherd/extensions/charts"
 	"github.com/rancher/shepherd/extensions/cloudcredentials"
-	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/pkg/config"
 	shepherdConfig "github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/session"
@@ -25,16 +19,12 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
 const (
-	localCluster                   = "local"
-	harvesterUIExtensionGitRepoURL = "https://github.com/harvester/harvester-ui-extension"
-	harvesterUIExtensionGitBranch  = "gh-pages"
-	harvesterExtensionName         = "harvester"
-	clusterRepoType                = "catalog.cattle.io.clusterrepo"
+	localCluster                = "local"
+	harvesterUIExtensionRepoURL = "https://harvester.github.io/harvester-ui-extension"
+	harvesterExtensionName      = "harvester"
 )
 
 type HarvesterTestSuite struct {
@@ -66,39 +56,16 @@ func (h *HarvesterTestSuite) SetupSuite() {
 		return harvesteraction.ResetHarvesterRegistration(h.harvesterClient)
 	})
 
-	err = extensioncharts.CreateChartRepoFromGithub(client.Steve, harvesterUIExtensionGitRepoURL, harvesterUIExtensionGitBranch, harvesterExtensionName)
-	if err != nil {
-		if !strings.Contains(err.Error(), "already exists") {
-			require.NoError(h.T(), err)
-		}
-	}
+	err = uiplugins.CreateExtensionsHelmRepo(client, harvesterExtensionName, harvesterUIExtensionRepoURL)
+	require.NoError(h.T(), err)
 
 	uiExtensionObject, err := extensioncharts.GetChartStatus(client, localCluster, interoperablecharts.ExtensionNamespace, interoperablecharts.HarvesterExtensionName)
 	require.NoError(h.T(), err)
 
 	if !uiExtensionObject.IsAlreadyInstalled {
 		var latestUIPluginVersion string
-		var chartVersionErr error
-		var lastRepoRefresh time.Time
-		err = kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.FifteenMinuteTimeout, true, func(context.Context) (bool, error) {
-			latestUIPluginVersion, chartVersionErr = h.client.Catalog.GetLatestChartVersion(interoperablecharts.HarvesterExtensionName, interoperablecharts.HarvesterExtensionName)
-			if chartVersionErr == nil {
-				return true, nil
-			}
-
-			if time.Since(lastRepoRefresh) >= defaults.OneMinuteTimeout {
-				refreshed, refreshErr := refreshBackedOffClusterRepo(h.client, harvesterExtensionName)
-				if refreshErr != nil {
-					logrus.Warnf("unable to refresh cluster repo %s: %v", harvesterExtensionName, refreshErr)
-				} else if refreshed {
-					lastRepoRefresh = time.Now()
-					logrus.Infof("cluster repo %s failed to download, forcing a new download", harvesterExtensionName)
-				}
-			}
-
-			return false, nil
-		})
-		require.NoError(h.T(), err, "harvester UI extension chart version never became available: %v", chartVersionErr)
+		latestUIPluginVersion, err = h.client.Catalog.GetLatestChartVersion(interoperablecharts.HarvesterExtensionName, interoperablecharts.HarvesterExtensionName)
+		require.NoError(h.T(), err)
 
 		extensionOptions := &uiplugins.ExtensionOptions{
 			ChartName:   interoperablecharts.HarvesterExtensionName,
@@ -130,31 +97,6 @@ func (h *HarvesterTestSuite) TestImport() {
 	harvesterCredentialConfig.KubeconfigContent = kubeConfig.Config
 
 	shepherdConfig.UpdateConfig(cloudcredentials.HarvesterCredentialConfigurationFileKey, harvesterCredentialConfig)
-}
-
-func refreshBackedOffClusterRepo(client *rancher.Client, repoName string) (bool, error) {
-	repoObject, err := client.Steve.SteveType(clusterRepoType).ByID(repoName)
-	if err != nil {
-		return false, err
-	}
-
-	clusterRepo := &catalogv1.ClusterRepo{}
-	err = steveV1.ConvertToK8sType(repoObject, clusterRepo)
-	if err != nil {
-		return false, err
-	}
-
-	if clusterRepo.Status.NextRetryAt.IsZero() {
-		return false, nil
-	}
-
-	clusterRepo.Spec.ForceUpdate = &metav1.Time{Time: time.Now()}
-	_, err = client.Steve.SteveType(clusterRepoType).Update(repoObject, clusterRepo)
-	if err != nil {
-		return false, err
-	}
-
-	return true, nil
 }
 
 // In order for 'go test' to run this suite, we need to create
