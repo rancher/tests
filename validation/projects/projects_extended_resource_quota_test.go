@@ -108,7 +108,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectLevelExtendedReso
 	require.NoError(perq.T(), err)
 
 	log.Infof("Verifying that the resource quota validation for the second namespace %s fails.", secondNamespace.Name)
-	err = namespaceapi.VerifyNamespaceResourceQuotaValidationStatus(standardUserClient, perq.cluster.ID, secondNamespace.Name, nil, namespaceExtendedQuota, false, "exceeds project limit")
+	err = namespaceapi.VerifyNamespaceResourceQuotaValidationStatus(standardUserClient, perq.cluster.ID, secondNamespace.Name, nil, namespaceExtendedQuota, false, "exceeds project limit", "Oversubscribed resource quota")
 	require.NoError(perq.T(), err)
 
 	log.Infof("Attempting to create a pod in the second namespace %s, exceeding the resource quota limits of the project.", secondNamespace.Name)
@@ -207,7 +207,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestProjectLevelExistingReso
 	existingLimits := map[string]string{"pods": namespacePodLimit}
 	ns2, err := namespaceapi.CreateNamespace(standardUserClient, perq.cluster.ID, createdProject.Name, namegen.AppendRandomString("testns"), "", nil, nil)
 	require.NoError(perq.T(), err)
-	err = namespaceapi.VerifyNamespaceResourceQuotaValidationStatus(standardUserClient, perq.cluster.ID, ns2.Name, existingLimits, nil, false, "exceeds project limit")
+	err = namespaceapi.VerifyNamespaceResourceQuotaValidationStatus(standardUserClient, perq.cluster.ID, ns2.Name, existingLimits, nil, false, "exceeds project limit", "Oversubscribed resource quota")
 	require.NoError(perq.T(), err)
 
 	log.Infof("Attempting to create another pod in the second namespace %s, exceeding the project-level existing pod count quota", ns2.Name)
@@ -1365,7 +1365,7 @@ func (perq *ProjectsExtendedResourceQuotaTestSuite) TestNamespaceOverrideExtende
 	require.NoError(perq.T(), err)
 
 	log.Info("Verifying resource quota validation status in the namespace reflects exceeded project limits.")
-	err = namespaceapi.VerifyNamespaceResourceQuotaValidationStatus(standardUserClient, perq.cluster.ID, ns.Name, nil, invalidNamespaceQuota, false, "exceeds project limit")
+	err = namespaceapi.VerifyNamespaceResourceQuotaValidationStatus(standardUserClient, perq.cluster.ID, ns.Name, nil, invalidNamespaceQuota, false, "exceeds project limit", "Oversubscribed resource quota")
 	require.NoError(perq.T(), err)
 
 	log.Info("Verifying namespace ResourceQuota remains unchanged after failed override.")

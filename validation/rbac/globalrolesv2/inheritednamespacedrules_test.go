@@ -1578,6 +1578,86 @@ func (inr *InheritedNamespacedRulesTestSuite) TestInheritedNamespacedRulesIgnore
 	}
 }
 
+func (inr *InheritedNamespacedRulesTestSuite) TestUserCannotCreateGlobalRoleWithEscalatedInheritedNamespacedRules() {
+	subSession := inr.session.NewSession()
+	defer subSession.Cleanup()
+
+	sharedNamespace := namegen.AppendRandomString("shared-namespace-")
+	log.Infof("Create namespace %s in the downstream cluster.", sharedNamespace)
+	downstreamProject, err := projectapi.CreateProject(inr.client, inr.cluster.ID)
+	require.NoError(inr.T(), err, "Failed to create project in downstream cluster")
+	_, err = namespaceapi.CreateNamespace(inr.client, inr.cluster.ID, downstreamProject.Name, sharedNamespace, "", nil, nil)
+	require.NoError(inr.T(), err, "Failed to create namespace %s in downstream cluster", sharedNamespace)
+
+	log.Info("Create a GlobalRole that grants globalrole CRUD plus limited inherited namespaced rules.")
+	globalRole := &v3.GlobalRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: namegen.AppendRandomString("test-gr-1"),
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{rbacapi.ManagementAPIGroup},
+				Resources: []string{rbacapi.GlobalRoleResource, rbacapi.GlobalRoleBindingResource},
+				Verbs:     []string{"get", "create", "list", "watch", "update", "delete", "patch"},
+			},
+		},
+		InheritedNamespacedRules: map[string][]rbacv1.PolicyRule{
+			sharedNamespace: {
+				{
+					APIGroups: []string{rbacapi.CatalogCattleAPIGroup},
+					Resources: []string{rbacapi.CatalogAppsResource},
+					Verbs:     []string{"edit"},
+				},
+			},
+		},
+	}
+	bootstrapGlobalRole, err := extrbacapi.CreateGlobalRole(inr.client, globalRole)
+	require.NoError(inr.T(), err)
+
+	log.Info("Create a user and assign the GlobalRole.")
+	createdUser, userPassword, err := userapi.CreateUserWithRoles(inr.client, rbac.StandardUser.String())
+	require.NoError(inr.T(), err)
+	_, err = rbacapi.CreateGlobalRoleBinding(inr.client, bootstrapGlobalRole.Name, createdUser.Username, "", "")
+	require.NoError(inr.T(), err)
+
+	log.Infof("Add the user %s as a cluster member to the local cluster.", createdUser.Username)
+	_, err = rbacapi.CreateClusterRoleTemplateBinding(inr.client, extclusterapi.LocalCluster, createdUser.Name, rbac.ClusterMember.String())
+	require.NoError(inr.T(), err)
+
+	userClient, err := inr.client.AsPublicAPIUser(createdUser, userPassword)
+	require.NoError(inr.T(), err)
+	userClient, err = userClient.ReLogin()
+	require.NoError(inr.T(), err)
+
+	log.Infof("As user %s, attempt to create a second GlobalRole whose inheritedNamespacedRules use apiGroups '*' is rejected.", createdUser.Username)
+	globalRole = &v3.GlobalRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: namegen.AppendRandomString("test-gr-2"),
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{rbacapi.ManagementAPIGroup},
+				Resources: []string{rbacapi.GlobalRoleResource, rbacapi.GlobalRoleBindingResource},
+				Verbs:     []string{"get", "create", "list", "watch", "update", "delete", "patch"},
+			},
+		},
+		InheritedNamespacedRules: map[string][]rbacv1.PolicyRule{
+			sharedNamespace: {
+				{
+					APIGroups: []string{"*"},
+					Resources: []string{rbacapi.CatalogAppsResource},
+					Verbs:     []string{"edit"},
+				},
+			},
+		},
+	}
+
+	_, err = extrbacapi.CreateGlobalRole(userClient, globalRole)
+	require.Error(inr.T(), err, "user should not be able to create a GlobalRole with inheritedNamespacedRules permissions they do not already hold")
+	require.Contains(inr.T(), err.Error(), "attempting to grant RBAC permissions not currently held")
+	require.Contains(inr.T(), err.Error(), `APIGroups:["*"]`)
+}
+
 func TestInheritedNamespacedRulesTestSuite(t *testing.T) {
 	suite.Run(t, new(InheritedNamespacedRulesTestSuite))
 }
