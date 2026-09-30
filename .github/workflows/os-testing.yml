@@ -179,10 +179,18 @@ jobs:
             HB_AWS_REGION, HB_AWS_REGION
             HB_TERRAFORM_VERSION, HB_TERRAFORM_VERSION
             HB_RANCHER_ADMIN_PASSWORD, HB_RANCHER_ADMIN_PASSWORD
-            HB_RANCHER_VERSION, ${{ format('HB_RANCHER_VERSION_2_{0}_HEAD', matrix.version) }}
-            HB_RELEASED_RANCHER_CHART_VERSION, ${{ format('HB_RELEASED_RANCHER_CHART_VERSION_2_{0}', matrix.version == '16' && '15' || matrix.version) }}
-            HB_RKE2_VERSION, ${{ format('HB_RKE2_VERSION_2_{0}', matrix.version) }}
-            HB_K3S_VERSION, ${{ format('HB_K3S_VERSION_2_{0}', matrix.version) }}
+            HB_RANCHER_VERSION_2_16_HEAD, HB_RANCHER_VERSION_2_16_HEAD
+            HB_RANCHER_VERSION_2_15_HEAD, HB_RANCHER_VERSION_2_15_HEAD
+            HB_RANCHER_VERSION_2_14_HEAD, HB_RANCHER_VERSION_2_14_HEAD
+            HB_RELEASED_RANCHER_CHART_VERSION_2_16, HB_RELEASED_RANCHER_CHART_VERSION_2_16
+            HB_RELEASED_RANCHER_CHART_VERSION_2_15, HB_RELEASED_RANCHER_CHART_VERSION_2_15
+            HB_RELEASED_RANCHER_CHART_VERSION_2_14, HB_RELEASED_RANCHER_CHART_VERSION_2_14
+            HB_RKE2_VERSION_2_16, HB_RKE2_VERSION_2_16
+            HB_K3S_VERSION_2_16, HB_K3S_VERSION_2_16
+            HB_RKE2_VERSION_2_15, HB_RKE2_VERSION_2_15
+            HB_K3S_VERSION_2_15, HB_K3S_VERSION_2_15
+            HB_RKE2_VERSION_2_14, HB_RKE2_VERSION_2_14
+            HB_K3S_VERSION_2_14, HB_K3S_VERSION_2_14
             HB_K3S_VERSION_SUFFIX, HB_K3S_VERSION_SUFFIX
             HB_QA_PRIVATE_REGISTRY_NAME, HB_QA_PRIVATE_REGISTRY_NAME
             HB_QASE_AUTOMATION_TOKEN, HB_QASE_AUTOMATION_TOKEN
@@ -205,6 +213,14 @@ jobs:
             DOCKERHUB_USERNAME
             DOCKERHUB_PASSWORD
             HB_QASE_AUTOMATION_TOKEN
+            HB_SSH_PRIVATE_KEY
+            HB_SSH_PRIVATE_KEY_NAME
+            HB_WINDOWS_SSH_PRIVATE_KEY
+            HB_WINDOWS_SSH_PRIVATE_KEY_NAME
+            HB_PRIVATE_FULL_CHAIN
+            HB_PRIVATE_FULL_CHAIN_NAME
+            HB_PRIVATE_CERT_KEY
+            HB_PRIVATE_CERT_KEY_NAME
 
       - name: Whitelist Runner IP
         id: whitelist-runner-ip
@@ -241,8 +257,9 @@ jobs:
           value: |
             ${{ 
               github.event.inputs.rancher_version || 
-              inputs.rancher_version ||
-              fromJSON(env.HB_RANCHER_VERSION).value
+              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version) || 
+              (github.event_name == 'schedule' && fromJSON(env[format('HB_RANCHER_VERSION_2_{0}_HEAD', matrix.version)]).value) ||
+              (github.event.inputs.run_all_versions == 'true' && fromJSON(env[format('HB_RANCHER_VERSION_2_{0}_HEAD', matrix.version)]).value)
             }}
 
       - name: Set Rancher chart version
@@ -252,8 +269,9 @@ jobs:
           value: |
             ${{ 
               github.event.inputs.rancher_chart_version || 
-              inputs.rancher_chart_version ||
-              fromJSON(env.HB_RELEASED_RANCHER_CHART_VERSION).value
+              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version) || 
+              (github.event_name == 'schedule' && fromJSON(env[format('HB_RELEASED_RANCHER_CHART_VERSION_2_{0}', matrix.version)]).value) ||
+              (github.event.inputs.run_all_versions == 'true' && fromJSON(env[format('HB_RELEASED_RANCHER_CHART_VERSION_2_{0}', matrix.version)]).value)
             }}
 
       - name: Create Qase test run
