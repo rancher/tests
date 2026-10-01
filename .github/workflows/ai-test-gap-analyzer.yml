@@ -1,0 +1,69 @@
+name: AI Test Gap Analyzer
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_url:
+        description: "GitHub PR URL (public repo)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  copilot-requests: write
+
+env:
+  PR_URL: ${{ inputs.pr_url }}
+  MAX_DIFF_BYTES: "60000"
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate PR URL
+        run: |
+          if ! [[ "$PR_URL" =~ ^https://github\.com/[^/]+/[^/]+/pull/[0-9]+/?$ ]]; then
+            echo "::error::Not a valid GitHub PR URL: $PR_URL"
+            exit 1
+          fi
+
+      - name: Fetch PR diff and prepare input
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr diff "$PR_URL" > diff_full.txt
+          echo "Full diff: $(wc -l < diff_full.txt) lines, $(wc -c < diff_full.txt) bytes"
+
+          head -c "$MAX_DIFF_BYTES" diff_full.txt > diff.txt
+          if [ "$(wc -c < diff_full.txt)" -gt "$MAX_DIFF_BYTES" ]; then
+            echo "::warning::Diff truncated to ${MAX_DIFF_BYTES} bytes"
+          fi
+
+          {
+            echo "PR URL: $PR_URL"
+            echo
+            echo "DIFF:"
+            cat diff.txt
+          } > ai_input.txt
+
+      - name: Run AI analysis
+        id: ai
+        uses: ./.github/actions/gh-model-prompt
+        with:
+          prompt_file: ./.github/models/test-gap-analyzer.prompt.yml
+          input_file: ai_input.txt
+          output_file: test_gap_report.md
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Publish report
+        run: |
+          {
+            echo "# AI Test Gap Analysis"
+            echo "PR: $PR_URL"
+            echo
+            cat test_gap_report.md
+          } >> "$GITHUB_STEP_SUMMARY"
