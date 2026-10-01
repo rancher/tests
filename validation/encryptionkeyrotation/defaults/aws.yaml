@@ -32,7 +32,7 @@ clusterConfig:
 awsCredentials:
   secretKey: "<required>"
   accessKey: "<required>"
-  defaultRegion: "us-east-2" 
+  defaultRegion: "us-east-2"
 
 #Required for tests that utilize node driver clusters
 awsMachineConfigs:

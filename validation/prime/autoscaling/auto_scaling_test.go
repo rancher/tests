@@ -71,7 +71,10 @@ func TestAutoScalingUp(t *testing.T) {
 			machineConfigSpec := provider.LoadMachineConfigFunc(s.cattleConfig)
 
 			logrus.Infof("Provisioning %s cluster", tt.clusterType)
-			cluster, err := resources.ProvisionRKE2K3SCluster(t, s.client, tt.clusterType, provider, *clusterConfig, machineConfigSpec, nil, true, false)
+			credentialSpec, err := provider.LoadCredentialConfigFunc(s.cattleConfig)
+			require.NoError(t, err)
+
+			cluster, err := resources.ProvisionRKE2K3SCluster(t, s.client, tt.clusterType, provider, credentialSpec, *clusterConfig, machineConfigSpec, nil, true, false)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster autoscaler (%s)", cluster.Name)
@@ -158,7 +161,10 @@ func TestAutoScalingDown(t *testing.T) {
 			machineConfigSpec := provider.LoadMachineConfigFunc(s.cattleConfig)
 
 			logrus.Infof("Provisioning %s cluster", tt.clusterType)
-			cluster, err := resources.ProvisionRKE2K3SCluster(t, tt.client, tt.clusterType, provider, *clusterConfig, machineConfigSpec, nil, true, false)
+			credentialSpec, err := provider.LoadCredentialConfigFunc(s.cattleConfig)
+			require.NoError(t, err)
+
+			cluster, err := resources.ProvisionRKE2K3SCluster(t, tt.client, tt.clusterType, provider, credentialSpec, *clusterConfig, machineConfigSpec, nil, true, false)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
@@ -261,7 +267,10 @@ func TestAutoScalingPause(t *testing.T) {
 			machineConfigSpec := provider.LoadMachineConfigFunc(s.cattleConfig)
 
 			logrus.Infof("Provisioning %s cluster", tt.clusterType)
-			cluster, err := resources.ProvisionRKE2K3SCluster(t, s.client, tt.clusterType, provider, *clusterConfig, machineConfigSpec, nil, true, false)
+			credentialSpec, err := provider.LoadCredentialConfigFunc(s.cattleConfig)
+			require.NoError(t, err)
+
+			cluster, err := resources.ProvisionRKE2K3SCluster(t, s.client, tt.clusterType, provider, credentialSpec, *clusterConfig, machineConfigSpec, nil, true, false)
 			require.NoError(t, err)
 
 			logrus.Infof("Pausing cluster autoscaler (%s)", cluster.Name)

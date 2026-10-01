@@ -25,7 +25,7 @@ clusterConfig:
       quantity: 1
   kubernetesVersion: ""
   cni: "<HB_CNI>"
-  provider: "<HB_PROVIDER>"
+  provider: "aws"
   pathToRepo: "<HB_PATH_TO_TESTS_REPO>"
   nodeProvider: "<HB_NODE_PROVIDER>"
 
@@ -56,14 +56,14 @@ awsMachineConfigs:
     volumeType: "<HB_AWS_VOLUME_TYPE>"
     zone: "<HB_AWS_ZONE_LETTER>"
     retries: "5"
-    rootSize: "<HB_AWS_ROOT_SIZE>" 
+    rootSize: "<HB_AWS_ROOT_SIZE>"
 
 
 #terraform and terratest variables required for custom cluster provisioning
 terraform:
-  provider: "<HB_PROVIDER>"
+  provider: "aws"
   cni: "<HB_CNI>"
-  downstreamClusterProvider: "<HB_PROVIDER>"
+  downstreamClusterProvider: "aws"
   defaultClusterRoleForProjectMembers: "<HB_CLUSTER_ROLE_FOR_PROJECT_MEMBERS>"
   enableNetworkPolicy: false
   resourcePrefix: "<HB_RESOURCE_PREFIX>"
@@ -157,7 +157,7 @@ workloadConfigs:
           containers:
             - name: "testdeployment"
               image: "nginx:latest"
-  
+
   daemonset:
     metadata:
       generateName: "testdaemonset-"
@@ -205,7 +205,7 @@ workloadConfigs:
             - name: "testjob"
               image: "nginx:latest"
               command: ["sh", "-c", "echo Hello World; sleep 30"]
-  
+
   pod:
     metadata:
       generateName: "testpod-"

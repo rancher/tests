@@ -1,0 +1,40 @@
+awsCredentials:
+  accessKey: "<required>"
+  defaultRegion: "<required>"
+  secretKey: "<required>"
+
+eksClusterConfig:
+  imported: false
+  kmsKey: ""
+  loggingTypes: []
+  nodeGroups:
+  - desiredSize: 3
+    diskSize: 50
+    ec2SshKey: "<required>"
+    gpu: false
+    imageId: ""
+    instanceType: "<required>"
+    labels: {}
+    maxSize: 10
+    minSize: 1
+    nodeRole: ""
+    nodegroupName: "<required>"
+    requestSpotInstances: false
+    resourceTags: {}
+    spotInstanceTypes: []
+    subnets: []
+    tags: {}
+    userData: ""
+  privateAccess: false
+  publicAccess: true
+  publicAccessSources: []
+  region: "<required>"
+  secretsEncryption: false
+  securityGroups:
+  - "<required>"
+  serviceRole: ""
+  subnets:
+  - "<required>"
+  - "<required>"
+  tags: {}
+

@@ -11,6 +11,7 @@ import (
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/logging"
+	"github.com/rancher/tests/actions/provisioning"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -44,7 +45,10 @@ func Setup(t *testing.T) *hostedTest {
 
 	h.CattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	h.CattleConfig, err = defaults.LoadPackageDefaults(h.CattleConfig, "")
+	_, providerName, err := provisioning.GetProviderFromConfig(h.CattleConfig)
+	require.NoError(t, err)
+
+	h.CattleConfig, err = defaults.LoadPackageDefaults(h.CattleConfig, "", providerName)
 	require.NoError(t, err)
 
 	loggingConfig := new(logging.Logging)

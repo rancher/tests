@@ -35,7 +35,7 @@ clusterConfig:
 awsCredentials:
   secretKey: "<required>"
   accessKey: "<required>"
-  defaultRegion: "us-east-2" 
+  defaultRegion: "us-east-2"
 
 #Required for tests that utilize node driver clusters
 awsMachineConfigs:
@@ -58,7 +58,7 @@ awsMachineConfigs:
     volumeType: "<required>"
     zone: "a"
     retries: "5"
-    rootSize: "100" 
+    rootSize: "100"
 
 #Required for tests that utilize custom clusters
 awsEC2Configs:
@@ -89,7 +89,7 @@ awsEC2Configs:
 
 #Required for tests that utilize custom clusters
 sshPath:
-   sshPath: "<required>" 
+   sshPath: "<required>"
 
 logging:
    level: "info"
@@ -110,7 +110,7 @@ workloadConfigs:
           containers:
             - name: "testdeployment"
               image: "nginx:latest"
-  
+
   daemonset:
     metadata:
       generateName: "testdaemonset-"
@@ -158,7 +158,7 @@ workloadConfigs:
             - name: "testjob"
               image: "nginx:latest"
               command: ["sh", "-c", "echo Hello World; sleep 30"]
-  
+
   pod:
     metadata:
       generateName: "testpod-"

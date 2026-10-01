@@ -15,7 +15,7 @@ terraform:
   cni: "<HB_CNI>"
   defaultClusterRoleForProjectMembers: "true"
   enableNetworkPolicy: false
-  provider: "<HB_PROVIDER_AMAZON>"
+  provider: "aws"
   privateKeyPath: "<HB_TFP_SSH_PRIVATE_KEY_PATH>"
   resourcePrefix: "<HB_HOSTNAME_PREFIX>"
   awsConfig:

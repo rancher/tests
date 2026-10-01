@@ -52,7 +52,10 @@ func Setup(t *testing.T, clusterType string) *nodeScalingTest {
 
 	s.CattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	s.CattleConfig, err = defaults.LoadPackageDefaults(s.CattleConfig, "")
+	_, providerName, err := provisioning.GetProviderFromConfig(s.CattleConfig)
+	require.NoError(t, err)
+
+	s.CattleConfig, err = defaults.LoadPackageDefaults(s.CattleConfig, "", providerName)
 	require.NoError(t, err)
 
 	loggingConfig := new(logging.Logging)
@@ -76,10 +79,13 @@ func Setup(t *testing.T, clusterType string) *nodeScalingTest {
 		machineConfigSpec := provider.LoadMachineConfigFunc(s.CattleConfig)
 
 		logrus.Infof("Provisioning %s cluster", clusterType)
-		s.Cluster, err = resources.ProvisionRKE2K3SCluster(t, standardUserClient, clusterType, provider, *clusterConfig, machineConfigSpec, nil, true, false)
+		credentialSpec, err := provider.LoadCredentialConfigFunc(s.CattleConfig)
 		require.NoError(t, err)
 
-		_, err := rbacapi.GetClusterRoleTemplateBindingsForUser(s.Client, standardUser.ID)
+		s.Cluster, err = resources.ProvisionRKE2K3SCluster(t, standardUserClient, clusterType, provider, credentialSpec, *clusterConfig, machineConfigSpec, nil, true, false)
+		require.NoError(t, err)
+
+		_, err = rbacapi.GetClusterRoleTemplateBindingsForUser(s.Client, standardUser.ID)
 		require.NoError(t, err)
 
 		s.StandardUserClient, err = s.StandardUserClient.ReLogin()

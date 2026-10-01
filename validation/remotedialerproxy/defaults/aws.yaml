@@ -27,12 +27,15 @@ clusterConfig:
   cni: "calico"
   provider: "aws"
   nodeProvider: "ec2"
+  hardened: false
+  compliance: false
+  psact: ""
 
-#Required for all tests
+#Required for all tests except template
 awsCredentials:
   secretKey: "<required>"
   accessKey: "<required>"
-  defaultRegion: "us-east-2" 
+  defaultRegion: "us-east-2"
 
 #Required for tests that utilize node driver clusters
 awsMachineConfigs:
@@ -40,13 +43,13 @@ awsMachineConfigs:
   awsMachineConfig:
   - roles: ["etcd","controlplane","worker"]
     ami: "<required>"
-    instanceType: "t3.2xlarge"
+    instanceType: "t3.xlarge"
     volumeType: "<required>"
     rootSize: "<required>"
     sshUser: "<required>"
     vpcId: "<required>"
-    retries: "5"
     zone: "a"
+    retries: "5"
   - roles: ["windows"]
     ami: "<required>"
     instanceType: "t2.2xlarge"
@@ -63,9 +66,8 @@ awsEC2Configs:
   awsSecretAccessKey: "<required>"
   awsAccessKeyID: "<required>"
   awsEC2Config:
-    - instanceType: "t3.2xlarge"
+    - instanceType: "t3.xlarge"
       awsRegionAZ: ""
-      awsSSHKeyName: "<required>"
       awsAMI: "<required>"
       awsSecurityGroups: ["<required>"]
       awsSSHKeyName: "<required>"
@@ -76,7 +78,6 @@ awsEC2Configs:
       roles: ["etcd", "controlplane", "worker"]
     - instanceType: "t2.2xlarge"
       awsRegionAZ: ""
-      awsSSHKeyName: "<required>"
       awsAMI: "<required>"
       awsSecurityGroups: ["<required>"]
       awsSSHKeyName: "<required>"
@@ -86,9 +87,17 @@ awsEC2Configs:
       volumeSize: 100
       roles: ["windows"]
 
+#Required for tests that utilize custom clusters
+sshPath:
+   sshPath: "<required>"
+
+logging:
+   level: "info"
+
 workloadConfigs:
   deployment:
-    metadata: {}
+    metadata:
+      generateName: "testdeployment-"
     spec:
       selector:
         matchLabels:
@@ -100,4 +109,77 @@ workloadConfigs:
         spec:
           containers:
             - name: "testdeployment"
-              replicas: 3
+              image: "nginx:latest"
+
+  daemonset:
+    metadata:
+      generateName: "testdaemonset-"
+    spec:
+      selector:
+        matchLabels:
+          "workload.user.cattle.io/workloadselector": "testdaemonset"
+      template:
+        metadata:
+          labels:
+            "workload.user.cattle.io/workloadselector": "testdaemonset"
+        spec:
+          containers:
+            - name: "testdaemonset"
+              image: "nginx:latest"
+
+  cronjob:
+    metadata:
+      generateName: "testcronjob-"
+    spec:
+      schedule: "* * * * *"
+      jobTemplate:
+        metadata:
+          generateName: "testcronjob-"
+        spec:
+          template:
+            generateName: testcronjob-
+            spec:
+              restartPolicy: "Never"
+              containers:
+                - name: "testcronjob"
+                  image: "nginx:latest"
+
+  job:
+    metadata:
+      generateName: "testjob-"
+    spec:
+      template:
+        metadata:
+          generateName: "testjob-"
+        spec:
+          generateName: testjob-
+          restartPolicy: "Never"
+          containers:
+            - name: "testjob"
+              image: "nginx:latest"
+              command: ["sh", "-c", "echo Hello World; sleep 30"]
+
+  pod:
+    metadata:
+      generateName: "testpod-"
+    spec:
+      generateName: testpod-
+      containers:
+        - name: "testpod"
+          image: "nginx:latest"
+
+  statefulset:
+    metadata:
+      generateName: "teststatefulset-"
+    spec:
+      selector:
+        matchLabels:
+          "workload.user.cattle.io/workloadselector": "teststatefulset"
+      template:
+        metadata:
+          labels:
+            "workload.user.cattle.io/workloadselector": "teststatefulset"
+        spec:
+          containers:
+            - name: "teststatefulset"
+              image: "nginx:latest"

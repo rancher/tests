@@ -69,7 +69,10 @@ func ProvisionClustersPreUpgrade(t *testing.T, client *rancher.Client, cattleCon
 		go func() {
 			defer wg.Done()
 			logrus.Infof("Provisioning %s node driver cluster", clusterType)
-			_, err := resources.ProvisionRKE2K3SCluster(t, client, clusterType, provider, *clusterConfig, machineConfigSpec, nil, true, false)
+			credentialSpec, err := provider.LoadCredentialConfigFunc(cattleConfig)
+			require.NoError(t, err)
+
+			_, err = resources.ProvisionRKE2K3SCluster(t, client, clusterType, provider, credentialSpec, *clusterConfig, machineConfigSpec, nil, true, false)
 			if err != nil {
 				addErr(fmt.Errorf("%s node driver: %w", clusterType, err))
 			}

@@ -32,7 +32,7 @@ clusterConfig:
 awsCredentials:
   secretKey: "<required>"
   accessKey: "<required>"
-  defaultRegion: "us-east-2" 
+  defaultRegion: "us-east-2"
 
 #Required for tests that utilize node driver clusters
 awsMachineConfigs:
@@ -40,20 +40,30 @@ awsMachineConfigs:
   awsMachineConfig:
   - roles: ["etcd","controlplane","worker"]
     ami: "<required>"
-    instanceType: "t3a.xlarge"
+    instanceType: "t3.xlarge"
     volumeType: "<required>"
     rootSize: "<required>"
     sshUser: "<required>"
     vpcId: "<required>"
     retries: "5"
     zone: "a"
+  - roles: ["windows"]
+    ami: "<required>"
+    instanceType: "t2.2xlarge"
+    sshUser: "<required>"
+    vpcId: "<required>"
+    volumeType: "<required>"
+    zone: "a"
+    retries: "5"
+    rootSize: "100"
 
+#Required for tests that utilize custom clusters
 awsEC2Configs:
   region: "us-east-2"
   awsSecretAccessKey: "<required>"
   awsAccessKeyID: "<required>"
   awsEC2Config:
-    - instanceType: "t3a.xlarge"
+    - instanceType: "t3.xlarge"
       awsRegionAZ: ""
       awsSSHKeyName: "<required>"
       awsAMI: "<required>"
@@ -64,3 +74,14 @@ awsEC2Configs:
       awsUser: "<required>"
       volumeSize: 100
       roles: ["etcd", "controlplane", "worker"]
+    - instanceType: "t2.2xlarge"
+      awsRegionAZ: ""
+      awsSSHKeyName: "<required>"
+      awsAMI: "<required>"
+      awsSecurityGroups: ["<required>"]
+      awsSSHKeyName: "<required>"
+      awsCICDInstanceTag: "<required>"
+      awsIAMProfile: ""
+      awsUser: "<required>"
+      volumeSize: 100
+      roles: ["windows"]

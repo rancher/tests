@@ -6,10 +6,6 @@ on:
     - cron: "0 10 * * 3,5"
   workflow_dispatch:
     inputs:
-      qase_test_run_id:
-        description: "Optional Qase test run ID override"
-        required: false
-        type: string
       rancher_version:
         description: "Rancher tag version"
         required: false
@@ -34,6 +30,10 @@ on:
         options:
           - k3s
           - rke2
+      qase_test_run_id:
+        description: "Optional Qase test run ID override"
+        required: false
+        type: string
       environment_cleanup:
         description: "Enable environment cleanup after test run"
         required: false

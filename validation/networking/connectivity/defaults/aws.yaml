@@ -15,7 +15,7 @@ workloadConfigs:
             - name: "testdeployment"
               image: "ranchertest/mytestcontainer"
               imagePullPolicy: "Always"
-  
+
   daemonset:
     metadata:
       generateName: "testdaemonset-"

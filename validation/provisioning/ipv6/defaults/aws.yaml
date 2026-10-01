@@ -45,7 +45,7 @@ awsEC2Configs:
 
 sshPath:
    sshPath: "<HB_TESTS_SSH_DIR_PATH>"
-   
+
 terraform:
   awsConfig:
     ami: "<HB_AWS_IPV6_AMI>"

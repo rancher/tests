@@ -37,9 +37,14 @@ func main() {
 		logrus.Fatal("Failed to determine current file path")
 	}
 
-	packageDefaultsPath := filepath.Join(filepath.Dir(currentFilePath), defaults.DefaultFilePath)
+	providerName, _, err := provisioning.GetProviderFromConfig(cattleConfig)
+	if err != nil {
+		logrus.Fatalf("Failed to get provider from config: %v", err)
+	}
 
-	cattleConfig, err := defaults.LoadPackageDefaults(cattleConfig, packageDefaultsPath)
+	packageDefaultsPath := filepath.Join(filepath.Dir(currentFilePath), "defaults", providerName+".yaml")
+
+	cattleConfig, err = defaults.LoadPackageDefaults(cattleConfig, packageDefaultsPath, providerName)
 	if err != nil {
 		logrus.Fatalf("Failed to load package defaults: %v", err)
 	}

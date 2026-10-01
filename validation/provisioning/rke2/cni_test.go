@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
-	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
@@ -41,7 +40,10 @@ func cniSetup(t *testing.T) cniTest {
 
 	r.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	r.cattleConfig, err = defaults.LoadPackageDefaults(r.cattleConfig, "")
+	_, providerName, err := provisioning.GetProviderFromConfig(r.cattleConfig)
+	require.NoError(t, err)
+
+	r.cattleConfig, err = defaults.LoadPackageDefaults(r.cattleConfig, "", providerName)
 	require.NoError(t, err)
 
 	r.cattleConfig, err = defaults.LoadSecretsManagerDefaults(r.cattleConfig)
@@ -100,7 +102,9 @@ func TestCNI(t *testing.T) {
 			clusterConfig.CNI = tt.cni
 
 			provider := provisioning.CreateProvider(clusterConfig.Provider)
-			credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
+			credentialSpec, err := provider.LoadCredentialConfigFunc(r.cattleConfig)
+			require.NoError(t, err)
+
 			machineConfigSpec := provider.LoadMachineConfigFunc(r.cattleConfig)
 
 			logrus.Info("Provisioning cluster")

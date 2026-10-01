@@ -5,7 +5,7 @@ rancher:
   cleanup: true
 
 terraform:
-  provider: "<HB_PROVIDER>"
+  provider: "aws"
   resourcePrefix: "<HB_HOSTNAME_PREFIX>"
   localCluster: "rke2"
   cni: "<HB_CNI>"

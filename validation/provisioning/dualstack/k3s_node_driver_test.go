@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
-	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
@@ -43,7 +42,10 @@ func nodeDriverK3SSetup(t *testing.T) nodeDriverK3STest {
 
 	k.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	k.cattleConfig, err = defaults.LoadPackageDefaults(k.cattleConfig, "")
+	_, providerName, err := provisioning.GetProviderFromConfig(k.cattleConfig)
+	require.NoError(t, err)
+
+	k.cattleConfig, err = defaults.LoadPackageDefaults(k.cattleConfig, "", providerName)
 	require.NoError(t, err)
 
 	k.cattleConfig, err = defaults.LoadSecretsManagerDefaults(k.cattleConfig)
@@ -118,7 +120,9 @@ func TestNodeDriverK3S(t *testing.T) {
 			}
 
 			provider := provisioning.CreateProvider(clusterConfig.Provider)
-			credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
+			credentialSpec, err := provider.LoadCredentialConfigFunc(k.cattleConfig)
+			require.NoError(t, err)
+
 			machineConfigSpec := provider.LoadMachineConfigFunc(k.cattleConfig)
 
 			// Needed to ensure we are testing use-case with IPv6 address only set and without it set in the other test cases.

@@ -57,7 +57,10 @@ func ImportedSetup(t *testing.T, clusterType string) *importedEncryptionKeyRotat
 
 	e.CattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	e.CattleConfig, err = defaults.LoadPackageDefaults(e.CattleConfig, "")
+	_, providerName, err := provisioning.GetProviderFromConfig(e.CattleConfig)
+	require.NoError(t, err)
+
+	e.CattleConfig, err = defaults.LoadPackageDefaults(e.CattleConfig, "", providerName)
 	require.NoError(t, err)
 
 	rancherConfig := new(rancher.Config)

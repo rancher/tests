@@ -8,7 +8,6 @@ import (
 
 	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
-	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
@@ -43,7 +42,10 @@ func dataDirectoriesSetup(t *testing.T) dataDirectoriesTest {
 
 	r.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	r.cattleConfig, err = defaults.LoadPackageDefaults(r.cattleConfig, "")
+	_, providerName, err := provisioning.GetProviderFromConfig(r.cattleConfig)
+	require.NoError(t, err)
+
+	r.cattleConfig, err = defaults.LoadPackageDefaults(r.cattleConfig, "", providerName)
 	require.NoError(t, err)
 
 	r.cattleConfig, err = defaults.LoadSecretsManagerDefaults(r.cattleConfig)
@@ -110,7 +112,9 @@ func TestDataDirectories(t *testing.T) {
 			clusterConfig.Advanced.DataDirectories = &tt.dataDirectories
 
 			provider := provisioning.CreateProvider(clusterConfig.Provider)
-			credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
+			credentialSpec, err := provider.LoadCredentialConfigFunc(r.cattleConfig)
+			require.NoError(t, err)
+
 			machineConfigSpec := provider.LoadMachineConfigFunc(r.cattleConfig)
 
 			logrus.Info("Provisioning cluster")

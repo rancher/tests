@@ -2,6 +2,16 @@
 
 Welcome to the rancher test repo.
 
+## Provider Defaults
+
+Package defaults are named `defaults/<provider>.yaml`, such as `aws.yaml` or
+`vsphere.yaml`. Set both `clusterConfig.provider` and `terraform.provider` in
+the cattle config before loading defaults; their names must contain a common
+supported provider. User configuration overrides package defaults, which override
+parent defaults. Hosted defaults are separated into AWS, Azure, and Google files.
+Provider-independent packages such as workloads load shared defaults directly
+from `defaults/defaults.yaml` without requiring provider configuration.
+
 ## Branching Strategy
 
 main - active development branch

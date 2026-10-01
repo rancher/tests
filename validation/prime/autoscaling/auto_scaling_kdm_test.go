@@ -9,7 +9,6 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
-	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	"github.com/rancher/shepherd/extensions/clusters/kubernetesversions"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/tests/actions/clusters"
@@ -73,7 +72,8 @@ func TestAutoScalingKDM(t *testing.T) {
 
 				provider := provisioning.CreateProvider(clusterConfig.Provider)
 				machineConfigSpec := provider.LoadMachineConfigFunc(s.cattleConfig)
-				credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
+				credentialSpec, err := provider.LoadCredentialConfigFunc(s.cattleConfig)
+				require.NoError(t, err)
 
 				logrus.Infof("Provisioning %s cluster with k8s version %s", tt.clusterType, version)
 				cluster, err := provisioning.CreateProvisioningCluster(tt.client, provider, credentialSpec, clusterConfig, machineConfigSpec, nil)
