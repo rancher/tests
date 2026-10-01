@@ -47,7 +47,10 @@ func customK3SProxySetup(t *testing.T) customK3SProxyTest {
 
 	k.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	k.cattleConfig, err = defaults.LoadPackageDefaults(k.cattleConfig, "")
+	providerName, err := provisioning.GetProviderFromConfig(k.cattleConfig)
+	require.NoError(t, err)
+
+	k.cattleConfig, err = defaults.LoadPackageDefaults(k.cattleConfig, "", providerName)
 	require.NoError(t, err)
 
 	k.cattleConfig, err = defaults.LoadSecretsManagerDefaults(k.cattleConfig)

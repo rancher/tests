@@ -705,7 +705,7 @@ This package contains a defaults folder which contains default test configuratio
 2. Reduce the amount of yaml data that needs to be stored in our pipelines.
 3. Make it easier to run tests
 
-Any data the user provides will override these defaults which are stored here: [defaults](defaults/defaults.yaml). 
+Any data the user provides will override these defaults which are stored here: [defaults](defaults/aws.yaml).
 
 Note: these defaults intentionally use AWS Secrets Manager placeholder values for sensitive configuration such as AWS credentials and related resource identifiers. The defaults assume the environment is configured to resolve those placeholders before the tests runs, in the case that you do not provide AWS credentials you must provide all of those placeholder values that are necessary. 
 

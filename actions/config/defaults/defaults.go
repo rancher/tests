@@ -12,17 +12,20 @@ import (
 )
 
 const (
-	DefaultFilePath = "defaults/defaults.yaml"
-	RKE2            = "rke2"
-	K3S             = "k3s"
+	RKE2 = "rke2"
+	K3S  = "k3s"
 )
 
 var placeholderRegex = regexp.MustCompile(`<[^<>]+>`)
 
-// LoadPackageDefaults loads the specified filename in the same package as the test
-func LoadPackageDefaults(cattleConfig map[string]any, filePath string) (map[string]any, error) {
+// LoadPackageDefaults loads named provider defaults from the package and parent,
+// or from an explicit path.
+func LoadPackageDefaults(cattleConfig map[string]any, filePath, fileName string) (map[string]any, error) {
 	var defaultsConfig map[string]any
 	if filePath == "" {
+		if fileName == "" {
+			return nil, fmt.Errorf("provider defaults file name is required")
+		}
 		packagePath, err := os.Getwd()
 		if err != nil {
 			return nil, err
@@ -30,19 +33,23 @@ func LoadPackageDefaults(cattleConfig map[string]any, filePath string) (map[stri
 
 		index := strings.LastIndex(packagePath, "/")
 		parentPath := packagePath[:index+1]
+		defaultFilePath := "defaults/" + fileName + ".yaml"
 
 		var packageDefaultsConfig map[string]any
-		_, err = os.Stat(packagePath + "/" + DefaultFilePath)
+		_, err = os.Stat(packagePath + "/" + defaultFilePath)
 		packageDefaultsFound := err == nil
 		if packageDefaultsFound {
-			packageDefaultsConfig = config.LoadConfigFromFile(packagePath + "/" + DefaultFilePath)
+			packageDefaultsConfig = config.LoadConfigFromFile(packagePath + "/" + defaultFilePath)
 		}
 
 		var parentDefaultsConfig map[string]any
-		_, err = os.Stat(parentPath + DefaultFilePath)
+		_, err = os.Stat(parentPath + defaultFilePath)
 		parentDefaultsFound := err == nil
+		if !packageDefaultsFound && !parentDefaultsFound {
+			return nil, fmt.Errorf("missing %s in package or parent defaults", defaultFilePath)
+		}
 		if parentDefaultsFound {
-			parentDefaultsConfig = config.LoadConfigFromFile(parentPath + DefaultFilePath)
+			parentDefaultsConfig = config.LoadConfigFromFile(parentPath + defaultFilePath)
 			defaultsConfig, err = DeepMerge(packageDefaultsConfig, parentDefaultsConfig, true)
 			if err != nil {
 				return nil, err

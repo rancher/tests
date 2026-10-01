@@ -52,7 +52,10 @@ func Setup(t *testing.T, clusterType string) *certRotationTest {
 
 	c.CattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	c.CattleConfig, err = defaults.LoadPackageDefaults(c.CattleConfig, "")
+	providerName, err := provisioning.GetProviderFromConfig(c.CattleConfig)
+	require.NoError(t, err)
+
+	c.CattleConfig, err = defaults.LoadPackageDefaults(c.CattleConfig, "", providerName)
 	require.NoError(t, err)
 
 	loggingConfig := new(logging.Logging)
