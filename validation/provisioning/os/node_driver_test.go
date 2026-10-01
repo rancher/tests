@@ -47,10 +47,16 @@ func nodeDriverSetup(t *testing.T) nodeDriverTest {
 
 	r.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	r.cattleConfig, err = defaults.LoadPackageDefaults(r.cattleConfig, "")
+	defaultFileName, err := provisioning.GetDefaultFileName(r.cattleConfig)
+	require.NoError(t, err)
+
+	r.cattleConfig, err = defaults.LoadPackageDefaults(r.cattleConfig, "", defaultFileName)
 	require.NoError(t, err)
 
 	r.cattleConfig, err = defaults.LoadSecretsManagerDefaults(r.cattleConfig)
+	require.NoError(t, err)
+
+	_, err = provisioning.GetDefaultFileName(r.cattleConfig)
 	require.NoError(t, err)
 
 	err = defaults.VerifyCattleConfig(r.cattleConfig, nil)

@@ -83,7 +83,7 @@ func Setup(t *testing.T, clusterType string, isS3, isWindows bool) *snapshotTest
 
 	s.CattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	s.CattleConfig, err = defaults.LoadPackageDefaults(s.CattleConfig, "")
+	s.CattleConfig, err = defaults.LoadPackageDefaults(s.CattleConfig, "", "")
 	require.NoError(t, err)
 
 	loggingConfig := new(logging.Logging)

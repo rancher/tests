@@ -57,7 +57,7 @@ func registriesSetup(t *testing.T) registriesTest {
 
 	r.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	r.cattleConfig, err = defaults.LoadPackageDefaults(r.cattleConfig, "")
+	r.cattleConfig, err = defaults.LoadPackageDefaults(r.cattleConfig, "", "")
 	require.NoError(t, err)
 
 	loggingConfig := new(logging.Logging)

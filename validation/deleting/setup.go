@@ -48,7 +48,7 @@ func Setup(t *testing.T, clusterType string, defaultNodeRoles bool) *deleteTest 
 
 	d.CattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	d.CattleConfig, err = defaults.LoadPackageDefaults(d.CattleConfig, "")
+	d.CattleConfig, err = defaults.LoadPackageDefaults(d.CattleConfig, "", "")
 	require.NoError(t, err)
 
 	loggingConfig := new(logging.Logging)

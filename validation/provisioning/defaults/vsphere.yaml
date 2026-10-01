@@ -1,0 +1,113 @@
+rancher:
+  host: "<required>"
+  adminToken: "<required>"
+  insecure: true
+  cleanup: true
+
+clusterConfig:
+  machinePools:
+  - machinePoolConfig:
+      etcd: true
+      controlplane: false
+      worker: false
+      quantity: 1
+  - machinePoolConfig:
+      etcd: false
+      controlplane: true
+      worker: false
+      quantity: 1
+  - machinePoolConfig:
+      etcd: false
+      controlplane: false
+      worker: true
+      quantity: 1
+  kubernetesVersion: ""
+  cni: "<HB_CNI>"
+  provider: "<HB_VSPHERE_PROVIDER>"
+  pathToRepo: "<HB_PATH_TO_TESTS_REPO>"
+
+terraform:
+  generateV3Token: true
+  provider: "<HB_VSPHERE_PROVIDER>"
+  cni: "<HB_CNI>"
+  downstreamClusterProvider: "<HB_VSPHERE_PROVIDER>"
+  defaultClusterRoleForProjectMembers: "<HB_CLUSTER_ROLE_FOR_PROJECT_MEMBERS>"
+  enableNetworkPolicy: false
+  resourcePrefix: "<HB_RESOURCE_PREFIX>"
+  module: ""
+  privateKeyPath: "<HB_TFP_SSH_PRIVATE_KEY_PATH>"
+  vsphereCredentials:
+    vcenter: "<HB_VSPHERE_VCENTER>"
+    vcenterPort: "<HB_VSPHERE_VCENTER_PORT>"
+    username: "<HB_VSPHERE_USERNAME>"
+    password: "<HB_VSPHERE_PASSWORD>"
+  vsphereConfig:
+    dataCenter: "<HB_VSPHERE_DATACENTER>"
+    standaloneNetwork: "<HB_VSPHERE_STANDALONE_NETWORK>"
+    folder: "<HB_VSPHERE_FOLDER>"
+    hostSystem: "<HB_VSPHERE_HOST_SYSTEM>"
+    pool: "<HB_VSPHERE_POOL>"
+    dataStore: "<HB_VSPHERE_DATASTORE>"
+    firmware: "efi"
+    creationType: "template"
+    vsphereUser: "<HB_OS_USER>"
+    sshPort: "22"
+    sshUserGroup: "<HB_OS_GROUP>"
+    cfgparam:
+    - "disk.enableUUID=TRUE"
+    customAttribute: []
+    tag: []
+  standalone:
+    osUser: "<HB_OS_USER>"
+    osGroup: "<HB_OS_GROUP>"
+    rke2Version: "<required>"
+    k3sVersion: "<required>"
+
+terratest:
+  nodepools:
+  - quantity: 1
+    etcd: true
+    controlplane: false
+    worker: false
+  - quantity: 1
+    etcd: false
+    controlplane: true
+    worker: false
+  - quantity: 1
+    etcd: false
+    controlplane: false
+    worker: true
+  pathToRepo: "<HB_PATH_TO_TFP_REPO>"
+  tfLogging: false
+
+vmwarevsphereCredentials:
+  vcenter: "<HB_VSPHERE_VCENTER>"
+  vcenterPort: "<HB_VSPHERE_VCENTER_PORT>"
+  username: "<HB_VSPHERE_USERNAME>"
+  password: "<HB_VSPHERE_PASSWORD>"
+
+vmwarevsphereMachineConfigs:
+  folder: "<HB_VSPHERE_FOLDER>"
+  datacenter: "<HB_VSPHERE_DATACENTER>"
+  hostsystem: "<HB_VSPHERE_HOST_SYSTEM>"
+  pool: "<HB_VSPHERE_POOL>"
+  datastoreUrl: "<HB_VSPHERE_DATASTORE_URL>"
+  datastore: "<HB_VSPHERE_DATASTORE>"
+  vmwarevsphereMachineConfig:
+  - cfgparam: ["disk.enableUUID=TRUE"]
+    customAttribute: []
+    roles: ["etcd", "controlplane", "worker"]
+    creationType: "template"
+    cloudConfig: "#cloud-config\n\n"
+    network: ["<HB_VSPHERE_NETWORK>"]
+    os: "linux"
+    sshPort: "22"
+    tag: []
+    gracefulShutdownTimeout: "200"
+    sshUserGroup: "<HB_OS_GROUP>"
+
+sshPath:
+  sshPath: "<HB_TESTS_SSH_DIR_PATH>"
+
+logging:
+  level: "<HB_LOGGING_LEVEL>"
