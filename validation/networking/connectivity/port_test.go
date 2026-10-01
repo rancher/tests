@@ -66,7 +66,7 @@ func (p *PortTestSuite) SetupSuite() {
 
 	p.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	p.cattleConfig, err = defaults.LoadPackageDefaults(p.cattleConfig, "")
+	p.cattleConfig, err = defaults.LoadPackageDefaults(p.cattleConfig, "", "")
 	require.NoError(p.T(), err)
 
 	loggingConfig := new(logging.Logging)

@@ -19,8 +19,8 @@ const (
 
 var placeholderRegex = regexp.MustCompile(`<[^<>]+>`)
 
-// LoadPackageDefaults loads the specified filename in the same package as the test
-func LoadPackageDefaults(cattleConfig map[string]any, filePath string) (map[string]any, error) {
+// LoadPackageDefaults loads defaults from the package and parent, or from an explicit path.
+func LoadPackageDefaults(cattleConfig map[string]any, filePath, defaultFileName string) (map[string]any, error) {
 	var defaultsConfig map[string]any
 	if filePath == "" {
 		packagePath, err := os.Getwd()
@@ -30,19 +30,26 @@ func LoadPackageDefaults(cattleConfig map[string]any, filePath string) (map[stri
 
 		index := strings.LastIndex(packagePath, "/")
 		parentPath := packagePath[:index+1]
+		defaultFilePath := DefaultFilePath
+		if defaultFileName != "" {
+			defaultFilePath = "defaults/" + defaultFileName + ".yaml"
+		}
 
 		var packageDefaultsConfig map[string]any
-		_, err = os.Stat(packagePath + "/" + DefaultFilePath)
+		_, err = os.Stat(packagePath + "/" + defaultFilePath)
 		packageDefaultsFound := err == nil
 		if packageDefaultsFound {
-			packageDefaultsConfig = config.LoadConfigFromFile(packagePath + "/" + DefaultFilePath)
+			packageDefaultsConfig = config.LoadConfigFromFile(packagePath + "/" + defaultFilePath)
 		}
 
 		var parentDefaultsConfig map[string]any
-		_, err = os.Stat(parentPath + DefaultFilePath)
+		_, err = os.Stat(parentPath + defaultFilePath)
 		parentDefaultsFound := err == nil
+		if defaultFileName != "" && (!packageDefaultsFound || !parentDefaultsFound) {
+			return nil, fmt.Errorf("missing %s in package or parent defaults", defaultFilePath)
+		}
 		if parentDefaultsFound {
-			parentDefaultsConfig = config.LoadConfigFromFile(parentPath + DefaultFilePath)
+			parentDefaultsConfig = config.LoadConfigFromFile(parentPath + defaultFilePath)
 			defaultsConfig, err = DeepMerge(packageDefaultsConfig, parentDefaultsConfig, true)
 			if err != nil {
 				return nil, err
