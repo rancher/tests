@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
-	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
@@ -43,7 +42,10 @@ func nodeDriverRKE2IPv6Setup(t *testing.T) nodeDriverRKE2IPv6Test {
 
 	r.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	r.cattleConfig, err = defaults.LoadPackageDefaults(r.cattleConfig, "")
+	_, providerName, err := provisioning.GetProviderFromConfig(r.cattleConfig)
+	require.NoError(t, err)
+
+	r.cattleConfig, err = defaults.LoadPackageDefaults(r.cattleConfig, "", providerName)
 	require.NoError(t, err)
 
 	r.cattleConfig, err = defaults.LoadSecretsManagerDefaults(r.cattleConfig)
@@ -119,7 +121,9 @@ func TestNodeDriverRKE2IPv6(t *testing.T) {
 			t.Parallel()
 
 			provider := provisioning.CreateProvider(clusterConfig.Provider)
-			credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
+			credentialSpec, err := provider.LoadCredentialConfigFunc(r.cattleConfig)
+			require.NoError(t, err)
+
 			machineConfigSpec := provider.LoadMachineConfigFunc(r.cattleConfig)
 
 			logrus.Info("Provisioning cluster")

@@ -55,7 +55,10 @@ func ImportedSetup(t *testing.T, clusterType string) *importedCertificatesTest {
 
 	c.CattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	c.CattleConfig, err = defaults.LoadPackageDefaults(c.CattleConfig, "")
+	_, providerName, err := provisioning.GetProviderFromConfig(c.CattleConfig)
+	require.NoError(t, err)
+
+	c.CattleConfig, err = defaults.LoadPackageDefaults(c.CattleConfig, "", providerName)
 	require.NoError(t, err)
 
 	rancherConfig := new(rancher.Config)

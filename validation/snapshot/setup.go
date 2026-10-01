@@ -12,7 +12,6 @@ import (
 	"github.com/rancher/shepherd/clients/ec2"
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
-	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	extclusters "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/pkg/config"
@@ -88,7 +87,10 @@ func Setup(t *testing.T, clusterType string, isS3, isWindows bool) *snapshotTest
 
 	s.CattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	s.CattleConfig, err = defaults.LoadPackageDefaults(s.CattleConfig, "")
+	_, providerName, err := provisioning.GetProviderFromConfig(s.CattleConfig)
+	require.NoError(t, err)
+
+	s.CattleConfig, err = defaults.LoadPackageDefaults(s.CattleConfig, "", providerName)
 	require.NoError(t, err)
 
 	loggingConfig := new(logging.Logging)
@@ -126,7 +128,9 @@ func Setup(t *testing.T, clusterType string, isS3, isWindows bool) *snapshotTest
 		machineConfigSpec := provider.LoadMachineConfigFunc(s.CattleConfig)
 
 		if isS3 {
-			credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
+			credentialSpec, err := provider.LoadCredentialConfigFunc(s.CattleConfig)
+			require.NoError(t, err)
+
 			cloudCredential, err := provider.CloudCredFunc(standardUserClient, credentialSpec)
 			require.NoError(t, err)
 
@@ -183,10 +187,13 @@ func Setup(t *testing.T, clusterType string, isS3, isWindows bool) *snapshotTest
 			require.NoError(t, err)
 		} else {
 			logrus.Infof("Provisioning %s cluster", clusterType)
-			s.Cluster, err = resources.ProvisionRKE2K3SCluster(t, standardUserClient, clusterType, provider, *clusterConfig, machineConfigSpec, nil, false, false)
+			credentialSpec, err := provider.LoadCredentialConfigFunc(s.CattleConfig)
 			require.NoError(t, err)
 
-			_, err := rbacapi.GetClusterRoleTemplateBindingsForUser(s.Client, standardUser.ID)
+			s.Cluster, err = resources.ProvisionRKE2K3SCluster(t, standardUserClient, clusterType, provider, credentialSpec, *clusterConfig, machineConfigSpec, nil, false, false)
+			require.NoError(t, err)
+
+			_, err = rbacapi.GetClusterRoleTemplateBindingsForUser(s.Client, standardUser.ID)
 			require.NoError(t, err)
 
 			s.StandardUserClient, err = s.StandardUserClient.ReLogin()

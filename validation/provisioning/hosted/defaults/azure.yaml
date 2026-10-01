@@ -1,0 +1,31 @@
+azureCredentials: 
+  clientId: "<required>"
+  clientSecret: "<required>"
+  subscriptionId: "<required>"
+  environment: "AzurePublicCloud"
+
+aksClusterConfig:
+  dnsPrefix: "<required>"
+  linuxAdminUsername: "azureuser"
+  loadBalancerSku: "Standard"
+  networkPlugin: "<required>"
+  nodePools:
+  - availabilityZones:
+    - "1"
+    - "2"
+    - "3"
+    enableAutoScaling: true
+    maxPods: 110
+    maxCount: 10
+    minCount: 3
+    mode: "System"
+    name: "agentpool"
+    nodeCount: 3
+    osDiskSizeGB: 128
+    osDiskType: "Managed"
+    osType: "Linux"
+    vmSize: "<required>"
+  resourceGroup: "<required>"
+  resourceLocation: "<required>"
+  tags: {}
+

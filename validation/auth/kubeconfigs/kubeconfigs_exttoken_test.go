@@ -12,7 +12,6 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 
-	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	extclusters "github.com/rancher/shepherd/extensions/clusters"
 	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	extconfigmapapi "github.com/rancher/shepherd/extensions/kubeapi/configmaps"
@@ -76,7 +75,9 @@ func (kc *ExtKubeconfigExtTokenTestSuite) SetupSuite() {
 	operations.LoadObjectFromMap(configDefaults.ClusterConfigKey, cattleConfig, clusterConfig)
 	clusterConfig.MachinePools = nodeRolesAll
 	provider := provisioning.CreateProvider(clusterConfig.Provider)
-	credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
+	credentialSpec, err := provider.LoadCredentialConfigFunc(cattleConfig)
+	require.NoError(kc.T(), err)
+
 	machineConfigSpec := machinepools.LoadMachineConfigs(string(provider.Name))
 
 	log.Infof("Creating ACE-disabled clusters")

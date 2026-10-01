@@ -71,7 +71,10 @@ func TestUnauthenticatedRegistry(t *testing.T) {
 			machineConfigSpec := provider.LoadMachineConfigFunc(r.cattleConfig)
 
 			logrus.Infof("Provisioning %s cluster", tt.clusterType)
-			cluster, err := resources.ProvisionRKE2K3SCluster(t, r.client, tt.clusterType, provider, *clusterConfig, machineConfigSpec, nil, true, false)
+			credentialSpec, err := provider.LoadCredentialConfigFunc(r.cattleConfig)
+			require.NoError(t, err)
+
+			cluster, err := resources.ProvisionRKE2K3SCluster(t, r.client, tt.clusterType, provider, credentialSpec, *clusterConfig, machineConfigSpec, nil, true, false)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)

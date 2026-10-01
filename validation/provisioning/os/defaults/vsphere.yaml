@@ -1,0 +1,18 @@
+terraform:
+  vsphereConfig:
+    guestID: "<required>"
+    cloneFrom: "<required>"
+    cpuCount: "<required>"
+    memorySize: "<required>"
+    diskSize: "<required>"
+    sshUser: "<required>"
+    sshPassword: "<required>"
+
+vmwarevsphereMachineConfigs:
+  vmwarevsphereMachineConfig:
+  - cloneFrom: "<required>"
+    cpuCount: "<required>"
+    memorySize: "<required>"
+    diskSize: "<required>"
+    sshUser: "<required>"
+    sshPassword: "<required>"

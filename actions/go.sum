@@ -277,12 +277,10 @@ github.com/rancher/rancher v0.0.0-20260527150105-ae26ccbc3fed h1:G66Ag8VZXlA6Kiu
 github.com/rancher/rancher v0.0.0-20260527150105-ae26ccbc3fed/go.mod h1:wn9b239FRsjEulPTy5U1qTgT9vusgIc8Sxq0UJRdvhA=
 github.com/rancher/rancher/pkg/apis v0.0.0-20261008184213-aaaf0be31813 h1:FW0OeIKOh7erWnPIDiL7z1qKCILwP2slOSQ0uHvJMFw=
 github.com/rancher/rancher/pkg/apis v0.0.0-20261008184213-aaaf0be31813/go.mod h1:qWqt6qvM1iqtCB3GatAuxxe/d5BHqrzifOdsnlitVrM=
-github.com/rancher/shepherd v0.0.0-20261023222044-ce0c5d6e7f38 h1:DpqENr0YnXNPNF+v06ffhHsprGgCARY2UNwiYAjTPhs=
-github.com/rancher/shepherd v0.0.0-20261023222044-ce0c5d6e7f38/go.mod h1:fKpwRL07dBLvMIzWAsB+2CPYmlPEs+7Ua23r5sXTq1M=
 github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20260519183600-f1362a3fe1a8 h1:7qMiCWOKZdhscekXzeIUpaGethXtj19ob6V+U91tAxI=
 github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20260519183600-f1362a3fe1a8/go.mod h1:xDDFkXVPcCf+S6wQoIDwgIijQHcIaVdN0eQRG2GcFd4=
-github.com/rancher/tfp-automation v0.0.0-20261029172718-3695a416f6d6 h1:1ItRogKmdHC8GJoLDqOC1ZKLG1mAoFDYJRyQbBJCSs4=
-github.com/rancher/tfp-automation v0.0.0-20261029172718-3695a416f6d6/go.mod h1:KmgePWLMVGBL2q07sCU7mXv+JoDumhtwjjTKoGUpwrA=
+github.com/rancher/tfp-automation v0.0.0-20261023234248-bef41d02c39f h1:VfbM78RbODTaExEr20jCHZVMydzSEEpL7POcdl2SzyE=
+github.com/rancher/tfp-automation v0.0.0-20261023234248-bef41d02c39f/go.mod h1:KmgePWLMVGBL2q07sCU7mXv+JoDumhtwjjTKoGUpwrA=
 github.com/rancher/wrangler v1.1.2 h1:oXbXo9k7y/H4drUpb4RM1c++vT9O3rpoNEfyusGykiU=
 github.com/rancher/wrangler v1.1.2/go.mod h1:2k9MyhlBdjcutcBGoOJSUAz0HgDAXnMjv81d3n/AaQc=
 github.com/rancher/wrangler/v3 v3.8.0-rc.2 h1:Hw+l7mkWqnFBjenphvyEjSANhUL1MY0PsKCmQT+FqT8=
@@ -315,6 +313,8 @@ github.com/stretchr/testify v1.6.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/
 github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 github.com/stretchr/testify v1.12.1 h1:EuwCh5fleGS7H32xRwO3wRGT7DxrDhLAT6FF8MpWDWE=
 github.com/stretchr/testify v1.12.1/go.mod h1:MDEgiDPPsNp5cuIrHPPCyornHKgEVbtFUmoNlxoYthg=
+github.com/susesgartner/shepherd v0.0.0-20261028175709-c081b97f7ce1 h1:4r0uiFkEiyJyDGi9n3Gr3zjIeRX3UhPuTlqwaMhKZuU=
+github.com/susesgartner/shepherd v0.0.0-20261028175709-c081b97f7ce1/go.mod h1:fKpwRL07dBLvMIzWAsB+2CPYmlPEs+7Ua23r5sXTq1M=
 github.com/tklauser/go-sysconf v0.3.16 h1:frioLaCQSsF5Cy1jgRBrzr6t502KIIwQ0MArYICU0nA=
 github.com/tklauser/go-sysconf v0.3.16/go.mod h1:/qNL9xxDhc7tx3HSRsLWNnuzbVfh3e7gh/BmM179nYI=
 github.com/tklauser/numcpus v0.11.0 h1:nSTwhKH5e1dMNsCdVBukSZrURJRoHbSEQjdEbY+9RXw=

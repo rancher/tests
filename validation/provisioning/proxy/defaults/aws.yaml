@@ -32,7 +32,7 @@ clusterConfig:
       quantity: 3
   kubernetesVersion: ""
   cni: "<HB_CNI>"
-  provider: "<HB_PROVIDER>"
+  provider: "aws"
   nodeProvider: "ec2"
 
 #Required for all tests

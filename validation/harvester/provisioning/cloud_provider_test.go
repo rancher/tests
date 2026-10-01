@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
-	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	"github.com/rancher/shepherd/extensions/defaults/providers"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
@@ -64,7 +63,9 @@ func (p *HarvesterProvisioningTestSuite) TestCloudProvider() {
 	clusterConfig.MachinePools = nodeRolesDedicated
 
 	provider := provisioning.CreateProvider(clusterConfig.Provider)
-	credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
+	credentialSpec, err := provider.LoadCredentialConfigFunc(p.cattleConfig)
+	require.NoError(p.T(), err)
+
 	machineConfigSpec := provider.LoadMachineConfigFunc(p.cattleConfig)
 
 	logrus.Infof("Provisioning cluster")

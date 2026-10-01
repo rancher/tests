@@ -11,6 +11,7 @@ import (
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/config/defaults"
+	"github.com/rancher/tests/actions/provisioning"
 	infraConfig "github.com/rancher/tests/validation/recurring/infrastructure/config"
 	"github.com/rancher/tfp-automation/defaults/keypath"
 	setupdualstack "github.com/rancher/tfp-automation/tests/infrastructure/ranchers/setup/dualstack"
@@ -27,9 +28,14 @@ func main() {
 		logrus.Fatal("Failed to determine current file path")
 	}
 
-	packageDefaultsPath := filepath.Join(filepath.Dir(currentFilePath), defaults.DefaultFilePath)
+	providerName, _, err := provisioning.GetProviderFromConfig(cattleConfig)
+	if err != nil {
+		logrus.Fatalf("Failed to get provider from config: %v", err)
+	}
 
-	cattleConfig, err := defaults.LoadPackageDefaults(cattleConfig, packageDefaultsPath)
+	packageDefaultsPath := filepath.Join(filepath.Dir(currentFilePath), "defaults", providerName+".yaml")
+
+	cattleConfig, err = defaults.LoadPackageDefaults(cattleConfig, packageDefaultsPath, providerName)
 	if err != nil {
 		logrus.Fatalf("Failed to load package defaults: %v", err)
 	}

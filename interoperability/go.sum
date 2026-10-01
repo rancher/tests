@@ -3660,8 +3660,6 @@ github.com/rancher/rancher v0.0.0-20260527150105-ae26ccbc3fed h1:G66Ag8VZXlA6Kiu
 github.com/rancher/rancher v0.0.0-20260527150105-ae26ccbc3fed/go.mod h1:wn9b239FRsjEulPTy5U1qTgT9vusgIc8Sxq0UJRdvhA=
 github.com/rancher/rancher/pkg/apis v0.0.0-20261008184213-aaaf0be31813 h1:FW0OeIKOh7erWnPIDiL7z1qKCILwP2slOSQ0uHvJMFw=
 github.com/rancher/rancher/pkg/apis v0.0.0-20261008184213-aaaf0be31813/go.mod h1:qWqt6qvM1iqtCB3GatAuxxe/d5BHqrzifOdsnlitVrM=
-github.com/rancher/shepherd v0.0.0-20261023222044-ce0c5d6e7f38 h1:DpqENr0YnXNPNF+v06ffhHsprGgCARY2UNwiYAjTPhs=
-github.com/rancher/shepherd v0.0.0-20261023222044-ce0c5d6e7f38/go.mod h1:fKpwRL07dBLvMIzWAsB+2CPYmlPEs+7Ua23r5sXTq1M=
 github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20260519183600-f1362a3fe1a8 h1:7qMiCWOKZdhscekXzeIUpaGethXtj19ob6V+U91tAxI=
 github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20260519183600-f1362a3fe1a8/go.mod h1:xDDFkXVPcCf+S6wQoIDwgIijQHcIaVdN0eQRG2GcFd4=
 github.com/rancher/tfp-automation v0.0.0-20261029172718-3695a416f6d6 h1:1ItRogKmdHC8GJoLDqOC1ZKLG1mAoFDYJRyQbBJCSs4=
@@ -3763,6 +3761,8 @@ github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD
 github.com/stretchr/testify v1.12.1 h1:EuwCh5fleGS7H32xRwO3wRGT7DxrDhLAT6FF8MpWDWE=
 github.com/stretchr/testify v1.12.1/go.mod h1:MDEgiDPPsNp5cuIrHPPCyornHKgEVbtFUmoNlxoYthg=
 github.com/substrait-io/substrait-go v0.4.2/go.mod h1:qhpnLmrcvAnlZsUyPXZRqldiHapPTXC3t7xFgDi3aQg=
+github.com/susesgartner/shepherd v0.0.0-20261028175709-c081b97f7ce1 h1:4r0uiFkEiyJyDGi9n3Gr3zjIeRX3UhPuTlqwaMhKZuU=
+github.com/susesgartner/shepherd v0.0.0-20261028175709-c081b97f7ce1/go.mod h1:fKpwRL07dBLvMIzWAsB+2CPYmlPEs+7Ua23r5sXTq1M=
 github.com/tidwall/gjson v1.14.2/go.mod h1:/wbyibRr2FHMks5tjHJ5F8dMZh3AcwJEMf5vlfC0lxk=
 github.com/tidwall/match v1.1.1/go.mod h1:eRSPERbgtNPcGhD8UCthc6PmLEQXEWd3PRB5JTxsfmM=
 github.com/tidwall/pretty v1.2.0/go.mod h1:ITEVvHYasfjBbM0u2Pg8T2nJnzm8xPwvNhhsoaGGjNU=

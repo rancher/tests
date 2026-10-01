@@ -6,7 +6,6 @@ import (
 	upstream "github.com/qase-tms/qase-go/qase-api-client"
 	rancherEc2 "github.com/rancher/shepherd/clients/ec2"
 	"github.com/rancher/shepherd/clients/rancher"
-	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/tests/actions/capipnp"
 	"github.com/rancher/tests/actions/clusters"
@@ -32,7 +31,7 @@ func GetProvisioningSchemaParams(client *rancher.Client, cattleConfig map[string
 		getRunType(terraformConfig),
 		getRancherType(terraformConfig),
 		getNetworkStackType(clusterConfig),
-		getOSNameParam(client, clusterConfig),
+		getOSNameParam(client, cattleConfig, clusterConfig),
 		getProviderParam(clusterConfig),
 		getK8sParam(clusterConfig),
 		getCNIParam(clusterConfig),
@@ -147,9 +146,14 @@ func getNetworkStackType(clusterConfig *clusters.ClusterConfig) upstream.TestCas
 	return networkParam
 }
 
-func getOSNameParam(client *rancher.Client, clusterConfig *clusters.ClusterConfig) upstream.TestCaseParameterCreate {
+func getOSNameParam(client *rancher.Client, cattleConfig map[string]any, clusterConfig *clusters.ClusterConfig) upstream.TestCaseParameterCreate {
 	provider := CreateProvider(clusterConfig.Provider)
-	credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
+	credentialSpec, err := provider.LoadCredentialConfigFunc(cattleConfig)
+	if err != nil {
+		logrus.Warningf("Error loading cloud credentials: %s", err)
+		return upstream.TestCaseParameterCreate{}
+	}
+
 	machineConfigSpec := machinepools.LoadMachineConfigs(string(provider.Name))
 
 	if strings.Contains(clusterConfig.Provider, "aws") {

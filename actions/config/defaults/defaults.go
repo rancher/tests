@@ -3,6 +3,7 @@ package defaults
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -12,57 +13,55 @@ import (
 )
 
 const (
-	DefaultFilePath = "defaults/defaults.yaml"
-	RKE2            = "rke2"
-	K3S             = "k3s"
+	RKE2 = "rke2"
+	K3S  = "k3s"
 )
 
 var placeholderRegex = regexp.MustCompile(`<[^<>]+>`)
 
-// LoadPackageDefaults loads the specified filename in the same package as the test
-func LoadPackageDefaults(cattleConfig map[string]any, filePath string) (map[string]any, error) {
-	var defaultsConfig map[string]any
+// LoadPackageDefaults loads named provider defaults from the package and parent,
+// using aws when fileName is empty. An explicit path uses the same filename in the parent.
+func LoadPackageDefaults(cattleConfig map[string]any, filePath, fileName string) (map[string]any, error) {
+	if fileName == "" {
+		fileName = "aws"
+	}
 	if filePath == "" {
 		packagePath, err := os.Getwd()
 		if err != nil {
 			return nil, err
 		}
-
-		index := strings.LastIndex(packagePath, "/")
-		parentPath := packagePath[:index+1]
-
-		var packageDefaultsConfig map[string]any
-		_, err = os.Stat(packagePath + "/" + DefaultFilePath)
-		packageDefaultsFound := err == nil
-		if packageDefaultsFound {
-			packageDefaultsConfig = config.LoadConfigFromFile(packagePath + "/" + DefaultFilePath)
-		}
-
-		var parentDefaultsConfig map[string]any
-		_, err = os.Stat(parentPath + DefaultFilePath)
-		parentDefaultsFound := err == nil
-		if parentDefaultsFound {
-			parentDefaultsConfig = config.LoadConfigFromFile(parentPath + DefaultFilePath)
-			defaultsConfig, err = DeepMerge(packageDefaultsConfig, parentDefaultsConfig, true)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			defaultsConfig = packageDefaultsConfig
-		}
-
-		if !packageDefaultsFound && !parentDefaultsFound {
-			logrus.Warningf("No defaults found in: %s or %s", packagePath, parentPath)
-		}
-	} else {
-		_, err := os.Stat(filePath)
-		if err == nil {
-			defaultsConfig = config.LoadConfigFromFile(filePath)
-		} else {
-			logrus.Warningf("No defaults found at: %s", filePath)
-		}
+		filePath = filepath.Join(packagePath, "defaults", fileName+".yaml")
 	}
 
+	filePath, err := filepath.Abs(filePath)
+	if err != nil {
+		return nil, err
+	}
+	packagePath := filepath.Dir(filepath.Dir(filePath))
+	parentDefaultsPath := filepath.Join(filepath.Dir(packagePath), "defaults", filepath.Base(filePath))
+
+	var packageDefaultsConfig map[string]any
+	_, err = os.Stat(filePath)
+	packageDefaultsFound := err == nil
+	if packageDefaultsFound {
+		packageDefaultsConfig = config.LoadConfigFromFile(filePath)
+	}
+
+	var parentDefaultsConfig map[string]any
+	_, err = os.Stat(parentDefaultsPath)
+	parentDefaultsFound := err == nil
+	if !packageDefaultsFound && !parentDefaultsFound {
+		logrus.Warningf("Skipping package defaults: no defaults found at %s or %s", filePath, parentDefaultsPath)
+		return cattleConfig, nil
+	}
+	defaultsConfig := packageDefaultsConfig
+	if parentDefaultsFound {
+		parentDefaultsConfig = config.LoadConfigFromFile(parentDefaultsPath)
+		defaultsConfig, err = DeepMerge(packageDefaultsConfig, parentDefaultsConfig, true)
+		if err != nil {
+			return nil, err
+		}
+	}
 	config, err := DeepMerge(cattleConfig, defaultsConfig, true)
 	if err != nil {
 		return nil, err

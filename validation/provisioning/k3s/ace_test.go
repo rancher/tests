@@ -10,7 +10,6 @@ import (
 	v1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
-	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	extClusters "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/pkg/config"
@@ -47,7 +46,10 @@ func aceSetup(t *testing.T) aceTest {
 	k.client = client
 
 	k.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
-	k.cattleConfig, err = defaults.LoadPackageDefaults(k.cattleConfig, "")
+	_, providerName, err := provisioning.GetProviderFromConfig(k.cattleConfig)
+	require.NoError(t, err)
+
+	k.cattleConfig, err = defaults.LoadPackageDefaults(k.cattleConfig, "", providerName)
 	require.NoError(t, err)
 
 	k.cattleConfig, err = defaults.LoadSecretsManagerDefaults(k.cattleConfig)
@@ -93,7 +95,9 @@ func TestACE(t *testing.T) {
 	clusterConfig.MachinePools = nodeRolesStandard
 
 	provider := provisioning.CreateProvider(clusterConfig.Provider)
-	credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
+	credentialSpec, err := provider.LoadCredentialConfigFunc(k.cattleConfig)
+	require.NoError(t, err)
+
 	machineConfigSpec := provider.LoadMachineConfigFunc(k.cattleConfig)
 
 	logrus.Info("Provisioning downstream cluster")
