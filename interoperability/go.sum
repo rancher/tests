@@ -3664,8 +3664,8 @@ github.com/rancher/shepherd v0.0.0-20261002144048-2ae83452a53e h1:ShGqWPk+5wkQXZ
 github.com/rancher/shepherd v0.0.0-20261002144048-2ae83452a53e/go.mod h1:fKpwRL07dBLvMIzWAsB+2CPYmlPEs+7Ua23r5sXTq1M=
 github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20260519183600-f1362a3fe1a8 h1:7qMiCWOKZdhscekXzeIUpaGethXtj19ob6V+U91tAxI=
 github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20260519183600-f1362a3fe1a8/go.mod h1:xDDFkXVPcCf+S6wQoIDwgIijQHcIaVdN0eQRG2GcFd4=
-github.com/rancher/tfp-automation v0.0.0-20260929210548-eb089558bee3 h1:hvDjIelbW4v6WpW3vuyU5cVzFqwRtiOxKnobjg7QswA=
-github.com/rancher/tfp-automation v0.0.0-20260929210548-eb089558bee3/go.mod h1:PGw2u1nsKZqbn32t9v/fWXB8SwvVnyd6ciyO59cwYTY=
+github.com/rancher/tfp-automation v0.0.0-20261002180417-529bbbf4a53d h1:KFDFsoC3faIu6xcjY6x6d8fUnn9K6lBvzT4eP9x0HTU=
+github.com/rancher/tfp-automation v0.0.0-20261002180417-529bbbf4a53d/go.mod h1:xgEqaUDoGRwNlOdL+ZWwICtThdK0OeroRbprJI+kuvM=
 github.com/rancher/wrangler v0.6.2-0.20200515155908-1923f3f8ec3f/go.mod h1:NmtmlLkchboIksYJuBemwcP4RBfv8FpeyhVoWXB9Wdc=
 github.com/rancher/wrangler v0.6.2-0.20200622171942-7224e49a2407/go.mod h1:NmtmlLkchboIksYJuBemwcP4RBfv8FpeyhVoWXB9Wdc=
 github.com/rancher/wrangler v1.1.2 h1:oXbXo9k7y/H4drUpb4RM1c++vT9O3rpoNEfyusGykiU=
@@ -5389,8 +5389,8 @@ k8s.io/kube-openapi v0.0.0-20251125145642-4e65d59e963e/go.mod h1:kdmbQkyfwUagLfX
 k8s.io/kubectl v0.36.1 h1:96HqS9twIdHM0MlJLTwbo14b9kUKPkOzZ4tlRDLv4qI=
 k8s.io/kubectl v0.36.1/go.mod h1:/DGPAIewKsFWF9VFgGvkPhao2Ev4SNuE3BioZo8yPbk=
 k8s.io/streaming v0.36.1/go.mod h1:z6fV3D+NVkoeqRMtWwlUZK6U17SY/LqNzOxWL6GyR/s=
-k8s.io/streaming v0.37.0 h1:iPBUZLZiKt5bV+lxJurASMOV07VuBhNpiwJt2//AWrM=
-k8s.io/streaming v0.37.0/go.mod h1:APlJR26ZWRcVy5bIEj0QRrKUXROtBHPcxl2NT7EAzPU=
+k8s.io/streaming v0.37.1 h1:TpzVfQeFuVndn2g9mFqxy1UcUYPwDzqjUmwR/IzJCWc=
+k8s.io/streaming v0.37.1/go.mod h1:APlJR26ZWRcVy5bIEj0QRrKUXROtBHPcxl2NT7EAzPU=
 k8s.io/utils v0.0.0-20200324210504-a9aa75ae1b89/go.mod h1:sZAwmy6armz5eXlNoLmJcl4F1QuKu7sr+mFQ0byX7Ew=
 k8s.io/utils v0.0.0-20240711033017-18e509b52bc8/go.mod h1:OLgZIPagt7ERELqWJFomSt595RzquPNLL48iOWgYOg0=
 k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2/go.mod h1:xDxuJ0whA3d0I4mf/C4ppKHxXynQ+fxnkmQH0vTHnuk=
