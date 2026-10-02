@@ -114,7 +114,7 @@ func (prq *ProjectsResourceQuotaTestSuite) TestProjectWithResourceQuota() {
 	log.Info("Create another namespace in the project and verify that the resource quota validation for the namespace fails.")
 	secondNamespace, err := namespaceapi.CreateNamespace(standardUserClient, prq.cluster.ID, createdProject.Name, namegen.AppendRandomString("testns-"), "", nil, nil)
 	require.NoError(prq.T(), err, "Failed to create namespace in the project")
-	err = namespaceapi.VerifyNamespacePodQuotaValidationStatus(standardUserClient, prq.cluster.ID, secondNamespace.Name, namespacePodLimit, false, "Resource quota [pods=4] exceeds project limit")
+	err = namespaceapi.VerifyNamespacePodQuotaValidationStatus(standardUserClient, prq.cluster.ID, secondNamespace.Name, namespacePodLimit, false, "exceeds project limit", "Oversubscribed resource quota")
 	require.NoError(prq.T(), err)
 
 	log.Info("Verify that the resource quota object is created for the namespace and the pod limit in the resource quota is set to 0.")
@@ -350,7 +350,7 @@ func (prq *ProjectsResourceQuotaTestSuite) TestOverrideQuotaInNamespace() {
 	require.NoError(prq.T(), err)
 
 	log.Info("Verify that the resource quota validation for the namespace fails.")
-	err = namespaceapi.VerifyNamespacePodQuotaValidationStatus(standardUserClient, prq.cluster.ID, updatedNamespace.Name, namespacePodLimit, false, "Resource quota [pods=4] exceeds project limit")
+	err = namespaceapi.VerifyNamespacePodQuotaValidationStatus(standardUserClient, prq.cluster.ID, updatedNamespace.Name, namespacePodLimit, false, "exceeds project limit", "Oversubscribed resource quota")
 	require.NoError(prq.T(), err)
 }
 
