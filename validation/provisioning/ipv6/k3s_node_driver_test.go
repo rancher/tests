@@ -43,7 +43,7 @@ func nodeDriverK3SIPv6Setup(t *testing.T) nodeDriverK3SIPv6Test {
 
 	r.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	r.cattleConfig, err = defaults.LoadPackageDefaults(r.cattleConfig, "")
+	r.cattleConfig, err = defaults.LoadPackageDefaults(r.cattleConfig, "", "")
 	require.NoError(t, err)
 
 	r.cattleConfig, err = defaults.LoadSecretsManagerDefaults(r.cattleConfig)

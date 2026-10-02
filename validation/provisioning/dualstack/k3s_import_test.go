@@ -44,7 +44,7 @@ func importK3SDualstackSetup(t *testing.T) importK3SDualstackTest {
 
 	k.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	k.cattleConfig, err = defaults.LoadPackageDefaults(k.cattleConfig, "")
+	k.cattleConfig, err = defaults.LoadPackageDefaults(k.cattleConfig, "", "")
 	require.NoError(t, err)
 
 	k.cattleConfig, err = defaults.LoadSecretsManagerDefaults(k.cattleConfig)

@@ -38,7 +38,7 @@ func rdpSetup(t *testing.T) rdpTest {
 	r.client = client
 
 	r.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
-	r.cattleConfig, err = defaults.LoadPackageDefaults(r.cattleConfig, "")
+	r.cattleConfig, err = defaults.LoadPackageDefaults(r.cattleConfig, "", "")
 	require.NoError(t, err)
 
 	logCfg := new(logging.Logging)

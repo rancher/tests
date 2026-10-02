@@ -65,7 +65,7 @@ func airgapSetup(t *testing.T, clusterType string) airgapTest {
 
 	r.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	r.cattleConfig, err = defaults.LoadPackageDefaults(r.cattleConfig, "")
+	r.cattleConfig, err = defaults.LoadPackageDefaults(r.cattleConfig, "", "")
 	require.NoError(t, err)
 
 	r.cattleConfig, err = defaults.LoadSecretsManagerDefaults(r.cattleConfig)
