@@ -18,7 +18,7 @@ const (
 type GenericSAMLKeycloakFixture struct {
 	Admin            User
 	AdminPrincipalID string
-	AuthInput        *SAMLAuthConfig
+	AuthInput        *ExternalAuthConfig
 	EntityID         string
 	RancherAPIHost   string
 }
