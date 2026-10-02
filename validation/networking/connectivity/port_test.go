@@ -25,6 +25,7 @@ import (
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/networking"
 	projectsapi "github.com/rancher/tests/actions/projects"
+	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/services"
 	"github.com/rancher/tests/actions/workloads"
 	"github.com/rancher/tests/actions/workloads/daemonset"
@@ -43,12 +44,13 @@ const (
 
 type PortTestSuite struct {
 	suite.Suite
-	session          *session.Session
-	client           *rancher.Client
-	cluster          *client.Cluster
-	cattleConfig     map[string]any
-	downstreamClient *v1.Client
-	namespace        *corev1.Namespace
+	session            *session.Session
+	client             *rancher.Client
+	standardUserClient *rancher.Client
+	cluster            *client.Cluster
+	cattleConfig       map[string]any
+	downstreamClient   *v1.Client
+	namespace          *corev1.Namespace
 }
 
 func (p *PortTestSuite) TearDownSuite() {
@@ -81,10 +83,16 @@ func (p *PortTestSuite) SetupSuite() {
 	p.cluster, err = p.client.Management.Cluster.ByID(clusterID)
 	require.NoError(p.T(), err)
 
-	p.downstreamClient, err = p.client.Steve.ProxyDownstream(p.cluster.ID)
+	logrus.Info("Creating a standard user and granting it cluster-owner on the target cluster")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(p.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), p.cluster, nil)
 	require.NoError(p.T(), err)
 
-	_, p.namespace, err = projectsapi.CreateProjectAndNamespace(p.client, p.cluster.ID)
+	p.standardUserClient = standardUserClient
+
+	p.downstreamClient, err = p.standardUserClient.Steve.ProxyDownstream(p.cluster.ID)
+	require.NoError(p.T(), err)
+
+	_, p.namespace, err = projectsapi.CreateProjectAndNamespace(p.standardUserClient, p.cluster.ID)
 	require.NoError(p.T(), err)
 }
 
@@ -93,7 +101,7 @@ func (p *PortTestSuite) TestHostPort() {
 	operations.LoadObjectFromMap(workloads.WorkloadsConfigurationFileKey, p.cattleConfig, workloadConfigs)
 	hostPort := rand.Intn(55283) + 10251
 
-	err := networking.VerifyHostPortConnectivity(p.client, p.downstreamClient, p.cluster.ID, p.namespace.Name, hostPort, "/name.html", workloadConfigs)
+	err := networking.VerifyHostPortConnectivity(p.standardUserClient, p.downstreamClient, p.cluster.ID, p.namespace.Name, hostPort, "/name.html", workloadConfigs)
 	require.NoError(p.T(), err)
 }
 
@@ -102,7 +110,7 @@ func (p *PortTestSuite) TestNodePort() {
 	operations.LoadObjectFromMap(workloads.WorkloadsConfigurationFileKey, p.cattleConfig, workloadConfigs)
 	nodePort := rand.Intn(2767) + 30000
 
-	err := networking.VerifyNodePortConnectivity(p.client, p.downstreamClient, p.cluster.ID, p.namespace.Name, nodePort, "/name.html", workloadConfigs)
+	err := networking.VerifyNodePortConnectivity(p.standardUserClient, p.downstreamClient, p.cluster.ID, p.namespace.Name, nodePort, "/name.html", workloadConfigs)
 	require.NoError(p.T(), err)
 }
 
@@ -119,7 +127,7 @@ func (p *PortTestSuite) TestClusterIP() {
 	require.NoError(p.T(), err)
 
 	logrus.Infof("Verifying daemonset %s is running", testDaemonset.Name)
-	err = extdaemonsetapi.WaitForDaemonSetReady(p.client, p.cluster.ID, p.namespace.Name, testDaemonset.Name)
+	err = extdaemonsetapi.WaitForDaemonSetReady(p.standardUserClient, p.cluster.ID, p.namespace.Name, testDaemonset.Name)
 	require.NoError(p.T(), err)
 
 	serviceName := namegen.AppendRandomString("test-service")
@@ -140,12 +148,12 @@ func (p *PortTestSuite) TestClusterIP() {
 	require.NoError(p.T(), err)
 
 	logrus.Infof("Verifying Cluster connectivity for daemonset %s on port %d", testDaemonset.Name, port)
-	err = networking.VerifyClusterConnectivity(p.client, p.cluster.ID, serviceResp.ID, port, testDaemonset.Name)
+	err = networking.VerifyClusterConnectivity(p.standardUserClient, p.cluster.ID, serviceResp.ID, port, testDaemonset.Name)
 	require.NoError(p.T(), err)
 }
 
 func (p *PortTestSuite) TestLoadBalancer() {
-	isEnabled, err := cloudprovider.IsCloudProviderEnabled(p.client, p.cluster.ID)
+	isEnabled, err := cloudprovider.IsCloudProviderEnabled(p.standardUserClient, p.cluster.ID)
 	require.NoError(p.T(), err)
 
 	if !isEnabled {
@@ -166,7 +174,7 @@ func (p *PortTestSuite) TestLoadBalancer() {
 	require.NoError(p.T(), err)
 
 	logrus.Infof("Verifying daemonset %s is running", testDaemonset.Name)
-	err = extdaemonsetapi.WaitForDaemonSetReady(p.client, p.cluster.ID, p.namespace.Name, testDaemonset.Name)
+	err = extdaemonsetapi.WaitForDaemonSetReady(p.standardUserClient, p.cluster.ID, p.namespace.Name, testDaemonset.Name)
 	require.NoError(p.T(), err)
 
 	serviceName := namegen.AppendRandomString("test-service")
@@ -187,12 +195,12 @@ func (p *PortTestSuite) TestLoadBalancer() {
 	err = services.VerifyService(p.downstreamClient, serviceResp)
 	require.NoError(p.T(), err)
 
-	err = networking.VerifyLoadBalancerConnectivity(p.client, p.cluster.ID, serviceResp.ID, testDaemonset.Name)
+	err = networking.VerifyLoadBalancerConnectivity(p.standardUserClient, p.cluster.ID, serviceResp.ID, testDaemonset.Name)
 	require.NoError(p.T(), err)
 }
 
 func (p *PortTestSuite) TestClusterIPScaleAndUpgrade() {
-	_, namespace, err := projectsapi.CreateProjectAndNamespace(p.client, p.cluster.ID)
+	_, namespace, err := projectsapi.CreateProjectAndNamespace(p.standardUserClient, p.cluster.ID)
 	require.NoError(p.T(), err)
 
 	workloadConfigs := new(workloads.Workloads)
@@ -209,7 +217,7 @@ func (p *PortTestSuite) TestClusterIPScaleAndUpgrade() {
 	require.NoError(p.T(), err)
 
 	logrus.Infof("Verifying deployment %s is running", testDeployment.Name)
-	err = deployment.VerifyDeployment(p.client, p.cluster.ID, testDeployment.Namespace, testDeployment.Name)
+	err = deployment.VerifyDeployment(p.standardUserClient, p.cluster.ID, testDeployment.Namespace, testDeployment.Name)
 	require.NoError(p.T(), err)
 
 	serviceName := namegen.AppendRandomString("test-service")
@@ -232,30 +240,30 @@ func (p *PortTestSuite) TestClusterIPScaleAndUpgrade() {
 	logrus.Infof("Scaling up deployment %s to 3 replicas", testDeployment.Name)
 	replicas = 3
 	testDeployment.Spec.Replicas = &replicas
-	testDeployment, err = extdeploymentapi.UpdateDeployment(p.client, p.cluster.ID, testDeployment, true)
+	testDeployment, err = extdeploymentapi.UpdateDeployment(p.standardUserClient, p.cluster.ID, testDeployment, true)
 	require.NoError(p.T(), err)
 
 	logrus.Infof("Verifying cluster IP connectivity after scale up for deployment %s", testDeployment.Name)
-	err = networking.VerifyClusterConnectivity(p.client, p.cluster.ID, serviceResp.ID, port, testDeployment.Name)
+	err = networking.VerifyClusterConnectivity(p.standardUserClient, p.cluster.ID, serviceResp.ID, port, testDeployment.Name)
 	require.NoError(p.T(), err)
 
 	logrus.Infof("Scaling down deployment %s to 2 replicas", testDeployment.Name)
 	replicas = 2
 	testDeployment.Spec.Replicas = &replicas
-	testDeployment, err = extdeploymentapi.UpdateDeployment(p.client, p.cluster.ID, testDeployment, true)
+	testDeployment, err = extdeploymentapi.UpdateDeployment(p.standardUserClient, p.cluster.ID, testDeployment, true)
 	require.NoError(p.T(), err)
 
 	logrus.Infof("Verifying cluster IP connectivity after scale down for deployment %s", testDeployment.Name)
-	err = networking.VerifyClusterConnectivity(p.client, p.cluster.ID, serviceResp.ID, port, testDeployment.Name)
+	err = networking.VerifyClusterConnectivity(p.standardUserClient, p.cluster.ID, serviceResp.ID, port, testDeployment.Name)
 	require.NoError(p.T(), err)
 
 	logrus.Infof("Upgrading deployment %s container", testDeployment.Name)
 	testDeployment.Spec.Template.Spec.Containers[0].Name = namegen.AppendRandomString("test-upgrade")
-	testDeployment, err = extdeploymentapi.UpdateDeployment(p.client, p.cluster.ID, testDeployment, true)
+	testDeployment, err = extdeploymentapi.UpdateDeployment(p.standardUserClient, p.cluster.ID, testDeployment, true)
 	require.NoError(p.T(), err)
 
 	logrus.Infof("Verifying cluster IP connectivity after upgrade for deployment %s", testDeployment.Name)
-	err = networking.VerifyClusterConnectivity(p.client, p.cluster.ID, serviceResp.ID, port, testDeployment.Name)
+	err = networking.VerifyClusterConnectivity(p.standardUserClient, p.cluster.ID, serviceResp.ID, port, testDeployment.Name)
 	require.NoError(p.T(), err)
 }
 
@@ -266,7 +274,7 @@ func (p *PortTestSuite) TestHostPortScaleAndUpgrade() {
 	}
 	require.NoError(p.T(), err)
 
-	_, namespace, err := projectsapi.CreateProjectAndNamespace(p.client, p.cluster.ID)
+	_, namespace, err := projectsapi.CreateProjectAndNamespace(p.standardUserClient, p.cluster.ID)
 	require.NoError(p.T(), err)
 
 	workloadConfigs := new(workloads.Workloads)
@@ -288,41 +296,41 @@ func (p *PortTestSuite) TestHostPortScaleAndUpgrade() {
 	require.NoError(p.T(), err)
 
 	logrus.Infof("Verifying deployment %s is running", testDeployment.Name)
-	err = deployment.VerifyDeployment(p.client, p.cluster.ID, testDeployment.Namespace, testDeployment.Name)
+	err = deployment.VerifyDeployment(p.standardUserClient, p.cluster.ID, testDeployment.Namespace, testDeployment.Name)
 	require.NoError(p.T(), err)
 
 	logrus.Infof("Scaling up deployment %s to 3 replicas", testDeployment.Name)
 	replicas = 3
 	testDeployment.Spec.Replicas = &replicas
-	testDeployment, err = extdeploymentapi.UpdateDeployment(p.client, p.cluster.ID, testDeployment, true)
+	testDeployment, err = extdeploymentapi.UpdateDeployment(p.standardUserClient, p.cluster.ID, testDeployment, true)
 	require.NoError(p.T(), err)
 
 	logrus.Infof("Verifying host port connectivity after scale up for deployment %s", testDeployment.Name)
-	err = networking.VerifyConnectivityFromWorkerNodes(p.client, p.cluster.ID, "localhost", hostPort, "/name.html", testDeployment.Name)
+	err = networking.VerifyConnectivityFromWorkerNodes(p.standardUserClient, p.cluster.ID, "localhost", hostPort, "/name.html", testDeployment.Name)
 	require.NoError(p.T(), err)
 
 	logrus.Infof("Scaling down deployment %s to 2 replicas", testDeployment.Name)
 	replicas = 2
 	testDeployment.Spec.Replicas = &replicas
-	testDeployment, err = extdeploymentapi.UpdateDeployment(p.client, p.cluster.ID, testDeployment, true)
+	testDeployment, err = extdeploymentapi.UpdateDeployment(p.standardUserClient, p.cluster.ID, testDeployment, true)
 	require.NoError(p.T(), err)
 
 	logrus.Infof("Verifying host port connectivity after scale down for deployment %s", testDeployment.Name)
-	err = networking.VerifyConnectivityFromWorkerNodes(p.client, p.cluster.ID, "localhost", hostPort, "/name.html", testDeployment.Name)
+	err = networking.VerifyConnectivityFromWorkerNodes(p.standardUserClient, p.cluster.ID, "localhost", hostPort, "/name.html", testDeployment.Name)
 	require.NoError(p.T(), err)
 
 	logrus.Infof("Upgrading deployment %s container", testDeployment.Name)
 	testDeployment.Spec.Template.Spec.Containers[0].Name = namegen.AppendRandomString("test-upgrade")
-	testDeployment, err = extdeploymentapi.UpdateDeployment(p.client, p.cluster.ID, testDeployment, true)
+	testDeployment, err = extdeploymentapi.UpdateDeployment(p.standardUserClient, p.cluster.ID, testDeployment, true)
 	require.NoError(p.T(), err)
 
 	logrus.Infof("Verifying host port connectivity after upgrade for deployment %s", testDeployment.Name)
-	err = networking.VerifyConnectivityFromWorkerNodes(p.client, p.cluster.ID, "localhost", hostPort, "/name.html", testDeployment.Name)
+	err = networking.VerifyConnectivityFromWorkerNodes(p.standardUserClient, p.cluster.ID, "localhost", hostPort, "/name.html", testDeployment.Name)
 	require.NoError(p.T(), err)
 }
 
 func (p *PortTestSuite) TestNodePortScaleAndUpgrade() {
-	_, namespace, err := projectsapi.CreateProjectAndNamespace(p.client, p.cluster.ID)
+	_, namespace, err := projectsapi.CreateProjectAndNamespace(p.standardUserClient, p.cluster.ID)
 	require.NoError(p.T(), err)
 
 	workloadConfigs := new(workloads.Workloads)
@@ -339,7 +347,7 @@ func (p *PortTestSuite) TestNodePortScaleAndUpgrade() {
 	require.NoError(p.T(), err)
 
 	logrus.Infof("Verifying deployment %s is running", testDeployment.Name)
-	err = deployment.VerifyDeployment(p.client, p.cluster.ID, testDeployment.Namespace, testDeployment.Name)
+	err = deployment.VerifyDeployment(p.standardUserClient, p.cluster.ID, testDeployment.Namespace, testDeployment.Name)
 	require.NoError(p.T(), err)
 
 	serviceName := namegen.AppendRandomString("test-service")
@@ -362,42 +370,42 @@ func (p *PortTestSuite) TestNodePortScaleAndUpgrade() {
 	logrus.Infof("Scaling up deployment %s to 3 replicas", testDeployment.Name)
 	replicas = 3
 	testDeployment.Spec.Replicas = &replicas
-	testDeployment, err = extdeploymentapi.UpdateDeployment(p.client, p.cluster.ID, testDeployment, true)
+	testDeployment, err = extdeploymentapi.UpdateDeployment(p.standardUserClient, p.cluster.ID, testDeployment, true)
 	require.NoError(p.T(), err)
 
 	logrus.Infof("Verifying node port connectivity after scale up for deployment %s", testDeployment.Name)
-	err = networking.VerifyConnectivityFromWorkerNodes(p.client, p.cluster.ID, "", nodePort, "/name.html", testDeployment.Name)
+	err = networking.VerifyConnectivityFromWorkerNodes(p.standardUserClient, p.cluster.ID, "", nodePort, "/name.html", testDeployment.Name)
 	require.NoError(p.T(), err)
 
 	logrus.Infof("Scaling down deployment %s to 2 replicas", testDeployment.Name)
 	replicas = 2
 	testDeployment.Spec.Replicas = &replicas
-	testDeployment, err = extdeploymentapi.UpdateDeployment(p.client, p.cluster.ID, testDeployment, true)
+	testDeployment, err = extdeploymentapi.UpdateDeployment(p.standardUserClient, p.cluster.ID, testDeployment, true)
 	require.NoError(p.T(), err)
 
 	logrus.Infof("Verifying node port connectivity after scale down for deployment %s", testDeployment.Name)
-	err = networking.VerifyConnectivityFromWorkerNodes(p.client, p.cluster.ID, "", nodePort, "/name.html", testDeployment.Name)
+	err = networking.VerifyConnectivityFromWorkerNodes(p.standardUserClient, p.cluster.ID, "", nodePort, "/name.html", testDeployment.Name)
 	require.NoError(p.T(), err)
 
 	logrus.Infof("Upgrading deployment %s container", testDeployment.Name)
 	testDeployment.Spec.Template.Spec.Containers[0].Name = namegen.AppendRandomString("test-upgrade")
-	testDeployment, err = extdeploymentapi.UpdateDeployment(p.client, p.cluster.ID, testDeployment, true)
+	testDeployment, err = extdeploymentapi.UpdateDeployment(p.standardUserClient, p.cluster.ID, testDeployment, true)
 	require.NoError(p.T(), err)
 
 	logrus.Infof("Verifying node port connectivity after upgrade for deployment %s", testDeployment.Name)
-	err = networking.VerifyConnectivityFromWorkerNodes(p.client, p.cluster.ID, "", nodePort, "/name.html", testDeployment.Name)
+	err = networking.VerifyConnectivityFromWorkerNodes(p.standardUserClient, p.cluster.ID, "", nodePort, "/name.html", testDeployment.Name)
 	require.NoError(p.T(), err)
 }
 
 func (p *PortTestSuite) TestLoadBalanceScaleAndUpgrade() {
-	isEnabled, err := cloudprovider.IsCloudProviderEnabled(p.client, p.cluster.ID)
+	isEnabled, err := cloudprovider.IsCloudProviderEnabled(p.standardUserClient, p.cluster.ID)
 	require.NoError(p.T(), err)
 
 	if !isEnabled {
 		p.T().Skip("Load Balance test requires access to cloud provider.")
 	}
 
-	_, namespace, err := projectsapi.CreateProjectAndNamespace(p.client, p.cluster.ID)
+	_, namespace, err := projectsapi.CreateProjectAndNamespace(p.standardUserClient, p.cluster.ID)
 	require.NoError(p.T(), err)
 
 	workloadConfigs := new(workloads.Workloads)
@@ -415,7 +423,7 @@ func (p *PortTestSuite) TestLoadBalanceScaleAndUpgrade() {
 	require.NoError(p.T(), err)
 
 	logrus.Infof("Verifying deployment %s is running", testDeployment.Name)
-	err = deployment.VerifyDeployment(p.client, p.cluster.ID, testDeployment.Namespace, testDeployment.Name)
+	err = deployment.VerifyDeployment(p.standardUserClient, p.cluster.ID, testDeployment.Namespace, testDeployment.Name)
 	require.NoError(p.T(), err)
 
 	serviceName := namegen.AppendRandomString("test-service")
@@ -439,30 +447,30 @@ func (p *PortTestSuite) TestLoadBalanceScaleAndUpgrade() {
 	logrus.Infof("Scaling up deployment %s to 3 replicas", testDeployment.Name)
 	replicas = 3
 	testDeployment.Spec.Replicas = &replicas
-	testDeployment, err = extdeploymentapi.UpdateDeployment(p.client, p.cluster.ID, testDeployment, true)
+	testDeployment, err = extdeploymentapi.UpdateDeployment(p.standardUserClient, p.cluster.ID, testDeployment, true)
 	require.NoError(p.T(), err)
 
 	logrus.Infof("Verifying load balancer connectivity after scale up for deployment %s", testDeployment.Name)
-	err = networking.VerifyLoadBalancerConnectivity(p.client, p.cluster.ID, serviceResp.ID, testDeployment.Name)
+	err = networking.VerifyLoadBalancerConnectivity(p.standardUserClient, p.cluster.ID, serviceResp.ID, testDeployment.Name)
 	require.NoError(p.T(), err)
 
 	logrus.Infof("Scaling down deployment %s to 2 replicas", testDeployment.Name)
 	replicas = 2
 	testDeployment.Spec.Replicas = &replicas
-	testDeployment, err = extdeploymentapi.UpdateDeployment(p.client, p.cluster.ID, testDeployment, true)
+	testDeployment, err = extdeploymentapi.UpdateDeployment(p.standardUserClient, p.cluster.ID, testDeployment, true)
 	require.NoError(p.T(), err)
 
 	logrus.Infof("Verifying load balancer connectivity after scale down for deployment %s", testDeployment.Name)
-	err = networking.VerifyLoadBalancerConnectivity(p.client, p.cluster.ID, serviceResp.ID, testDeployment.Name)
+	err = networking.VerifyLoadBalancerConnectivity(p.standardUserClient, p.cluster.ID, serviceResp.ID, testDeployment.Name)
 	require.NoError(p.T(), err)
 
 	logrus.Infof("Upgrading deployment %s container", testDeployment.Name)
 	testDeployment.Spec.Template.Spec.Containers[0].Name = namegen.AppendRandomString("test-upgrade")
-	testDeployment, err = extdeploymentapi.UpdateDeployment(p.client, p.cluster.ID, testDeployment, true)
+	testDeployment, err = extdeploymentapi.UpdateDeployment(p.standardUserClient, p.cluster.ID, testDeployment, true)
 	require.NoError(p.T(), err)
 
 	logrus.Infof("Verifying load balancer connectivity after upgrade for deployment %s", testDeployment.Name)
-	err = networking.VerifyLoadBalancerConnectivity(p.client, p.cluster.ID, serviceResp.ID, testDeployment.Name)
+	err = networking.VerifyLoadBalancerConnectivity(p.standardUserClient, p.cluster.ID, serviceResp.ID, testDeployment.Name)
 	require.NoError(p.T(), err)
 }
 
