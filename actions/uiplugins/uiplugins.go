@@ -184,7 +184,7 @@ func CreateExtensionsHelmRepo(client *rancher.Client, repoName, repoURL string) 
 		},
 	}
 
-	_, err := client.Catalog.ClusterRepos().Create(context.TODO(), &clusterRepoObj, metav1.CreateOptions{})
+	_, err := client.Catalog.ClusterRepos().Create(context.Background(), &clusterRepoObj, metav1.CreateOptions{})
 	if err != nil && !k8sErrors.IsAlreadyExists(err) {
 		return err
 	}
