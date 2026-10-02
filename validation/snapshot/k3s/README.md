@@ -78,6 +78,20 @@ The snapshot restore test validates that snapshots can be created and restored w
 1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestSnapshotRestoreUpgradeStrategy -timeout=1h -v`
 
 
+### Snapshot Restore Etcd Imported Test
+
+#### Description:
+The snapshot restore test validates that snapshots can be created and restored without any failures or longterm disruption to workloads on imported clusters.
+
+#### Required Configurations: 
+1. [Terraform Config](#terraform-config)
+
+#### Table Tests:
+1. `K3S_Imported_Restore_ETCD`
+
+#### Run Commands:
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestSnapshotRestoreImported -timeout=1h -v`
+
 ### Snapshot Retention Test
 
 #### Description:
@@ -112,6 +126,44 @@ The snapshot S3 test validates that snapshots can be stored and restored from an
 1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestS3SnapshotRestore -timeout=1h -v`
 
 ## Configurations
+
+### Terraform Config
+terraform config is needed when running the custom clusters and imported clusters as rancher/tfp-automation is utilized to create the clusters.
+
+```yaml
+terraform:
+  downstreamClusterProvider: "aws"
+  privateKeyPath: ""
+  resourcePrefix: ""
+  windowsPrivateKeyPath: ""
+  awsConfig:
+    ami: ""
+    awsKeyName: ""
+    awsInstanceType: "t"
+    awsVolumeType: ""
+    region: ""
+    awsSecurityGroups: ["sg-"]
+    awsSecurityGroupNames: [""]
+    awsSubnetID: ""
+    awsVpcID: ""
+    awsZoneLetter: "a"
+    awsRootSize: 100
+    awsUser: "ubuntu"
+    sshConnectionType: "ssh"
+    timeout: "5m"
+  standalone:
+    k3sVersion: ""
+    osGroup: ""
+    osUser: ""
+```
+
+Also, be sure to export the following variables:
+
+```
+export RANCHER2_PROVIDER_VERSION=""                                     # Required
+export CLOUD_PROVIDER_VERSION=""                                        # Required for custom cluster / infrastructure building
+export LOCALS_PROVIDER_VERSION=""                                       # Required for custom cluster / infrastructure building
+```
 
 ### Existing cluster:
 ```yaml

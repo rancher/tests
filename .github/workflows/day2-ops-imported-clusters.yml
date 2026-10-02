@@ -1,9 +1,12 @@
 ---
-name: Day 2 Operations - Rancher Prime
+name: Day 2 Operations - Imported Clusters
 
 on:
+  pull_request:
+    branches:
+      - main
   schedule:
-    - cron: "0 7 * * 1"
+    - cron: "0 9 * * 5"
   workflow_dispatch:
     inputs:
       rancher_version:
@@ -42,18 +45,19 @@ permissions:
 
 env:
   CLOUD_PROVIDER_VERSION: "6.50.0"
-  LOCAL_CLUSTER_TYPE: >-
-    ${{ 
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.local_cluster_type) || 
-      (github.event_name == 'schedule' && 'rke2') || 'rke2' 
-    }}
+  # LOCAL_CLUSTER_TYPE: >-
+  #   ${{ 
+  #     (github.event_name == 'workflow_dispatch' && github.event.inputs.local_cluster_type) || 
+  #     (github.event_name == 'schedule' && 'rke2') || 'rke2' 
+  #   }}
+  LOCAL_CLUSTER_TYPE: "k3s"
   LOCALS_PROVIDER_VERSION: "${{ vars.LOCALS_PROVIDER_VERSION }}"
   REPORTING_ENABLED: >-
-        ${{
-          github.event_name == 'schedule' ||
-          github.actor == 'github-actions[bot]' ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
-        }}
+    ${{
+      github.event_name == 'schedule' ||
+      github.actor == 'github-actions[bot]' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
+    }}
   CLEANUP_ENABLED: >-
     ${{
       github.event_name == 'schedule' ||
@@ -68,24 +72,24 @@ jobs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     env:
       RUN_ALL_VERSIONS: ${{ github.event.inputs.run_all_versions || 'false' }}
-      RANCHER_VERSION_INPUT: ${{ github.event.inputs.rancher_version || inputs.rancher_version }}
+      # RANCHER_VERSION_INPUT: ${{ github.event.inputs.rancher_version || inputs.rancher_version }}
+      RANCHER_VERSION_INPUT: "head"
     steps:
       - id: set-matrix
         shell: bash
         run: |
           if [[ "$RUN_ALL_VERSIONS" == "true" || "$GITHUB_EVENT_NAME" == "schedule" ]]; then
-            versions='["16", "15", "14"]'
+            versions='["16", "15"]'
           else
             case "$RANCHER_VERSION_INPUT" in
               head) versions='["16"]' ;;
               v2.15-head) versions='["15"]' ;;
-              v2.14-head) versions='["14"]' ;;
               *) versions='[]' ;;
             esac
           fi
           echo "matrix={\"version\":$versions}" >> "$GITHUB_OUTPUT"
 
-  day2-ops-rancher-prime:
+  day2-ops-imported-clusters:
     needs: prepare-matrix
     strategy:
       fail-fast: false
@@ -94,7 +98,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: prime-head
     env:
-      HOSTNAME_PREFIX: "pgha-${{ matrix.version }}"
+      HOSTNAME_PREFIX: "gha-r${{ matrix.version }}"
       RANCHER2_PROVIDER_VERSION: "${{ vars[format('RANCHER2_PROVIDER_VERSION_2_{0}', matrix.version)] }}"
 
     steps:
@@ -140,20 +144,15 @@ jobs:
             HB_RANCHER_REPO, HB_RANCHER_REPO
             HB_RANCHER_VERSION_2_16_HEAD, HB_RANCHER_VERSION_2_16_HEAD
             HB_RANCHER_VERSION_2_15_HEAD, HB_RANCHER_VERSION_2_15_HEAD
-            HB_RANCHER_VERSION_2_14_HEAD, HB_RANCHER_VERSION_2_14_HEAD
             HB_RELEASED_RANCHER_CHART_VERSION_2_16, HB_RELEASED_RANCHER_CHART_VERSION_2_16
             HB_RELEASED_RANCHER_CHART_VERSION_2_15, HB_RELEASED_RANCHER_CHART_VERSION_2_15
-            HB_RELEASED_RANCHER_CHART_VERSION_2_14, HB_RELEASED_RANCHER_CHART_VERSION_2_14
             HB_RKE2_VERSION_2_16, HB_RKE2_VERSION_2_16
             HB_K3S_VERSION_2_16, HB_K3S_VERSION_2_16
             HB_RKE2_VERSION_2_15, HB_RKE2_VERSION_2_15
             HB_K3S_VERSION_2_15, HB_K3S_VERSION_2_15
-            HB_RKE2_VERSION_2_14, HB_RKE2_VERSION_2_14
-            HB_K3S_VERSION_2_14, HB_K3S_VERSION_2_14
             HB_K3S_VERSION_SUFFIX, HB_K3S_VERSION_SUFFIX
             HB_QASE_RECURRING_TEST_RUN_ID_2_16, HB_QASE_RECURRING_TEST_RUN_ID_2_16
             HB_QASE_RECURRING_TEST_RUN_ID_2_15, HB_QASE_RECURRING_TEST_RUN_ID_2_15
-            HB_QASE_RECURRING_TEST_RUN_ID_2_14, HB_QASE_RECURRING_TEST_RUN_ID_2_14
             HB_QA_PRIVATE_REGISTRY_NAME, HB_QA_PRIVATE_REGISTRY_NAME
             HB_QASE_AUTOMATION_TOKEN, HB_QASE_AUTOMATION_TOKEN
             HB_QASE_PROJECT_ID, HB_QASE_PROJECT_ID
@@ -218,25 +217,27 @@ jobs:
         uses: ./.github/actions/set-env-var
         with:
           key: RANCHER_VERSION
-          value: |
-            ${{ 
-              github.event.inputs.rancher_version || 
-              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version) || 
-              (github.event_name == 'schedule' && fromJSON(env[format('HB_RANCHER_VERSION_2_{0}_HEAD', matrix.version)]).value) ||
-              (github.event.inputs.run_all_versions == 'true' && fromJSON(env[format('HB_RANCHER_VERSION_2_{0}_HEAD', matrix.version)]).value)
-            }}
+          # value: |
+          #   ${{ 
+          #     github.event.inputs.rancher_version || 
+          #     (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version) || 
+          #     (github.event_name == 'schedule' && fromJSON(env[format('HB_RANCHER_VERSION_2_{0}_HEAD', matrix.version)]).value) ||
+          #     (github.event.inputs.run_all_versions == 'true' && fromJSON(env[format('HB_RANCHER_VERSION_2_{0}_HEAD', matrix.version)]).value)
+          #   }}
+          value: head
 
       - name: Set Rancher chart version
         uses: ./.github/actions/set-env-var
         with:
           key: RANCHER_CHART_VERSION
-          value: |
-            ${{ 
-              github.event.inputs.rancher_chart_version || 
-              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version) || 
-              (github.event_name == 'schedule' && fromJSON(env[format('HB_RELEASED_RANCHER_CHART_VERSION_2_{0}', matrix.version)]).value) ||
-              (github.event.inputs.run_all_versions == 'true' && fromJSON(env[format('HB_RELEASED_RANCHER_CHART_VERSION_2_{0}', matrix.version)]).value)
-            }}
+          # value: |
+          #   ${{ 
+          #     github.event.inputs.rancher_chart_version || 
+          #     (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version) || 
+          #     (github.event_name == 'schedule' && fromJSON(env[format('HB_RELEASED_RANCHER_CHART_VERSION_2_{0}', matrix.version)]).value) ||
+          #     (github.event.inputs.run_all_versions == 'true' && fromJSON(env[format('HB_RELEASED_RANCHER_CHART_VERSION_2_{0}', matrix.version)]).value)
+          #   }}
+          value: 2.15.2
 
       - name: Get Qase ID
         id: get-qase-id
@@ -249,6 +250,9 @@ jobs:
           cat > config.yaml <<EOF
           rancher:
             host: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
+            adminPassword: "<HB_RANCHER_ADMIN_PASSWORD>"
+            insecure: true
+            cleanup: true
 
           awsCredentials:
             accessKey: "$AWS_ACCESS_KEY"
@@ -256,6 +260,7 @@ jobs:
             defaultRegion: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
           terraform:
+            downstreamClusterProvider: "<HB_PROVIDER>"
             localCluster: "${{ env.LOCAL_CLUSTER_TYPE }}"
             privateKeyPath: "${{ steps.setup-ssh-keys.outputs.ssh-private-key-path }}"
             privateFullChainPath: "${{ steps.setup-certs.outputs.private-full-chain-tfp-path }}"
@@ -271,41 +276,11 @@ jobs:
               rke2Version: "${{ fromJSON(env[format('HB_RKE2_VERSION_2_{0}', matrix.version)]).value }}"
               k3sVersion: "${{ fromJSON(env[format('HB_K3S_VERSION_2_{0}', matrix.version)]).value }}${{ fromJSON(env.HB_K3S_VERSION_SUFFIX).value }}"
 
-          clusterConfig:
-            resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
-            cni: "<HB_CNI>"
-            provider: "<HB_PROVIDER>"
-            nodeProvider: "<HB_NODE_PROVIDER>"
-            pathToRepo: "<HB_PATH_TO_TESTS_REPO>"
-            registries:
-              rke2Registries:
-                mirrors:
-                  "docker.io":
-                    endpoint: ["https://${{ fromJSON(env.HB_QA_PRIVATE_REGISTRY_NAME).value }}"]
-                configs:
-                  "${{ fromJSON(env.HB_QA_PRIVATE_REGISTRY_NAME).value }}":
-                    "auth":
-                      username: "${{ env.DOCKERHUB_USERNAME }}"
-                      password: "${{ env.DOCKERHUB_PASSWORD }}"
-
           logging:
             level: "<HB_LOGGING_LEVEL>"
 
-          awsMachineConfigs:
-            region: "<HB_AWS_REGION>"
-            awsMachineConfig:
-            - roles: ["etcd","controlplane","worker"]
-              iamInstanceProfile: "<HB_AWS_IAM_PROFILE>"
-              ami: "<HB_DEFAULT_AMI>"
-              instanceType: "<HB_AWS_INSTANCE_TYPE>"
-              volumeType: "<HB_AWS_VOLUME_TYPE>"
-              rootSize: "<HB_AWS_ROOT_SIZE>"
-              sshUser: "<HB_AWS_OS_USER>"
-              subnetId: "<HB_AWS_SUBNET_ID>"
-              vpcId: "<HB_AWS_VPC_ID>"
-              securityGroup: ["<HB_AWS_SECURITY_GROUP_NAMES_PRIME>"]
-              zone: "<HB_AWS_ZONE_LETTER>"
-              retries: "5"
+          sshPath: 
+            sshPath: "<HB_TESTS_SSH_DIR_PATH>"
           EOF
 
       - name: Export CATTLE_TEST_CONFIG
@@ -341,7 +316,8 @@ jobs:
           QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
-        uses: ./.github/actions/run-hostbusters-prime-test-suites
+          tags: imported
+        uses: ./.github/actions/run-hostbusters-test-suites
 
       - name: Cleanup Infrastructure
         if: always() && env.CLEANUP_ENABLED == 'true'
@@ -400,6 +376,6 @@ jobs:
         if: always() && github.event_name == 'schedule'
         uses: ./.github/actions/save-weekly-summary-result
         with:
-          rancher_version: ${{ env.RANCHER_VERSION }}
-          workflow: day2-ops-rancher-prime
+          rancher_version: ${{ env.UPGRADED_RANCHER_VERSION }}
+          workflow: day2-ops-imported-clusters
           job: v2-${{ matrix.version }}

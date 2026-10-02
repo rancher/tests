@@ -70,7 +70,7 @@ func VerifyV2ProvSnapshots(client *rancher.Client, clusterName string, snapshotI
 				return false
 			}
 
-			if snapshot.ObjectMeta.State.Name != "active" {
+			if snapshot.Labels[SnapshotClusterNameLabel] != clusterName || snapshot.ObjectMeta.State == nil || snapshot.ObjectMeta.State.Name != "active" {
 				return false
 			}
 		}
@@ -90,11 +90,11 @@ func VerifyV2ProvSnapshots(client *rancher.Client, clusterName string, snapshotI
 func VerifySnapshotReadyForRestore(client *rancher.Client, clusterName, snapshotName string) error {
 	err := verifySnapshotsStable(client, clusterName, func(snapshotList []steveV1.SteveAPIObject) bool {
 		for _, snapshot := range snapshotList {
-			if snapshot.Name != snapshotName {
+			if snapshot.Name != snapshotName || snapshot.Labels[SnapshotClusterNameLabel] != clusterName {
 				continue
 			}
 
-			if snapshot.ObjectMeta.State.Name != "active" {
+			if snapshot.ObjectMeta.State == nil || snapshot.ObjectMeta.State.Name != "active" {
 				return false
 			}
 
