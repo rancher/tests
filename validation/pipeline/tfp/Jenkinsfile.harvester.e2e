@@ -313,6 +313,10 @@ node("harvester-vpn-1") {
                                         script: "yq '.harvesterCredentials.clusterId' ../${filename}",
                                         returnStdout: true
                                     ).trim()
+                                    env.AWS_REGION = sh (
+                                        script: "yq '.awsCredentials.defaultRegion // \"\"' ../${filename}",
+                                        returnStdout: true
+                                    ).trim()
                                     def tfvars_filepath = "cluster.tfvars"
                                     writeFile file: tfvars_filepath, text: DOWNSTREAM_CLUSTER_CONFIG
                                     sh """
@@ -344,7 +348,7 @@ echo "}\\n" >> "${tfvars_filepath}"
                                 docker cp ${tfvars_filepath} hvst${golangTestContainer}:/root/go/src/github.com/rancher/qa-infra-automation/tofu/rancher/cluster/
                                 docker stop hvst${golangTestContainer} || true; docker rm hvst${golangTestContainer}
 
-                                docker run -v ${validationVolume}:/root --name ${testContainer}-ds -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_REGION=us-east-2 -t ${validationImage} sh -c '
+                                docker run -v ${validationVolume}:/root --name ${testContainer}-ds -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_REGION -t ${validationImage} sh -c '
                                 . /root/playbook.env
                                 . ./validation/pipeline/scripts/register_downstream_cluster.sh
                                 '

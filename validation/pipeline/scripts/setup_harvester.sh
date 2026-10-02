@@ -38,8 +38,33 @@ get_vip() {
     [[ -n "$harvester_vip" ]]
 }
 
+seeder_cluster_running() {
+    local cluster_status
+    cluster_status=$(kubectl get "clusters.metal/$HARVESTER_CLUSTER_NAME" -n tink-system -o jsonpath='{.status.status}')
+    harvester_vip=$(kubectl get "clusters.metal/$HARVESTER_CLUSTER_NAME" -n tink-system -o jsonpath='{.status.clusterAddress}')
+    [[ "$cluster_status" == "clusterRunning" && -n "$harvester_vip" ]]
+}
+
+deployment_exists() {
+    kubectl get deployment -n "$1" "$2" >/dev/null 2>&1
+}
+
 harvester_is_healthy() {
     [[ "$(curl -s -L --insecure --max-time 30 -o /dev/null -w "%{http_code}" "https://$harvester_vip/v3-public/localproviders/local")" == "200" ]]
+}
+
+harvester_login() {
+    local pw loginBody
+    for pw in "password1234" "admin"; do
+        loginBody=$(jq -n --arg p "$pw" '{username:"admin", password:$p, responseType:"json"}')
+        jsonOutput=$(curl -s --insecure --max-time 60 -d "$loginBody" "https://$harvester_vip/v3-public/localproviders/local?action=login" || true)
+        token=$(echo "$jsonOutput" | jq -cr .token 2>/dev/null || echo "")
+        if [[ -n "$token" && "$token" != "null" ]]; then
+            usedPassword="$pw"
+            return 0
+        fi
+    done
+    return 1
 }
 
 yq e '.spec.nodes.[0].inventoryReference.name = strenv(HARVESTER_INVENTORY_NODE)' -i node_manifest.yaml
@@ -80,28 +105,18 @@ if [[ -z "$EXISTING_HARVESTER_IP" ]]; then
 
     kubectl apply -f node_manifest.yaml
     wait_for "PXE address on inventories/$HARVESTER_INVENTORY_NODE" 1800 10 get_pxe_address
+    wait_for "clusters.metal/$HARVESTER_CLUSTER_NAME to be clusterRunning with a cluster address" 3600 30 seeder_cluster_running
 fi
 
 echo "harvester IP address"
 echo "$harvester_node_ip"
 
-if [[ -z "$EXISTING_HARVESTER_IP" ]]; then
-    sleep 230
-fi
-
 wait_for "ping response from $harvester_node_ip" 1800 5 ping -c1 -W2 "$harvester_node_ip"
-
-if [[ -z "$EXISTING_HARVESTER_IP" ]]; then
-    sleep 660
-fi
-
 wait_for "harvester kubeconfig over ssh from $harvester_node_ip" 2400 15 fetch_harvester_kubeconfig
 
-if [[ -z "$EXISTING_HARVESTER_IP" ]]; then
-    sleep 480
+if [[ -z "$harvester_vip" ]]; then
+    wait_for "harvester VIP on $harvester_node_ip" 900 5 get_vip
 fi
-
-wait_for "harvester VIP on $harvester_node_ip" 900 5 get_vip
 
 echo "$harvester_vip" > host.txt
 
@@ -109,30 +124,18 @@ sed -i "s#server: https://127.0.0.1:6443#server: https://$harvester_vip:6443#g" 
 
 export KUBECONFIG=harvester.yaml
 
+wait_for "deployment harvester-system/harvester to exist" 1800 15 deployment_exists harvester-system harvester
+wait_for "deployment cattle-system/rancher to exist" 1800 15 deployment_exists cattle-system rancher
 kubectl get pods -A
 kubectl rollout status deployment -n harvester-system harvester --timeout=20m
 kubectl rollout status deployment -n cattle-system rancher --timeout=20m
 
 wait_for "https://$harvester_vip to be healthy" 1800 5 harvester_is_healthy
 
-if [[ -z "$EXISTING_HARVESTER_IP" ]]; then
-    sleep 120
-fi
-
 token=""
 usedPassword=""
 jsonOutput=""
-for pw in "password1234" "admin"; do
-    loginBody=$(jq -n --arg p "$pw" '{username:"admin", password:$p, responseType:"json"}')
-    jsonOutput=$(curl -s --insecure --max-time 60 -d "$loginBody" "https://$harvester_vip/v3-public/localproviders/local?action=login" || true)
-    token=$(echo "$jsonOutput" | jq -cr .token 2>/dev/null || echo "")
-    if [[ -n "$token" && "$token" != "null" ]]; then
-        usedPassword="$pw"
-        break
-    fi
-done
-
-if [[ -z "$token" || "$token" == "null" ]]; then
+if ! wait_for "admin login to https://$harvester_vip" 600 15 harvester_login; then
     echo "FATAL: could not log in to harvester at https://$harvester_vip with any known credential" >&2
     echo "$jsonOutput" >&2
     exit 1
