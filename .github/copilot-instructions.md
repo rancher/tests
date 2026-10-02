@@ -204,6 +204,7 @@ Always update relevant documentation when making changes:
   * one of which will always be contain `Dynamic` substring, which will depend on user input from "github.com/rancher/shepherd/pkg/config", wrapped in an action. See actions/fleet/fleet.go for an example
   * one of which will always be as static as possible, where no input is needed from the config
 * provide at least 1 full review of the code before submitting the PR
+* never include Jenkins URLs or other internal CI/infrastructure endpoints in PR/issue titles, bodies, comments, or commit messages; reference jobs and runs by name and number in plain text instead (e.g. "go-pit-setup-job run 127 failed in Run Test Validations")
 * when creating helper functions, default to returning an error instead of accepting a testing.T parameter
 * Use `logrus` only in helper/non-test functions where `*testing.T` is not in scope (standalone helper files, `actions/`)
 * return pointers to objects where possible in helper functions
