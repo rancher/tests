@@ -12,7 +12,7 @@ replace (
 
 	github.com/rancher/rancher/pkg/apis => github.com/rancher/rancher/pkg/apis v0.0.0-20260527150105-ae26ccbc3fed
 	github.com/rancher/rancher/pkg/client => github.com/rancher/rancher/pkg/client v0.0.0-20260527150105-ae26ccbc3fed
-	github.com/rancher/tfp-automation => github.com/rancher/tfp-automation v0.0.0-20260929210548-eb089558bee3
+	github.com/rancher/tfp-automation => github.com/rancher/tfp-automation v0.0.0-20261005183757-854b46a2b45d
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc => go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.53.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp => go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.53.0
 	go.opentelemetry.io/otel => go.opentelemetry.io/otel v1.28.0
@@ -76,15 +76,15 @@ require (
 	github.com/rancher/rancher v0.0.0-20260527150105-ae26ccbc3fed
 	github.com/rancher/rancher/pkg/apis v0.0.0
 	github.com/rancher/shepherd v0.0.0-20261002144048-2ae83452a53e
-	github.com/rancher/tfp-automation v0.0.0-20260929210548-eb089558bee3
+	github.com/rancher/tfp-automation v0.0.0-20261005183757-854b46a2b45d
 	github.com/rancher/wrangler v1.1.2
 	github.com/sirupsen/logrus v1.10.2
 	github.com/stretchr/testify v1.12.1
 	golang.org/x/crypto v0.57.0
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/api v0.37.0
-	k8s.io/apimachinery v0.37.0
+	k8s.io/api v0.37.1
+	k8s.io/apimachinery v0.37.1
 	k8s.io/client-go v12.0.0+incompatible
 	sigs.k8s.io/cluster-api v1.12.2
 	sigs.k8s.io/yaml v1.6.0
@@ -225,15 +225,15 @@ require (
 	gopkg.in/validator.v2 v2.0.1 // indirect
 	howett.net/plist v1.0.1 // indirect
 	k8s.io/apiextensions-apiserver v0.36.3 // indirect
-	k8s.io/apiserver v0.37.0 // indirect
-	k8s.io/cli-runtime v0.37.0 // indirect
-	k8s.io/component-base v0.37.0 // indirect
-	k8s.io/component-helpers v0.37.0 // indirect
+	k8s.io/apiserver v0.37.1 // indirect
+	k8s.io/cli-runtime v0.37.1 // indirect
+	k8s.io/component-base v0.37.1 // indirect
+	k8s.io/component-helpers v0.37.1 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
 	k8s.io/kube-aggregator v0.36.1 // indirect
 	k8s.io/kube-openapi v0.31.5 // indirect
 	k8s.io/kubectl v0.36.1 // indirect
-	k8s.io/streaming v0.37.0 // indirect
+	k8s.io/streaming v0.37.1 // indirect
 	k8s.io/utils v0.0.0-20260626114624-be93311217bd // indirect
 	sigs.k8s.io/cli-utils v0.37.2 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect

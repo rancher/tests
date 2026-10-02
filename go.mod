@@ -17,7 +17,7 @@ replace (
 
 	github.com/rancher/tests/actions => ./actions
 	github.com/rancher/tests/interoperability => ./interoperability
-	github.com/rancher/tfp-automation => github.com/rancher/tfp-automation v0.0.0-20260929210548-eb089558bee3
+	github.com/rancher/tfp-automation => github.com/rancher/tfp-automation v0.0.0-20261005183757-854b46a2b45d
 
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc => go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.53.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp => go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.53.0
@@ -69,7 +69,7 @@ require (
 	github.com/aws/aws-sdk-go v1.55.8
 	github.com/aws/aws-sdk-go-v2/config v1.32.33
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.106.2
-	github.com/go-echarts/go-echarts/v2 v2.7.2
+	github.com/go-echarts/go-echarts/v2 v2.7.3
 	github.com/gruntwork-io/terratest v1.0.1
 	github.com/hashicorp/go-version v1.8.0
 	github.com/mattn/go-sqlite3 v1.14.28
@@ -87,7 +87,7 @@ require (
 	github.com/rancher/shepherd v0.0.0-20261002144048-2ae83452a53e
 	github.com/rancher/tests/actions v0.0.0-20260925190906-17002625ce49
 	github.com/rancher/tests/interoperability v0.0.0
-	github.com/rancher/tfp-automation v0.0.0-20260929210548-eb089558bee3
+	github.com/rancher/tfp-automation v0.0.0-20261005183757-854b46a2b45d
 	github.com/rancher/wrangler/v3 v3.7.0
 	github.com/sirupsen/logrus v1.10.2
 	github.com/stretchr/testify v1.12.1
@@ -95,8 +95,8 @@ require (
 	golang.org/x/net v0.58.0
 	golang.org/x/text v0.42.0
 	gopkg.in/yaml.v2 v2.4.0
-	k8s.io/api v0.37.0
-	k8s.io/apimachinery v0.37.0
+	k8s.io/api v0.37.1
+	k8s.io/apimachinery v0.37.1
 	k8s.io/client-go v12.0.0+incompatible
 	sigs.k8s.io/yaml v1.6.0
 )
@@ -264,15 +264,15 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	howett.net/plist v1.0.1 // indirect
 	k8s.io/apiextensions-apiserver v0.36.3 // indirect
-	k8s.io/apiserver v0.37.0 // indirect
-	k8s.io/cli-runtime v0.37.0 // indirect
-	k8s.io/component-base v0.37.0 // indirect
-	k8s.io/component-helpers v0.37.0 // indirect
+	k8s.io/apiserver v0.37.1 // indirect
+	k8s.io/cli-runtime v0.37.1 // indirect
+	k8s.io/component-base v0.37.1 // indirect
+	k8s.io/component-helpers v0.37.1 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
 	k8s.io/kube-aggregator v0.36.1 // indirect
 	k8s.io/kube-openapi v0.31.5 // indirect
 	k8s.io/kubectl v0.36.1 // indirect
-	k8s.io/streaming v0.37.0 // indirect
+	k8s.io/streaming v0.37.1 // indirect
 	k8s.io/utils v0.0.0-20260626114624-be93311217bd // indirect
 	kubevirt.io/api v1.4.0 // indirect
 	kubevirt.io/containerized-data-importer-api v1.61.0 // indirect
