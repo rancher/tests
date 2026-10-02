@@ -153,7 +153,9 @@ else
     fi
     python3.11 scripts/generate_inventory.py --input "$NODES_JSON" --distro "$INVENTORY_DISTRO" --env default \
         --schema ansible/_inventory-schema.yaml --output-dir "$INVENTORY_DIR"
-    if [ $? -ne 0 ]; then
+    generate_status=$?
+    rm -f "$NODES_JSON"
+    if [ $generate_status -ne 0 ]; then
         echo "Error: failed to generate the Ansible inventory from $TERRAFORM_DIR."
         exit 1
     fi
