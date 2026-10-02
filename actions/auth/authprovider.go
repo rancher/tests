@@ -6,6 +6,7 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/clients/rancher/auth"
+	"github.com/rancher/shepherd/clients/rancher/auth/oidcprovider"
 	"github.com/rancher/shepherd/clients/rancher/auth/saml"
 	v3 "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/defaults"
@@ -30,10 +31,12 @@ const (
 	ActiveDirectory                      = "activedirectory"
 	KeycloakSAML                         = "keycloak"
 	GenericSAML                          = "genericsaml"
+	KeycloakOIDC                         = "keycloakoidc"
 	OpenLdapPasswordSecretID             = "openldapconfig-serviceaccountpassword"
 	ActiveDirectoryPasswordSecretID      = "activedirectoryconfig-serviceaccountpassword"
 	KeycloakSAMLKeySecretID              = "keycloakconfig-spkey"
 	GenericSAMLKeySecretID               = "genericsamlconfig-spkey"
+	KeycloakOIDCClientSecretID           = "keycloakoidcconfig-clientsecret"
 	PrincipalTypeUser                    = "user"
 	PrincipalTypeGroup                   = "group"
 	AccessModeMissingRequiredError       = "accessMode=MissingRequired"
@@ -51,6 +54,10 @@ const (
 var samlProviders = map[string]saml.Provider{
 	KeycloakSAML: saml.KeycloakSAML,
 	GenericSAML:  saml.GenericSAML,
+}
+
+var oidcProviders = map[string]oidcprovider.Provider{
+	KeycloakOIDC: oidcprovider.KeycloakOIDC,
 }
 
 type User struct {
@@ -80,7 +87,7 @@ type AuthConfig struct {
 	TripleNestedUsers []User `yaml:"tripleNestedUsers"`
 }
 
-type SAMLAuthConfig struct {
+type ExternalAuthConfig struct {
 	Group             string `yaml:"group"`
 	Users             []User `yaml:"users"`
 	ExcludedUsers     []User `yaml:"excludedUsers"`
@@ -147,12 +154,19 @@ func LoginAsAuthUser(client *rancher.Client, user *v3.User, providerName string)
 		return client.AsSAMLUser(user, samlProvider)
 	}
 
+	if oidcProvider, isOIDC := oidcProviders[providerName]; isOIDC {
+		return client.AsOIDCUser(user, oidcProvider)
+	}
+
 	return client.AsAuthUser(user, auth.Provider(providerName))
 }
 
 // NewPrincipalID constructs a principal ID string in the format required by the auth provider
 func NewPrincipalID(authConfigID, principalType, name, userSearchBase, groupSearchBase string) string {
-	if _, isSAML := samlProviders[authConfigID]; isSAML {
+	_, isSAML := samlProviders[authConfigID]
+	_, isOIDC := oidcProviders[authConfigID]
+
+	if isSAML || isOIDC {
 		return fmt.Sprintf("%s_%s://%s", authConfigID, principalType, name)
 	}
 
@@ -233,6 +247,8 @@ func EnsureAuthProviderEnabled(client *rancher.Client, providerName string) erro
 		err = enableKeycloakSAML(client)
 	case GenericSAML:
 		err = enableGenericSAML(client)
+	case KeycloakOIDC:
+		err = enableKeycloakOIDC(client)
 	default:
 		return fmt.Errorf("unsupported auth provider: %s", providerName)
 	}
@@ -269,25 +285,31 @@ func GetUserPrincipalID(providerName, username, userSearchBase, groupSearchBase 
 	return NewPrincipalID(providerName, PrincipalTypeUser, username, userSearchBase, groupSearchBase)
 }
 
-// GetSAMLGroupPrincipalID constructs a group principal ID for a SAML provider
-func GetSAMLGroupPrincipalID(providerName, groupName string) string {
+// GetExternalGroupPrincipalID constructs a group principal ID for an external auth provider
+func GetExternalGroupPrincipalID(providerName, groupName string) string {
 	return GetGroupPrincipalID(providerName, groupName, "", "")
 }
 
-// GetSAMLUserPrincipalID constructs a user principal ID for a SAML provider
-func GetSAMLUserPrincipalID(providerName string, user User) string {
+// GetExternalUserPrincipalID constructs a user principal ID for an external auth provider
+func GetExternalUserPrincipalID(providerName string, user User) string {
 	return GetUserPrincipalID(providerName, PrincipalNameOf(user), "", "")
 }
 
 // UpdateAccessMode updates the auth config to the specified access mode with optional allowed principal IDs
 func UpdateAccessMode(client *rancher.Client, providerName, accessMode string, allowedPrincipalIDs []string) (*v3.AuthConfig, error) {
-	if providerName == KeycloakSAML || providerName == GenericSAML {
-		samlClient := client.Auth.KeycloakSAML
-		if providerName == GenericSAML {
-			samlClient = client.Auth.GenericSAML
-		}
+	var updateAccessMode func(string, []string) error
 
-		if err := samlClient.UpdateAccessMode(accessMode, allowedPrincipalIDs); err != nil {
+	switch providerName {
+	case KeycloakSAML:
+		updateAccessMode = client.Auth.KeycloakSAML.UpdateAccessMode
+	case GenericSAML:
+		updateAccessMode = client.Auth.GenericSAML.UpdateAccessMode
+	case KeycloakOIDC:
+		updateAccessMode = client.Auth.KeycloakOIDC.UpdateAccessMode
+	}
+
+	if updateAccessMode != nil {
+		if err := updateAccessMode(accessMode, allowedPrincipalIDs); err != nil {
 			return nil, fmt.Errorf("failed to update auth config to access mode %s: %w", accessMode, err)
 		}
 
@@ -330,8 +352,8 @@ func SetupRequiredAccessModePrincipals(authAdmin *rancher.Client, clusterID stri
 	return principalIDs, nil
 }
 
-// SetupSAMLRequiredAccessModePrincipals grants a SAML group cluster access and returns the principal IDs that have to be allowed for that group and its members to sign in
-func SetupSAMLRequiredAccessModePrincipals(authAdmin *rancher.Client, clusterID string, authConfig *SAMLAuthConfig, providerName string) ([]string, error) {
+// SetupExternalRequiredAccessModePrincipals grants a group cluster access and returns the principal IDs that have to be allowed for that group and its members to sign in
+func SetupExternalRequiredAccessModePrincipals(authAdmin *rancher.Client, clusterID string, authConfig *ExternalAuthConfig, providerName string) ([]string, error) {
 	groupPrincipalID := GetGroupPrincipalID(providerName, authConfig.Group, "", "")
 
 	_, err := rbacapi.CreateGroupClusterRoleTemplateBinding(authAdmin, clusterID, groupPrincipalID, rbac.ClusterMember.String())
