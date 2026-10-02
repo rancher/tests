@@ -42,6 +42,7 @@ func (u *UpgradeWorkloadTestSuite) SetupSuite() {
 
 	upgradeClusters, err := upgradeinput.LoadUpgradeKubernetesConfig(client)
 	require.NoError(u.T(), err)
+	require.NotEmptyf(u.T(), upgradeClusters, "no clusters found in the upgrade config")
 
 	for _, cluster := range upgradeClusters {
 		clusterID, err := clusters.GetClusterIDByName(client, cluster.Name)
