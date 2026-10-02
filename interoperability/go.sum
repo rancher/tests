@@ -3497,8 +3497,8 @@ github.com/onsi/ginkgo/v2 v2.13.0/go.mod h1:TE309ZR8s5FsKKpuB1YAQYBzCaAfUgatB/xl
 github.com/onsi/ginkgo/v2 v2.17.1/go.mod h1:llBI3WDLL9Z6taip6f33H76YcWtJv+7R3HigUjbIBOs=
 github.com/onsi/ginkgo/v2 v2.17.2/go.mod h1:nP2DPOQoNsQmsVyv5rDA8JkXQoCs6goXIvr/PRJ1eCc=
 github.com/onsi/ginkgo/v2 v2.19.0/go.mod h1:rlwLi9PilAFJ8jCg9UE1QP6VBpd6/xj3SRC0d6TU0To=
-github.com/onsi/ginkgo/v2 v2.29.0 h1:rfh+ZFjgJhYWRoIqVf3Uwx/W20yLrcrE2h2GmYVRaag=
-github.com/onsi/ginkgo/v2 v2.29.0/go.mod h1:+aXOY+vzZ5mu2iI2HpTZUPmM//oQfsNFX6gU9kNcA44=
+github.com/onsi/ginkgo/v2 v2.32.0 h1:Hw7s2pVrQo/8Yz5N77qdnpHaoc+c6cC9WIV1Jce+J6E=
+github.com/onsi/ginkgo/v2 v2.32.0/go.mod h1:+aXOY+vzZ5mu2iI2HpTZUPmM//oQfsNFX6gU9kNcA44=
 github.com/onsi/gomega v1.4.3/go.mod h1:ex+gbHU/CVuBBDIJjb2X0qEXbFg53c61hWP/1CpauHY=
 github.com/onsi/gomega v1.7.1/go.mod h1:XdKZgCCFLUoM/7CFJVPcG8C1xQ1AJ0vpAezJrB7JYyY=
 github.com/onsi/gomega v1.8.1/go.mod h1:Ho0h+IUsWyvy1OpqCwxlQ/21gkhVunqlU8fDGcoTdcA=
@@ -3637,8 +3637,8 @@ github.com/prometheus/procfs v0.21.1 h1:GljZCt+zSTS+NZq88cyQ1LjZ+RCHp3uVuabBWA5+
 github.com/prometheus/procfs v0.21.1/go.mod h1:aB55Cww9pdSJVHk0hUf0inxWyyjPogFIjmHKYgMKmtY=
 github.com/rancher/aks-operator v1.15.0-rc.1 h1:+a6A3a1eGgtZVG+/Xi0us/4HVQSsG9j3CADKOGT6OqM=
 github.com/rancher/aks-operator v1.15.0-rc.1/go.mod h1:cAYS9zWnBcUDn2DPQbYbRty/gyYHXHKr5V9MUB7gG7w=
-github.com/rancher/ali-operator v1.14.0-rc.1 h1:K/9sFAdo7QM8rD+ZpPM8YkwhLee4NHqvu5psNEdZArU=
-github.com/rancher/ali-operator v1.14.0-rc.1/go.mod h1:96zTYfGWn5kQ6bkVimm2NlsEUYB5FzAYHmn+hlqs4Hc=
+github.com/rancher/ali-operator v1.14.1-rc.1 h1:Cc+L+yPjcyQlmxi1qWr3yMZTghHG/H6dOiOD4gc/wkE=
+github.com/rancher/ali-operator v1.14.1-rc.1/go.mod h1:2sA2EVG1KbGcsDmUxWv2eQle/aoiiWCtPwOBGfajKQs=
 github.com/rancher/apiserver v0.9.6 h1:oRPbe5ICkS5k9lQq0GR8ElYU5rikhxUZMFqHgXafJAE=
 github.com/rancher/apiserver v0.9.6/go.mod h1:NLkaZ69HiT6/5OcXm2EZcydCv8PKRcIXaIphABvhX1I=
 github.com/rancher/backup-restore-operator v1.2.1 h1:jsCChVZlezQnEagVs9YG+kaG8w5xXuBng6SPukrY2rs=
@@ -3647,8 +3647,8 @@ github.com/rancher/eks-operator v1.15.0-rc.1 h1:E/nQzCKn6SriPtD6bLG4G7YTx8CEmSG+
 github.com/rancher/eks-operator v1.15.0-rc.1/go.mod h1:k1PjsU9oG9mwwTSJmBfAs3snJ6VQ/6pPZK2HNI8KrVk=
 github.com/rancher/fleet/pkg/apis v0.15.0 h1:IZX56b8lA28BkTu+qThZgApgm61u0A+8utHJoFx7ij4=
 github.com/rancher/fleet/pkg/apis v0.15.0/go.mod h1:YTNYXP/LLahkk7pYMhhrXHlTdIN9vFe1WbnvV6h654Y=
-github.com/rancher/gke-operator v1.15.0-rc.1 h1:ZkwK9J2KLuu4PlScm2HShUb6koKbXjbmihuENkk4TV8=
-github.com/rancher/gke-operator v1.15.0-rc.1/go.mod h1:tc1XZNmqJAhOttKqgAQEoRp11GICuJ3ZgMazQt2n/+0=
+github.com/rancher/gke-operator v1.15.3 h1:Ag61jhP4rRwQFuD0pq2EsUk0i5UXQYGG0q0gX10Q/48=
+github.com/rancher/gke-operator v1.15.3/go.mod h1:fXkjQpeG9jpr71IjlsSNLpW5yvweoZ5cUfsVsMUABc0=
 github.com/rancher/lasso v0.0.0-20200515155337-a34e1e26ad91/go.mod h1:G6Vv2aj6xB2YjTVagmu4NkhBvbE8nBcGykHRENH6arI=
 github.com/rancher/lasso v0.2.9 h1:5Xk9Qid+YDOLpa6s5xalcSR0cA5BMbgWcaOZ8kdNU7k=
 github.com/rancher/lasso v0.2.9/go.mod h1:PMtxoVahRQvhEAi1HVOfyLDe1CrtGwTqOtkPVjSSkns=
@@ -3660,8 +3660,8 @@ github.com/rancher/rancher v0.0.0-20260527150105-ae26ccbc3fed h1:G66Ag8VZXlA6Kiu
 github.com/rancher/rancher v0.0.0-20260527150105-ae26ccbc3fed/go.mod h1:wn9b239FRsjEulPTy5U1qTgT9vusgIc8Sxq0UJRdvhA=
 github.com/rancher/rancher/pkg/apis v0.0.0-20260527150105-ae26ccbc3fed h1:HoeCYnxcvP+p020CvCyNaJSwzH5I/nsQ6uRcbDbB17E=
 github.com/rancher/rancher/pkg/apis v0.0.0-20260527150105-ae26ccbc3fed/go.mod h1:TtM3SQiHWml7okiEMRndWKt1knQ/DeQC60Bzt6OBmrg=
-github.com/rancher/shepherd v0.0.0-20260921153737-8e09fea6aaaf h1:gjjue7EfiYivzzSMOVvr2jPIQHCtdJzuMhP7BIzlGsE=
-github.com/rancher/shepherd v0.0.0-20260921153737-8e09fea6aaaf/go.mod h1:OxexRIlEGlPaWS9YeFVfYD5ANH/8Yqb+hMyPuUiCp2o=
+github.com/rancher/shepherd v0.0.0-20261002144048-2ae83452a53e h1:ShGqWPk+5wkQXZfCLKsc+2atQm4Y75wTEBFmwFg9K90=
+github.com/rancher/shepherd v0.0.0-20261002144048-2ae83452a53e/go.mod h1:fKpwRL07dBLvMIzWAsB+2CPYmlPEs+7Ua23r5sXTq1M=
 github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20260519183600-f1362a3fe1a8 h1:7qMiCWOKZdhscekXzeIUpaGethXtj19ob6V+U91tAxI=
 github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20260519183600-f1362a3fe1a8/go.mod h1:xDDFkXVPcCf+S6wQoIDwgIijQHcIaVdN0eQRG2GcFd4=
 github.com/rancher/tfp-automation v0.0.0-20260929210548-eb089558bee3 h1:hvDjIelbW4v6WpW3vuyU5cVzFqwRtiOxKnobjg7QswA=
