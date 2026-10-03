@@ -116,7 +116,7 @@ node("harvester-vpn-1") {
 
                 dir("./validation") {
                   def filename = "config.yaml"
-                  def configContents = env.CONFIG
+                  def configContents = env.CONFIG.replace('${AWS_ACCESS_KEY_ID}', env.AWS_ACCESS_KEY_ID).replace('${AWS_SECRET_ACCESS_KEY}', env.AWS_SECRET_ACCESS_KEY)
 
                   writeFile file: filename, text: configContents
                   env.CATTLE_TEST_CONFIG = rootPath+filename

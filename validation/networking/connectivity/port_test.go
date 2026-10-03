@@ -113,6 +113,7 @@ func (p *PortTestSuite) TestClusterIP() {
 
 	workloadConfigs.DaemonSet.ObjectMeta.Namespace = p.namespace.Name
 	workloadConfigs.DaemonSet.ObjectMeta.GenerateName = "cluster-ip-connectivity-"
+	daemonset.SetUniqueSelector(workloadConfigs.DaemonSet)
 
 	logrus.Infof("Creating daemonset with name prefix: %s", workloadConfigs.DaemonSet.ObjectMeta.GenerateName)
 	testDaemonset, err := daemonset.CreateDaemonSetFromConfig(p.downstreamClient, p.cluster.ID, workloadConfigs.DaemonSet)
@@ -160,6 +161,7 @@ func (p *PortTestSuite) TestLoadBalancer() {
 
 	workloadConfigs.DaemonSet.ObjectMeta.Namespace = p.namespace.Name
 	workloadConfigs.DaemonSet.ObjectMeta.GenerateName = "load-balancer-connectivity-"
+	daemonset.SetUniqueSelector(workloadConfigs.DaemonSet)
 
 	logrus.Infof("Creating daemonset with name prefix: %s", workloadConfigs.DaemonSet.ObjectMeta.GenerateName)
 	testDaemonset, err := daemonset.CreateDaemonSetFromConfig(p.downstreamClient, p.cluster.ID, workloadConfigs.DaemonSet)

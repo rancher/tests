@@ -124,6 +124,7 @@ func VerifyNodePortConnectivity(client *rancher.Client, downstreamClient *v1.Cli
 
 	daemonSetConfig.ObjectMeta.Namespace = namespaceName
 	daemonSetConfig.ObjectMeta.GenerateName = nodePortNamePrefix
+	daemonset.SetUniqueSelector(daemonSetConfig)
 
 	logrus.Infof("Creating daemonset with name prefix: %s", daemonSetConfig.ObjectMeta.GenerateName)
 	testDaemonset, err := daemonset.CreateDaemonSetFromConfig(downstreamClient, clusterID, daemonSetConfig)

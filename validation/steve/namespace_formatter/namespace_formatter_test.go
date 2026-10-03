@@ -27,6 +27,7 @@ const (
 	allowedProjectIDAnnotation       = "field.cattle.io/projectId"
 	allowedFleetManagedLabel         = "fleet.cattle.io/managed"
 	fleetLocalNamespace              = "fleet-local"
+	localCluster                     = "local"
 )
 
 type NamespaceFormatterTestSuite struct {
@@ -47,10 +48,7 @@ func (nf *NamespaceFormatterTestSuite) SetupSuite() {
 	require.NoError(nf.T(), err)
 	nf.client = client
 
-	clusterName := client.RancherConfig.ClusterName
-	require.NotEmptyf(nf.T(), clusterName, "Cluster name to install should be set")
-
-	nf.clusterID, err = clusters.GetClusterIDByName(nf.client, clusterName)
+	nf.clusterID, err = clusters.GetClusterIDByName(nf.client, localCluster)
 	require.NoError(nf.T(), err, "Error getting cluster ID")
 }
 

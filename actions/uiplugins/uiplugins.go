@@ -2,6 +2,7 @@ package uiplugins
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	v1 "github.com/rancher/rancher/pkg/apis/catalog.cattle.io/v1"
@@ -168,4 +169,52 @@ func CreateExtensionsRepo(client *rancher.Client, rancherUiPluginsName, uiExtens
 	})
 
 	return err
+}
+
+// CreateExtensionsHelmRepo adds a helm repository of ui extensions to the local cluster, or reuses an existing one with the same name, and waits until rancher has downloaded its index.
+func CreateExtensionsHelmRepo(client *rancher.Client, repoName, repoURL string) error {
+	logrus.Infof("Adding ui extensions helm repo %s to rancher chart repositories in the local cluster.", repoURL)
+
+	clusterRepoObj := v1.ClusterRepo{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: repoName,
+		},
+		Spec: v1.RepoSpec{
+			URL: repoURL,
+		},
+	}
+
+	_, err := client.Catalog.ClusterRepos().Create(context.Background(), &clusterRepoObj, metav1.CreateOptions{})
+	if err != nil && !k8sErrors.IsAlreadyExists(err) {
+		return err
+	}
+
+	var lastForceUpdate time.Time
+	err = kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.FiveMinuteTimeout, true, func(ctx context.Context) (bool, error) {
+		repo, err := client.Catalog.ClusterRepos().Get(ctx, repoName, metav1.GetOptions{})
+		if err != nil {
+			return false, nil
+		}
+
+		if repo.Status.IndexConfigMapName != "" {
+			return true, nil
+		}
+
+		if !repo.Status.NextRetryAt.IsZero() && time.Since(lastForceUpdate) >= defaults.OneMinuteTimeout {
+			lastForceUpdate = time.Now()
+			logrus.Infof("Cluster repo %s failed to download, forcing a new download.", repoName)
+			repo.Spec.ForceUpdate = &metav1.Time{Time: time.Now()}
+			_, err = client.Catalog.ClusterRepos().Update(ctx, repo, metav1.UpdateOptions{})
+			if err != nil {
+				logrus.Warnf("Unable to force a new download of cluster repo %s: %v", repoName, err)
+			}
+		}
+
+		return false, nil
+	})
+	if err != nil {
+		return fmt.Errorf("index of cluster repo %s was not downloaded: %w", repoName, err)
+	}
+
+	return nil
 }

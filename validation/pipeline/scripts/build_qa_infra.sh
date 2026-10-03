@@ -74,7 +74,9 @@ fi
 : "${TERRAFORM_DIR:=tofu/aws/modules/cluster_nodes}"
 : "${RKE2_PLAYBOOK_PATH:=ansible/rke2/default/rke2-playbook.yml}"
 : "${TERRAFORM_INVENTORY:=ansible/rke2/default/terraform-inventory.yml}"
-: "${TERRAFORM_TEMPLATE:=ansible/rke2/default/inventory-template.yml}"
+: "${TERRAFORM_TEMPLATE:=$(dirname "$RKE2_PLAYBOOK_PATH")/inventory-template.yml}"
+: "${INVENTORY_DISTRO:=rke2}"
+: "${INVENTORY_DIR:=$(dirname "$RKE2_PLAYBOOK_PATH")/inventory}"
 
 : "${ANSIBLE_CONFIG:=ansible/rke2/default/ansible.cfg}"
 : "${RANCHER_PLAYBOOK_PATH:=ansible/rancher/default-ha/rancher-playbook.yml}"
@@ -129,7 +131,36 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-envsubst < "$TERRAFORM_TEMPLATE" > "$TERRAFORM_INVENTORY"
+if [[ -f "$TERRAFORM_TEMPLATE" ]]; then
+    envsubst < "$TERRAFORM_TEMPLATE" > "$TERRAFORM_INVENTORY"
+else
+    NODES_JSON="$(mktemp /tmp/cluster_nodes_XXXXXX.json)"
+    if ! tofu -chdir="$TERRAFORM_DIR" output -raw cluster_nodes_json > "$NODES_JSON" 2>/dev/null || [[ ! -s "$NODES_JSON" ]]; then
+        tofu -chdir="$TERRAFORM_DIR" show -json | jq '{
+            type: "cluster_nodes",
+            metadata: {
+                kube_api_host: .values.outputs.kube_api_host.value,
+                fqdn: .values.outputs.fqdn.value,
+                ssh_user: ([.values.root_module.resources[] | select(.type == "ansible_host") | .values.variables.ansible_user][0])
+            },
+            nodes: ([.values.root_module.resources[] | select(.type == "ansible_host") | .values | {
+                name: .name,
+                roles: (.variables.ansible_role | split(",")),
+                public_ip: .variables.ansible_host,
+                private_ip: .variables.ansible_host
+            }] | sort_by(.name != "master"))
+        }' > "$NODES_JSON"
+    fi
+    python3.11 scripts/generate_inventory.py --input "$NODES_JSON" --distro "$INVENTORY_DISTRO" --env default \
+        --schema ansible/_inventory-schema.yaml --output-dir "$INVENTORY_DIR"
+    generate_status=$?
+    rm -f "$NODES_JSON"
+    if [ $generate_status -ne 0 ]; then
+        echo "Error: failed to generate the Ansible inventory from $TERRAFORM_DIR."
+        exit 1
+    fi
+    TERRAFORM_INVENTORY="$INVENTORY_DIR/inventory.yml"
+fi
 
 # --- RKE2 Playbook ---
 

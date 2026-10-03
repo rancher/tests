@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
-	"time"
 
 	"github.com/rancher/shepherd/extensions/defaults"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
@@ -107,7 +106,7 @@ func PrometheusQueryInGrafana(client *http.Client, rancherHost string, clusterID
 	grafanaProxyURL := fmt.Sprintf(GrafanaProxyURLTemplate, rancherHost, clusterID)
 	var value int
 	var resp QueryResponse
-	err := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveHundredMillisecondTimeout, 30*time.Second, false, func(context.Context) (bool, error) {
+	err := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveHundredMillisecondTimeout, defaults.FiveMinuteTimeout, false, func(context.Context) (bool, error) {
 		respBytes, _, err := doRequest(*client, http.MethodPost, grafanaProxyURL+DsQueryURL, body)
 		if err != nil {
 			return false, err
