@@ -209,6 +209,7 @@ Always update relevant documentation when making changes:
 * return pointers to objects where possible in helper functions
 * if the case of ignoring errors arises, always justify via comment as to why it is ignored
 * strings should be a const wherever possible except for logs and error messages
+* comments in code should be at most 2 lines; if further explanation is necessary, it belongs in the documentation
 
 ## Available Skills
 
