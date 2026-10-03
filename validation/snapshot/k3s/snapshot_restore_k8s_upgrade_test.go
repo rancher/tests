@@ -47,32 +47,32 @@ func TestSnapshotRestoreK8sUpgrade(t *testing.T) {
 
 		t.Run(tt.name, func(t *testing.T) {
 			logrus.Infof("Creating snapshot on cluster %s", tt.cluster.Name)
-			clusterObject, snapshotName, err := etcdsnapshot.CreateAndValidateSnapshotV2Prov(s.Client, tt.cluster.Name, tt.cluster.ID, tt.etcdSnapshot)
+			clusterObject, snapshotName, err := etcdsnapshot.CreateAndValidateSnapshotV2Prov(s.StandardUserClient, tt.cluster.Name, tt.cluster.ID, tt.etcdSnapshot)
 			require.NoError(t, err)
 
 			clusterStatus := &provv1.ClusterStatus{}
 			err = v1.ConvertToK8sType(tt.cluster.Status, clusterStatus)
 			require.NoError(t, err)
 
-			err = snapshot.CreateSnapshotDeployment(s.Client, s.WorkloadClient, clusterStatus.ClusterName, tt.cluster.Name, s.WorkloadsConfig)
+			err = snapshot.CreateSnapshotDeployment(s.StandardUserClient, s.WorkloadClient, clusterStatus.ClusterName, tt.cluster.Name, s.WorkloadsConfig)
 			require.NoError(t, err)
 
 			logrus.Infof("Restoring snapshot %s on cluster %s", snapshotName, tt.cluster.Name)
-			restoredCluster, err := etcdsnapshot.RestoreAndValidateSnapshotV2Prov(s.Client, snapshotName, tt.etcdSnapshot, clusterObject, tt.cluster.ID)
+			restoredCluster, err := etcdsnapshot.RestoreAndValidateSnapshotV2Prov(s.StandardUserClient, snapshotName, tt.etcdSnapshot, clusterObject, tt.cluster.ID)
 			require.NoError(t, err)
 			require.Equal(t, restoredCluster.Spec.RKEConfig.UpgradeStrategy.ControlPlaneConcurrency, clusterObject.Spec.RKEConfig.UpgradeStrategy.ControlPlaneConcurrency)
 			require.Equal(t, restoredCluster.Spec.RKEConfig.UpgradeStrategy.WorkerConcurrency, clusterObject.Spec.RKEConfig.UpgradeStrategy.WorkerConcurrency)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", tt.cluster.Name)
-			err = provisioning.VerifyClusterReady(s.Client, tt.cluster)
+			err = provisioning.VerifyClusterReady(s.StandardUserClient, tt.cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster deployments (%s)", tt.cluster.Name)
-			err = deployment.VerifyClusterDeployments(s.Client, tt.cluster)
+			err = deployment.VerifyClusterDeployments(s.StandardUserClient, tt.cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster pods (%s)", tt.cluster.Name)
-			err = pods.VerifyClusterPods(s.Client, tt.cluster)
+			err = pods.VerifyClusterPods(s.StandardUserClient, tt.cluster)
 			require.NoError(t, err)
 		})
 

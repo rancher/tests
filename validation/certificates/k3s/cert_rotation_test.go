@@ -40,25 +40,25 @@ func TestCertRotation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			oldCertificates, err := certificates.GetClusterCertificates(c.Client, tt.cluster.Name)
+			oldCertificates, err := certificates.GetClusterCertificates(c.StandardUserClient, tt.cluster.Name)
 			require.NoError(t, err)
 
 			logrus.Infof("Rotating certificates on cluster (%s)", tt.cluster.Name)
-			require.NoError(t, certificates.RotateCerts(c.Client, tt.cluster.Name))
+			require.NoError(t, certificates.RotateCerts(c.StandardUserClient, tt.cluster.Name))
 
 			logrus.Infof("Verifying the cluster is ready (%s)", tt.cluster.Name)
-			err = provisioning.VerifyClusterReady(c.Client, tt.cluster)
+			err = provisioning.VerifyClusterReady(c.StandardUserClient, tt.cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster deployments (%s)", tt.cluster.Name)
-			err = deployment.VerifyClusterDeployments(c.Client, tt.cluster)
+			err = deployment.VerifyClusterDeployments(c.StandardUserClient, tt.cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster pods (%s)", tt.cluster.Name)
-			err = pods.VerifyClusterPods(c.Client, tt.cluster)
+			err = pods.VerifyClusterPods(c.StandardUserClient, tt.cluster)
 			require.NoError(t, err)
 
-			newCertificates, err := certificates.GetClusterCertificates(c.Client, tt.cluster.Name)
+			newCertificates, err := certificates.GetClusterCertificates(c.StandardUserClient, tt.cluster.Name)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying certificates were rotated (%s)", tt.cluster.Name)

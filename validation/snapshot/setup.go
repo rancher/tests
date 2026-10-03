@@ -13,6 +13,7 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/cloudcredentials"
+	extclusters "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
@@ -20,14 +21,15 @@ import (
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
+	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	"github.com/rancher/tests/actions/logging"
 	projectsapi "github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/provisioning"
+	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/storage/s3"
 	"github.com/rancher/tests/actions/workloads"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
-	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	tfpConfig "github.com/rancher/tfp-automation/config"
 	tfpCustom "github.com/rancher/tfp-automation/tests/infrastructure/downstream/custom"
 	"github.com/sirupsen/logrus"
@@ -44,21 +46,22 @@ const (
 
 type snapshotTest struct {
 	suite.Suite
-	Client            *rancher.Client
-	Session           *session.Session
-	CattleConfig      map[string]any
-	ClusterConfig     *clusters.ClusterConfig
-	rancherConfig     *rancher.Config
-	WorkloadsConfig   *workloads.Workloads
-	WorkloadClient    *v1.Client
-	Cluster           *v1.SteveAPIObject
-	S3BucketName      string
-	S3Region          string
-	S3Endpoint        string
-	S3CloudCredName   string
-	CreatedTestBucket bool
-	AWSAccessKey      string
-	AWSSecretKey      string
+	Client             *rancher.Client
+	StandardUserClient *rancher.Client
+	Session            *session.Session
+	CattleConfig       map[string]any
+	ClusterConfig      *clusters.ClusterConfig
+	rancherConfig      *rancher.Config
+	WorkloadsConfig    *workloads.Workloads
+	WorkloadClient     *v1.Client
+	Cluster            *v1.SteveAPIObject
+	S3BucketName       string
+	S3Region           string
+	S3Endpoint         string
+	S3CloudCredName    string
+	CreatedTestBucket  bool
+	AWSAccessKey       string
+	AWSSecretKey       string
 }
 
 type awsCredentialsConfig struct {
@@ -78,8 +81,10 @@ func Setup(t *testing.T, clusterType string, isS3, isWindows bool) *snapshotTest
 
 	s.Client = client
 
-	standardUserClient, _, _, err := standard.CreateStandardUser(s.Client)
+	standardUser, standardUserClient, err := rbac.SetupUser(s.Client, rbac.StandardUser.String())
 	require.NoError(t, err)
+
+	s.StandardUserClient = standardUserClient
 
 	s.CattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
@@ -163,6 +168,16 @@ func Setup(t *testing.T, clusterType string, isS3, isWindows bool) *snapshotTest
 			_, _, _, cluster := tfpCustom.CreateCustomCluster(t, s.Client, rancherConfig, terraformConfig, terratestConfig, "rke2_windows_2022", "validation/provisioning/rke2", true)
 
 			s.Cluster = cluster
+
+			logrus.Info("Granting the standard user cluster-owner on the windows cluster")
+			mgmtClusterID, err := extclusters.GetClusterIDByName(s.Client, cluster.Name)
+			require.NoError(t, err)
+
+			_, err = rbacapi.CreateClusterRoleTemplateBinding(s.Client, mgmtClusterID, standardUser.ID, rbac.ClusterOwner.String())
+			require.NoError(t, err)
+
+			s.StandardUserClient, err = s.StandardUserClient.ReLogin()
+			require.NoError(t, err)
 		} else {
 			logrus.Infof("Provisioning %s cluster", clusterType)
 			s.Cluster, err = resources.ProvisionRKE2K3SCluster(t, standardUserClient, clusterType, provider, *clusterConfig, machineConfigSpec, nil, false, false)
@@ -172,13 +187,23 @@ func Setup(t *testing.T, clusterType string, isS3, isWindows bool) *snapshotTest
 		logrus.Infof("Using existing cluster %s", rancherConfig.ClusterName)
 		s.Cluster, err = s.Client.Steve.SteveType(stevetypes.Provisioning).ByID("fleet-default/" + s.rancherConfig.ClusterName)
 		require.NoError(t, err)
+
+		logrus.Info("Granting the standard user cluster-owner on the existing cluster")
+		mgmtClusterID, err := extclusters.GetClusterIDByName(s.Client, rancherConfig.ClusterName)
+		require.NoError(t, err)
+
+		_, err = rbacapi.CreateClusterRoleTemplateBinding(s.Client, mgmtClusterID, standardUser.ID, rbac.ClusterOwner.String())
+		require.NoError(t, err)
+
+		s.StandardUserClient, err = s.StandardUserClient.ReLogin()
+		require.NoError(t, err)
 	}
 
 	clusterStatus := &provv1.ClusterStatus{}
 	err = v1.ConvertToK8sType(s.Cluster.Status, clusterStatus)
 	require.NoError(t, err)
 
-	s.WorkloadClient, err = s.Client.Steve.ProxyDownstream(clusterStatus.ClusterName)
+	s.WorkloadClient, err = s.StandardUserClient.Steve.ProxyDownstream(clusterStatus.ClusterName)
 	require.NoError(t, err)
 
 	return s
