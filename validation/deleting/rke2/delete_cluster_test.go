@@ -29,10 +29,10 @@ func TestDeletingCluster(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			logrus.Infof("Deleting cluster (%s)", tt.cluster.ID)
-			extClusters.DeleteK3SRKE2Cluster(d.Client, tt.cluster.ID)
+			extClusters.DeleteK3SRKE2Cluster(d.StandardUserClient, tt.cluster.ID)
 
 			logrus.Infof("Verifying cluster (%s) deletion", tt.cluster.ID)
-			provisioning.VerifyDeleteRKE2K3SCluster(t, d.Client, tt.cluster.ID)
+			provisioning.VerifyDeleteRKE2K3SCluster(t, d.StandardUserClient, tt.cluster.ID)
 		})
 
 		params := provisioning.GetProvisioningSchemaParams(d.Client, d.CattleConfig)

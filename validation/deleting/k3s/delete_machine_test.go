@@ -55,27 +55,27 @@ func TestDeleteMachine(t *testing.T) {
 		var err error
 
 		t.Run(tt.name, func(t *testing.T) {
-			machineList, err := machines.GetMachinesByRole(d.Client, tt.cluster, tt.nodeRoles)
+			machineList, err := machines.GetMachinesByRole(d.StandardUserClient, tt.cluster, tt.nodeRoles)
 			require.NoError(t, err)
 
 			machineToDelete := machineList[0]
 			logrus.Infof("Deleting machine (%s) from cluster (%s)", machineToDelete.Name, tt.cluster.Name)
-			err = d.Client.Steve.SteveType(stevetypes.Machine).Delete(&machineToDelete)
+			err = d.StandardUserClient.Steve.SteveType(stevetypes.Machine).Delete(&machineToDelete)
 			require.NoError(t, err)
 
-			err = machines.VerifyMachineReplacement(d.Client, &machineToDelete)
+			err = machines.VerifyMachineReplacement(d.StandardUserClient, &machineToDelete)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster is ready after machine replacement (%s)", tt.cluster.Name)
-			err = provisioning.VerifyClusterReady(d.Client, tt.cluster)
+			err = provisioning.VerifyClusterReady(d.StandardUserClient, tt.cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster deployments (%s)", tt.cluster.Name)
-			err = deployment.VerifyClusterDeployments(d.Client, tt.cluster)
+			err = deployment.VerifyClusterDeployments(d.StandardUserClient, tt.cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster pods (%s)", tt.cluster.Name)
-			err = pods.VerifyClusterPods(d.Client, tt.cluster)
+			err = pods.VerifyClusterPods(d.StandardUserClient, tt.cluster)
 			require.NoError(t, err)
 		})
 

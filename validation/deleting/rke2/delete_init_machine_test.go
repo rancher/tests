@@ -39,22 +39,22 @@ func TestDeleteInitMachine(t *testing.T) {
 
 		t.Run(tt.name, func(t *testing.T) {
 			logrus.Infof("Deleting init machine on cluster (%s)", tt.cluster.Name)
-			err := clusters.DeleteInitMachine(d.Client, tt.cluster.ID)
+			err := clusters.DeleteInitMachine(d.StandardUserClient, tt.cluster.ID)
 			require.NoError(t, err)
 
-			err = provisioning.WaitClusterToBeUpgradedWithRetry(d.Client, tt.cluster.ID)
+			err = provisioning.WaitClusterToBeUpgradedWithRetry(d.StandardUserClient, tt.cluster.ID)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", tt.cluster.Name)
-			err = provisioning.VerifyClusterReady(d.Client, tt.cluster)
+			err = provisioning.VerifyClusterReady(d.StandardUserClient, tt.cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster deployments (%s)", tt.cluster.Name)
-			err = deployment.VerifyClusterDeployments(d.Client, tt.cluster)
+			err = deployment.VerifyClusterDeployments(d.StandardUserClient, tt.cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster pods (%s)", tt.cluster.Name)
-			err = pods.VerifyClusterPods(d.Client, tt.cluster)
+			err = pods.VerifyClusterPods(d.StandardUserClient, tt.cluster)
 			require.NoError(t, err)
 		})
 
