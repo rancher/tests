@@ -21,3 +21,87 @@
     custom_field:
       "14": Validation
       "18": Hostbusters
+
+  - description: Rotates the clusters encryption keys on imported clusters
+    title: K3S_Imported_Encryption_Key_Rotation|etcd_cp_worker
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Rotate the clusters encryption keys
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+  - description: Rotates the clusters encryption keys on imported clusters
+    title: K3S_Imported_Encryption_Key_Rotation|etcd_cp|worker
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Rotate the clusters encryption keys
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+  - description: Rotates the clusters encryption keys on imported clusters
+    title: K3S_Imported_Encryption_Key_Rotation|etcd|cp|worker
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Rotate the clusters encryption keys
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
+
+  - description: Rotates the clusters encryption keys on imported clusters
+    title: K3S_Imported_Encryption_Key_Rotation|3_etcd|2_cp|3_worker
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Rotate the clusters encryption keys
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters

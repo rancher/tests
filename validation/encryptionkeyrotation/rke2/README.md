@@ -27,7 +27,61 @@ The encryption key rotation test verifies that a cluster can successfully perfor
 #### Run Commands:
 1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/encryptionkeyrotation/rke2 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestEncryptionKeyRotation -timeout=2h -v`
 
+### Encryption Key Rotation Imported Tests
+
+#### Description:
+The encryption key rotation test verifies that a cluster can successfully perform encryption key rotation on imported clusters.
+
+#### Required Configurations: 
+1. [Terraform Config](#terraform-config)
+
+#### Table Tests:
+1. `RKE2_Imported_Encryption_Key_Rotation|`
+
+#### Run Commands:
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/encryptionkeyrotation/rke2 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestEncryptionKeyRotationImported -timeout=1h -v`
+
 ## Configurations
+
+## Configurations
+
+### Terraform Config
+terraform config is needed when running the custom clusters and imported clusters as rancher/tfp-automation is utilized to create the clusters.
+
+```yaml
+terraform:
+  downstreamClusterProvider: "aws"
+  privateKeyPath: ""
+  resourcePrefix: ""
+  windowsPrivateKeyPath: ""
+  awsConfig:
+    ami: ""
+    awsKeyName: ""
+    awsInstanceType: "t"
+    awsVolumeType: ""
+    region: ""
+    awsSecurityGroups: ["sg-"]
+    awsSecurityGroupNames: [""]
+    awsSubnetID: ""
+    awsVpcID: ""
+    awsZoneLetter: "a"
+    awsRootSize: 100
+    awsUser: "ubuntu"
+    sshConnectionType: "ssh"
+    timeout: "5m"
+  standalone:
+    k3sVersion: ""
+    osGroup: ""
+    osUser: ""
+```
+
+Also, be sure to export the following variables:
+
+```
+export RANCHER2_PROVIDER_VERSION=""                                     # Required
+export CLOUD_PROVIDER_VERSION=""                                        # Required for custom cluster / infrastructure building
+export LOCALS_PROVIDER_VERSION=""                                       # Required for custom cluster / infrastructure building
+```
 
 ### Existing cluster:
 ```yaml

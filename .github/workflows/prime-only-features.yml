@@ -1,5 +1,5 @@
 ---
-name: Day 2 Operations - Rancher Prime
+name: Prime Only Features
 
 on:
   schedule:
@@ -85,7 +85,7 @@ jobs:
           fi
           echo "matrix={\"version\":$versions}" >> "$GITHUB_OUTPUT"
 
-  day2-ops-rancher-prime:
+  prime-only-features:
     needs: prepare-matrix
     strategy:
       fail-fast: false
@@ -401,5 +401,5 @@ jobs:
         uses: ./.github/actions/save-weekly-summary-result
         with:
           rancher_version: ${{ env.RANCHER_VERSION }}
-          workflow: day2-ops-rancher-prime
+          workflow: prime-only-features
           job: v2-${{ matrix.version }}
