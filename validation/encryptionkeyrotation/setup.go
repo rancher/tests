@@ -6,16 +6,18 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
+	extclusters "github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
+	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
+	"github.com/rancher/tests/actions/rbac"
 	resources "github.com/rancher/tests/validation/provisioning/resources/provisioncluster"
-	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -23,12 +25,13 @@ import (
 
 type encryptionKeyRotationTest struct {
 	suite.Suite
-	Client        *rancher.Client
-	Session       *session.Session
-	CattleConfig  map[string]any
-	ClusterConfig *clusters.ClusterConfig
-	rancherConfig *rancher.Config
-	Cluster       *v1.SteveAPIObject
+	Client             *rancher.Client
+	StandardUserClient *rancher.Client
+	Session            *session.Session
+	CattleConfig       map[string]any
+	ClusterConfig      *clusters.ClusterConfig
+	rancherConfig      *rancher.Config
+	Cluster            *v1.SteveAPIObject
 }
 
 func Setup(t *testing.T, clusterType string) *encryptionKeyRotationTest {
@@ -42,8 +45,10 @@ func Setup(t *testing.T, clusterType string) *encryptionKeyRotationTest {
 
 	e.Client = client
 
-	standardUserClient, _, _, err := standard.CreateStandardUser(e.Client)
+	standardUser, standardUserClient, err := rbac.SetupUser(e.Client, rbac.StandardUser.String())
 	require.NoError(t, err)
+
+	e.StandardUserClient = standardUserClient
 
 	e.CattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
@@ -76,6 +81,16 @@ func Setup(t *testing.T, clusterType string) *encryptionKeyRotationTest {
 	} else {
 		logrus.Infof("Using existing cluster %s", rancherConfig.ClusterName)
 		e.Cluster, err = e.Client.Steve.SteveType(stevetypes.Provisioning).ByID("fleet-default/" + e.rancherConfig.ClusterName)
+		require.NoError(t, err)
+
+		logrus.Info("Granting the standard user cluster-owner on the existing cluster")
+		mgmtClusterID, err := extclusters.GetClusterIDByName(e.Client, rancherConfig.ClusterName)
+		require.NoError(t, err)
+
+		_, err = rbacapi.CreateClusterRoleTemplateBinding(e.Client, mgmtClusterID, standardUser.ID, rbac.ClusterOwner.String())
+		require.NoError(t, err)
+
+		e.StandardUserClient, err = e.StandardUserClient.ReLogin()
 		require.NoError(t, err)
 	}
 
