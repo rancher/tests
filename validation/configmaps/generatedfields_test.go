@@ -13,6 +13,7 @@ import (
 	cm "github.com/rancher/shepherd/extensions/configmaps"
 	"github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
+	"github.com/rancher/tests/actions/rbac"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -20,11 +21,15 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const configMapNamespace = "default"
+const (
+	configMapNamespace = "default"
+	localClusterID     = "local"
+)
 
 type ConfigMapTestSuite struct {
 	suite.Suite
 	client             *rancher.Client
+	standardUserClient *rancher.Client
 	steveClient        *steveV1.Client
 	session            *session.Session
 	cluster            *management.Cluster
@@ -42,12 +47,19 @@ func (c *ConfigMapTestSuite) SetupSuite() {
 	client, err := rancher.NewClient("", c.session)
 	require.NoError(c.T(), err)
 	c.client = client
-	c.steveClient = client.Steve
+
+	c.cluster, err = c.client.Management.Cluster.ByID(localClusterID)
+	require.NoError(c.T(), err)
+
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(c.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), c.cluster, nil)
+	require.NoError(c.T(), err)
+	c.standardUserClient = standardUserClient
+	c.steveClient = standardUserClient.Steve
 }
 
 func (c *ConfigMapTestSuite) TestSteveGeneratedFields() {
 
-	steveClient := c.client.Steve
+	steveClient := c.steveClient
 	configMapName := namegenerator.AppendRandomString("test-configmap")
 
 	v1ConfigMap := &v1.ConfigMap{
@@ -67,7 +79,7 @@ func (c *ConfigMapTestSuite) TestSteveGeneratedFields() {
 	err = setPayload(configmapSteveObject, c.configMapPayload)
 	require.NoError(c.T(), err)
 
-	headers, _, err := steveClient.SteveType("configmaps").NamespacedSteveClient(configMapNamespace).PerformPutCaptureHeaders(c.client.RancherConfig.Host, c.client.RancherConfig.AdminToken, c.configMapPayload.Name, c.configMapPayload)
+	headers, _, err := steveClient.SteveType("configmaps").NamespacedSteveClient(configMapNamespace).PerformPutCaptureHeaders(c.client.RancherConfig.Host, steveClient.Opts.TokenKey, c.configMapPayload.Name, c.configMapPayload)
 	require.NoError(c.T(), err)
 
 	warnings, ok := headers["Warning"]
