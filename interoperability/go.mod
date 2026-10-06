@@ -218,3 +218,5 @@ require (
 )
 
 replace sigs.k8s.io/cluster-api/api => sigs.k8s.io/cluster-api/api v1.14.2
+
+replace github.com/rancher/shepherd => github.com/dasarinaidu/shepherd v0.0.0-20261006215002-f32c9238669c
