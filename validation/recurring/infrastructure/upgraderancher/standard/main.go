@@ -18,7 +18,7 @@ import (
 	"github.com/rancher/tests/actions/workloads/pods"
 	infraConfig "github.com/rancher/tests/validation/recurring/infrastructure/config"
 	"github.com/rancher/tests/validation/recurring/infrastructure/upgraderancher/clusters"
-	"github.com/rancher/tests/validation/recurring/infrastructure/upgraderancher/localcluster"
+	v3cluster "github.com/rancher/tests/validation/recurring/infrastructure/upgraderancher/v3cluster"
 	tfpConfig "github.com/rancher/tfp-automation/config"
 	"github.com/rancher/tfp-automation/defaults/keypath"
 	setupstandard "github.com/rancher/tfp-automation/tests/infrastructure/ranchers/setup/standard"
@@ -101,10 +101,10 @@ func main() {
 	err = pods.VerifyClusterPods(client, cluster)
 	require.NoError(t, err)
 
-	_, terraform, _, standalone := tfpConfig.LoadTFPConfigs(cattleConfig)
+	_, _, _, standalone := tfpConfig.LoadTFPConfigs(cattleConfig)
 
 	if standalone.UpgradeLocalCluster {
-		err = localcluster.UpgradeLocalCluster(client, terraform)
+		err = v3cluster.UpgradeV3Cluster(client, "local")
 		require.NoError(t, err)
 	}
 }

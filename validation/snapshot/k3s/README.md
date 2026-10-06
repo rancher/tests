@@ -87,10 +87,12 @@ The snapshot restore test validates that snapshots can be created and restored w
 1. [Terraform Config](#terraform-config)
 
 #### Table Tests:
-1. `K3S_Imported_Restore_ETCD|`
+1. `K3S_Imported_Restore_ETCD`
+2. `K3S_Imported_Restore_ETCD_K8sVersion`
 
 #### Run Commands:
-1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestSnapshotRestoreImported -timeout=1h -v`
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestSnapshotRestoreEtcdImported -timeout=1h -v`
+2. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestSnapshotRestoreK8sUpgradeImported -timeout=1h -v`
 
 ### Snapshot Retention Test
 

@@ -2,6 +2,8 @@ package localcluster
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/rancher/shepherd/clients/rancher"
@@ -10,7 +12,6 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters/kubernetesversions"
 	"github.com/rancher/shepherd/extensions/defaults"
 	actiondefaults "github.com/rancher/tests/actions/config/defaults"
-	"github.com/rancher/tfp-automation/config"
 	"github.com/sirupsen/logrus"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
@@ -19,9 +20,9 @@ const (
 	active = "active"
 )
 
-// UpgradeLocalCluster is a function that will upgrade the local cluster.
-func UpgradeLocalCluster(client *rancher.Client, terraformConfig *config.TerraformConfig) error {
-	clusterObj, err := extClusters.GetClusterIDByName(client, "local")
+// UpgradeV3Cluster is a function that will upgrade the local or imported cluster.
+func UpgradeV3Cluster(client *rancher.Client, clusterName string) error {
+	clusterObj, err := extClusters.GetClusterIDByName(client, clusterName)
 	if err != nil {
 		return err
 	}
@@ -31,10 +32,20 @@ func UpgradeLocalCluster(client *rancher.Client, terraformConfig *config.Terrafo
 		return err
 	}
 
+	initialCluster, err := client.Management.Cluster.ByID(clusterResp.ID)
+	if err != nil {
+		return err
+	}
+
+	initialVersion := initialCluster.Version.GitVersion
+	if initialVersion == "" {
+		return fmt.Errorf("initial cluster version is empty")
+	}
+
 	var clusterType string
-	if terraformConfig.LocalCluster == actiondefaults.K3S {
+	if strings.Contains(initialVersion, actiondefaults.K3S) {
 		clusterType = actiondefaults.K3S
-	} else if terraformConfig.LocalCluster == actiondefaults.RKE2 {
+	} else if strings.Contains(initialVersion, actiondefaults.RKE2) {
 		clusterType = actiondefaults.RKE2
 	}
 
@@ -44,14 +55,14 @@ func UpgradeLocalCluster(client *rancher.Client, terraformConfig *config.Terrafo
 	}
 
 	var updatedCluster *management.Cluster
-	if terraformConfig.LocalCluster == actiondefaults.K3S {
+	if clusterType == actiondefaults.K3S {
 		updatedCluster = &management.Cluster{
 			K3sConfig: &management.K3sConfig{
 				Version: version[0],
 			},
 			Name: clusterResp.Name,
 		}
-	} else if terraformConfig.LocalCluster == actiondefaults.RKE2 {
+	} else if clusterType == actiondefaults.RKE2 {
 		updatedCluster = &management.Cluster{
 			Rke2Config: &management.Rke2Config{
 				Version: version[0],
@@ -86,9 +97,9 @@ func UpgradeLocalCluster(client *rancher.Client, terraformConfig *config.Terrafo
 		return err
 	}
 
-	if terraformConfig.LocalCluster == actiondefaults.K3S {
+	if clusterType == actiondefaults.K3S {
 		logrus.Infof("Cluster has been upgraded to: %s", updatedClusterResp.K3sConfig.Version)
-	} else if terraformConfig.LocalCluster == actiondefaults.RKE2 {
+	} else if clusterType == actiondefaults.RKE2 {
 		logrus.Infof("Cluster has been upgraded to: %s", updatedClusterResp.Rke2Config.Version)
 	}
 
