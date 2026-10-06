@@ -542,7 +542,7 @@ func VerifyClusterDeployments(client *rancher.Client, cluster *v1.SteveAPIObject
 	}
 
 	logrus.Debugf("Verifying all required deployments exist: %v", requiredDeployments)
-	err = kwait.PollUntilContextTimeout(context.TODO(), 10*time.Second, defaults.FifteenMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
+	err = kwait.PollUntilContextTimeout(context.TODO(), 10*time.Second, defaults.ThirtyMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
 		if slices.Contains(requiredDeployments, ClusterAgent) || slices.Contains(requiredDeployments, Rancher) {
 			downstreamClient, err = client.Steve.ProxyDownstream(clusterID)
 			if err != nil {
