@@ -14,7 +14,7 @@ replace (
 	github.com/rancher/rancher/pkg/apis => github.com/rancher/rancher/pkg/apis v0.0.0-20260527150105-ae26ccbc3fed
 	github.com/rancher/rancher/pkg/client => github.com/rancher/rancher/pkg/client v0.0.0-20260527150105-ae26ccbc3fed
 	github.com/rancher/tests/actions => ./../actions
-	github.com/rancher/tfp-automation => github.com/rancher/tfp-automation v0.0.0-20261005183757-854b46a2b45d
+	github.com/rancher/tfp-automation => github.com/rancher/tfp-automation v0.0.0-20261007181317-b50499b3ff43
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc => go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.53.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp => go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.53.0
 	go.opentelemetry.io/otel => go.opentelemetry.io/otel v1.28.0
@@ -70,7 +70,7 @@ require (
 	github.com/rancher/rancher/pkg/apis v0.0.0
 	github.com/rancher/shepherd v0.0.0-20261002144048-2ae83452a53e
 	github.com/rancher/tests/actions v0.0.0-20260925190906-17002625ce49
-	github.com/rancher/tfp-automation v0.0.0-20261005183757-854b46a2b45d
+	github.com/rancher/tfp-automation v0.0.0-20261007181317-b50499b3ff43
 	github.com/sirupsen/logrus v1.10.2
 	github.com/stretchr/testify v1.12.1
 	golang.org/x/crypto v0.57.0

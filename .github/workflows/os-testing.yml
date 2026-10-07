@@ -327,8 +327,8 @@ jobs:
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
               rancherHostname: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
-              rke2Version: "${{ fromJSON(env.HB_RKE2_VERSION).value }}"
-              k3sVersion: "${{ fromJSON(env.HB_K3S_VERSION).value }}${{ fromJSON(env.HB_K3S_VERSION_SUFFIX).value }}"
+              rke2Version: "${{ fromJSON(env[format('HB_RKE2_VERSION_2_{0}', matrix.version)]).value }}"
+              k3sVersion: "${{ fromJSON(env[format('HB_K3S_VERSION_2_{0}', matrix.version)]).value }}${{ fromJSON(env.HB_K3S_VERSION_SUFFIX).value }}"
               osUser: "${{ inputs.os_user }}"
               osGroup: "${{ inputs.os_group }}"
 

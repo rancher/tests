@@ -44,6 +44,16 @@ func main() {
 		logrus.Fatalf("Failed to load Secrets Manager defaults: %v", err)
 	}
 
+	terraformConfig := cattleConfig["terraform"].(map[string]any)
+	awsConfig := terraformConfig["awsConfig"].(map[string]any)
+	rancherConfig := terraformConfig["rancherConfig"].(map[string]any)
+	rancherAWSConfig := rancherConfig["awsConfig"].(map[string]any)
+	logrus.Infof(
+		"AWS load balancer config: awsConfig[ipAddressType=%v, loadBalancerType=%v, targetType=%v], rancherConfig.awsConfig[ipAddressType=%v, loadBalancerType=%v, targetType=%v]",
+		awsConfig["ipAddressType"], awsConfig["loadBalancerType"], awsConfig["targetType"],
+		rancherAWSConfig["ipAddressType"], rancherAWSConfig["loadBalancerType"], rancherAWSConfig["targetType"],
+	)
+
 	err = defaults.VerifyCattleConfig(cattleConfig, nil)
 	if err != nil {
 		logrus.Fatalf("Cattle config verification failed: %v", err)
