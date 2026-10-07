@@ -11,6 +11,7 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/charts"
+	actionClusters "github.com/rancher/tests/actions/clusters"
 	"github.com/sirupsen/logrus"
 	coreV1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -27,6 +28,14 @@ type SupportedWithVai interface {
 }
 
 func isVaiEnabled(client *rancher.Client) (bool, error) {
+	alwaysEnabled, err := isVaiAlwaysEnabled(client)
+	if err != nil {
+		return false, err
+	}
+	if alwaysEnabled {
+		return true, nil
+	}
+
 	managementClient := client.Steve.SteveType("management.cattle.io.feature")
 	feature, err := managementClient.ByID(uiSQLCacheResource)
 	if err != nil {
@@ -80,6 +89,10 @@ func isVaiEnabled(client *rancher.Client) (bool, error) {
 	return defaultValue, nil
 }
 
+func isVaiAlwaysEnabled(client *rancher.Client) (bool, error) {
+	return actionClusters.IsRancherVersionAbove(client, "v2.16.0-0")
+}
+
 func filterTestCases[T SupportedWithVai](testCases []T, vaiEnabled bool) []T {
 	if !vaiEnabled {
 		return testCases
@@ -95,6 +108,16 @@ func filterTestCases[T SupportedWithVai](testCases []T, vaiEnabled bool) []T {
 }
 
 func ensureVAIState(client *rancher.Client, desiredState bool) error {
+	if !desiredState {
+		alwaysEnabled, err := isVaiAlwaysEnabled(client)
+		if err != nil {
+			return err
+		}
+		if alwaysEnabled {
+			return fmt.Errorf("VAI cannot be disabled on Rancher 2.16 and newer")
+		}
+	}
+
 	currentState, err := isVaiEnabled(client)
 	if err != nil {
 		return fmt.Errorf("failed to check VAI state: %v", err)
