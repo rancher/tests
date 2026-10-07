@@ -1,17 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ "$#" -ne 3 ]]; then
-	echo "Usage: $0 <username> <password> <ssh-public-key>" >&2
+if [[ "$#" -ne 5 ]]; then
+	echo "Usage: $0 <username> <password> <ssh-public-key> <rhsm-org> <rhsm-activation-key>" >&2
 	exit 2
 fi
 
 username=$1
 password=$2
 ssh_public_key=$3
+rhsm_org=$4
+rhsm_activation_key=$5
 
-if [[ -z "$password" || -z "$ssh_public_key" ]]; then
-	echo "Password and SSH public key must be non-empty." >&2
+if [[ -z "$password" || -z "$ssh_public_key" || -z "$rhsm_org" || -z "$rhsm_activation_key" ]]; then
+	echo "Password, SSH public key, RHSM org, and RHSM activation key must be non-empty." >&2
 	exit 2
 fi
 
@@ -42,9 +44,23 @@ sudo install -d -m 700 -o "$username" -g "$user_group" "$user_home/.ssh"
 printf '%s\n' "$ssh_public_key" | sudo tee "$user_home/.ssh/authorized_keys" >/dev/null
 sudo chown "$username:$user_group" "$user_home/.ssh/authorized_keys"
 sudo chmod 600 "$user_home/.ssh/authorized_keys"
+sudo restorecon -RF "$user_home/.ssh"
+
+if ! sudo subscription-manager identity >/dev/null 2>&1; then
+	sudo subscription-manager register --org "$rhsm_org" --activationkey "$rhsm_activation_key"
+fi
+
+sudo dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
 
 sudo dnf update -y
-sudo dnf install -y cloud-init iptables vim-enhanced
+sudo dnf install -y cloud-init iptables vim-enhanced yq
+
+sudo install -d -m 755 /etc/cloud/cloud.cfg.d
+{
+	printf 'allow_public_ssh_keys: true\n'
+	printf 'system_info:\n  default_user:\n    name: "%s"\n' "$username"
+} | sudo tee /etc/cloud/cloud.cfg.d/99-rancher-ssh-user.cfg >/dev/null
+sudo chmod 644 /etc/cloud/cloud.cfg.d/99-rancher-ssh-user.cfg
 
 sudo systemctl disable nm-cloud-setup
 sudo systemctl stop nm-cloud-setup
