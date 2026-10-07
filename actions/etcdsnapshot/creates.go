@@ -58,7 +58,7 @@ func CreateAndValidateSnapshotV2Prov(client *rancher.Client, clusterName, cluste
 	}
 
 	if etcdRestore.SnapshotRestore == kubernetesVersion || etcdRestore.SnapshotRestore == all {
-		err = upgradeClusterAndSnapshotSettings(client, clusterName, clusterID, etcdRestore)
+		err = UpgradeClusterAndSnapshotSettings(client, clusterName, clusterID, etcdRestore)
 		if err != nil {
 			return nil, "", err
 		}

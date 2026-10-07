@@ -108,10 +108,19 @@ func CreateImportedETCDSnapshot(client *rancher.Client, clusterName string) (str
 	return createdSnapshotNames[0], nil
 }
 
-// RestoreImportedETCDSnapshot restores the named snapshot on an imported cluster.
-func RestoreImportedETCDSnapshot(client *rancher.Client, clusterName, snapshotName string) error {
+// RestoreImportedETCDSnapshot restores the named snapshot on an imported cluster with an optional restore mode.
+func RestoreImportedETCDSnapshot(client *rancher.Client, clusterName, snapshotName string, restoreMode ...string) error {
 	if clusterName == "" || snapshotName == "" {
 		return fmt.Errorf("cluster name and snapshot name are required for imported snapshot restore")
+	}
+
+	if len(restoreMode) > 1 {
+		return fmt.Errorf("at most one restore mode may be supplied for imported snapshot restore")
+	}
+
+	args := map[string]any{"name": snapshotName}
+	if len(restoreMode) == 1 && restoreMode[0] != "" {
+		args["restoreMode"] = restoreMode[0]
 	}
 
 	if err := etcdsnapshot.VerifySnapshotReadyForRestore(client, clusterName, snapshotName); err != nil {
@@ -126,9 +135,7 @@ func RestoreImportedETCDSnapshot(client *rancher.Client, clusterName, snapshotNa
 			"namespace":    clusterName,
 		},
 		"spec": map[string]any{
-			"args": map[string]any{
-				"name": snapshotName,
-			},
+			"args":   args,
 			"cancel": false,
 			"clusterRef": map[string]any{
 				"apiVersion": managementAPIVersion,

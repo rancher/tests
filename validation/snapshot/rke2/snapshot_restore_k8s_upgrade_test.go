@@ -60,8 +60,7 @@ func TestSnapshotRestoreK8sUpgrade(t *testing.T) {
 			logrus.Infof("Restoring snapshot %s on cluster %s", snapshotName, tt.cluster.Name)
 			restoredCluster, err := etcdsnapshot.RestoreAndValidateSnapshotV2Prov(s.Client, snapshotName, tt.etcdSnapshot, clusterObject, tt.cluster.ID)
 			require.NoError(t, err)
-			require.Equal(t, restoredCluster.Spec.RKEConfig.UpgradeStrategy.ControlPlaneConcurrency, clusterObject.Spec.RKEConfig.UpgradeStrategy.ControlPlaneConcurrency)
-			require.Equal(t, restoredCluster.Spec.RKEConfig.UpgradeStrategy.WorkerConcurrency, clusterObject.Spec.RKEConfig.UpgradeStrategy.WorkerConcurrency)
+			require.Equal(t, restoredCluster.Spec.KubernetesVersion, clusterObject.Spec.KubernetesVersion)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", tt.cluster.Name)
 			err = provisioning.VerifyClusterReady(s.Client, tt.cluster)

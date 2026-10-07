@@ -19,7 +19,9 @@ const (
 	active = "active"
 )
 
-func upgradeClusterAndSnapshotSettings(client *rancher.Client, clusterName, clusterID string, etcdRestore *Config) error {
+// UpgradeClusterAndSnapshotSettings is a helper function that upgrades the Kubernetes version of a cluster and updates
+// the etcd snapshot settings based on the provided configuration.
+func UpgradeClusterAndSnapshotSettings(client *rancher.Client, clusterName, clusterID string, etcdRestore *Config) error {
 	clusterObject, clusterResponse, err := clusters.GetProvisioningClusterByName(client, clusterName, namespaces.FleetDefault)
 	if err != nil {
 		return err

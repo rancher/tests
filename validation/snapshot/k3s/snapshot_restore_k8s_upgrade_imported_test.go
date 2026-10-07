@@ -1,10 +1,11 @@
 //go:build validation || imported
 
-package rke2
+package k3s
 
 import (
 	"testing"
 
+	provv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/etcdsnapshot"
@@ -13,18 +14,20 @@ import (
 	"github.com/rancher/tests/actions/qase"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
+	v3cluster "github.com/rancher/tests/validation/recurring/infrastructure/upgraderancher/v3cluster"
 	"github.com/rancher/tests/validation/snapshot"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
 
-func TestSnapshotRestoreEtcdImported(t *testing.T) {
+func TestSnapshotRestoreK8sUpgradeImported(t *testing.T) {
+	t.Skip("Skipped due to https://github.com/rancher/rancher/issues/56077")
 	t.Parallel()
 
-	s := snapshot.ImportedSetup(t, defaults.RKE2)
+	s := snapshot.ImportedSetup(t, defaults.K3S)
 
 	snapshotRestore := &etcdsnapshot.Config{
-		RestoreMode: "none",
+		RestoreMode: "kubernetesVersion",
 	}
 
 	tests := []struct {
@@ -32,7 +35,7 @@ func TestSnapshotRestoreEtcdImported(t *testing.T) {
 		etcdSnapshot *etcdsnapshot.Config
 		cluster      *v1.SteveAPIObject
 	}{
-		{"RKE2_Imported_Restore_ETCD", snapshotRestore, s.Cluster},
+		{"K3S_Imported_Restore_ETCD_K8sVersion", snapshotRestore, s.Cluster},
 	}
 
 	for _, tt := range tests {
@@ -50,9 +53,30 @@ func TestSnapshotRestoreEtcdImported(t *testing.T) {
 			snapshotName, err := imported.CreateImportedETCDSnapshot(s.Client, tt.cluster.Name)
 			require.NoError(t, err)
 
+			clusterStatus := &provv1.ClusterStatus{}
+			err = v1.ConvertToK8sType(tt.cluster.Status, clusterStatus)
+			require.NoError(t, err)
+
+			clusterResp, err := s.Client.Management.Cluster.ByID(clusterStatus.ClusterName)
+			require.NoError(t, err)
+
+			initialVersion := clusterResp.Version.GitVersion
+			require.NotEmpty(t, initialVersion)
+
+			logrus.Infof("Upgrading imported cluster (%s)", tt.cluster.Name)
+			err = v3cluster.UpgradeV3Cluster(s.Client, clusterResp.Name)
+			require.NoError(t, err)
+
 			logrus.Infof("Restoring the etcd snapshot on imported cluster (%s)", tt.cluster.Name)
 			err = imported.RestoreImportedETCDSnapshot(s.Client, tt.cluster.Name, snapshotName, tt.etcdSnapshot.RestoreMode)
 			require.NoError(t, err)
+
+			updatedClusteResp, err := s.Client.Management.Cluster.ByID(clusterResp.ID)
+			require.NoError(t, err)
+
+			restoredVersion := updatedClusteResp.Version.GitVersion
+			require.NotEmpty(t, restoredVersion)
+			require.Equal(t, initialVersion, restoredVersion)
 
 			logrus.Infof("Verifying the imported cluster is ready (%s)", tt.cluster.Name)
 			require.NoError(t, provisioning.VerifyClusterReadyV3(s.Client, tt.cluster.Name))
