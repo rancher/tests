@@ -57,12 +57,12 @@ type steveCountResponse struct {
 	} `json:"data"`
 }
 
-type kubeconfigCountObservation struct {
+type resourceCountObservation struct {
 	listNames []string
 	counts    map[string]int
 }
 
-type kubeconfigCountTestCase struct {
+type resourceCountTestCase struct {
 	name          string
 	client        *rancher.Client
 	exactNames    []string
@@ -114,32 +114,32 @@ func (k *KubeconfigCountTestSuite) TestKubeconfigCountsRespectOwnership() {
 	_, additionalAdminClient, err := rbac.SetupUser(adminClient, rbac.Admin.String())
 	require.NoError(k.T(), err, "Failed to create an additional global admin")
 
-	_, baseOwnerClient, err := rbac.AddUserWithRoleToCluster(
+	_, baseMemberClient, err := rbac.AddUserWithRoleToCluster(
 		adminClient,
 		rbac.BaseUser.String(),
-		rbac.ClusterOwner.String(),
+		rbac.ClusterMember.String(),
 		k.cluster,
 		nil,
 	)
-	require.NoError(k.T(), err, "Failed to create a User-Base cluster owner")
+	require.NoError(k.T(), err, "Failed to create a User-Base cluster member")
 
-	_, standardOwnerClient, err := rbac.AddUserWithRoleToCluster(
+	_, standardMemberClient, err := rbac.AddUserWithRoleToCluster(
 		adminClient,
 		rbac.StandardUser.String(),
-		rbac.ClusterOwner.String(),
+		rbac.ClusterMember.String(),
 		k.cluster,
 		nil,
 	)
-	require.NoError(k.T(), err, "Failed to create a Standard User cluster owner")
+	require.NoError(k.T(), err, "Failed to create a Standard User cluster member")
 
-	_, ownerWithoutKubeconfigsClient, err := rbac.AddUserWithRoleToCluster(
+	_, memberWithoutKubeconfigsClient, err := rbac.AddUserWithRoleToCluster(
 		adminClient,
 		rbac.BaseUser.String(),
-		rbac.ClusterOwner.String(),
+		rbac.ClusterMember.String(),
 		k.cluster,
 		nil,
 	)
-	require.NoError(k.T(), err, "Failed to create a cluster owner with no kubeconfigs")
+	require.NoError(k.T(), err, "Failed to create a cluster member with no kubeconfigs")
 
 	_, standardUserClient, err := rbac.SetupUser(adminClient, rbac.StandardUser.String())
 	require.NoError(k.T(), err, "Failed to create a Standard User with no cluster access")
@@ -175,21 +175,21 @@ func (k *KubeconfigCountTestSuite) TestKubeconfigCountsRespectOwnership() {
 		createKubeconfig(adminClient, "local"),
 		createKubeconfig(additionalAdminClient, k.cluster.ID),
 	}
-	baseOwnerKubeconfigNames := []string{
-		createKubeconfig(baseOwnerClient, k.cluster.ID),
-		createKubeconfig(baseOwnerClient, k.cluster.ID),
+	baseMemberKubeconfigNames := []string{
+		createKubeconfig(baseMemberClient, k.cluster.ID),
+		createKubeconfig(baseMemberClient, k.cluster.ID),
 	}
-	standardOwnerKubeconfigNames := []string{
-		createKubeconfig(standardOwnerClient, k.cluster.ID),
+	standardMemberKubeconfigNames := []string{
+		createKubeconfig(standardMemberClient, k.cluster.ID),
 	}
 
 	allFixtureNames := combineNames(
 		adminKubeconfigNames,
-		baseOwnerKubeconfigNames,
-		standardOwnerKubeconfigNames,
+		baseMemberKubeconfigNames,
+		standardMemberKubeconfigNames,
 	)
 
-	initialCases := []kubeconfigCountTestCase{
+	initialCases := []resourceCountTestCase{
 		{
 			name:          "configured admin sees every fixture",
 			client:        adminClient,
@@ -203,20 +203,22 @@ func (k *KubeconfigCountTestSuite) TestKubeconfigCountsRespectOwnership() {
 			minimumCount:  len(allFixtureNames),
 		},
 		{
-			name:          "User-Base cluster owner count matches visible kubeconfigs",
-			client:        baseOwnerClient,
-			includedNames: baseOwnerKubeconfigNames,
-			minimumCount:  len(baseOwnerKubeconfigNames),
+			name:          "User-Base cluster member sees two owned kubeconfigs only",
+			client:        baseMemberClient,
+			exactNames:    baseMemberKubeconfigNames,
+			excludedNames: namesExcept(allFixtureNames, baseMemberKubeconfigNames),
 		},
 		{
-			name:          "Standard User cluster owner count matches visible kubeconfigs",
-			client:        standardOwnerClient,
-			includedNames: standardOwnerKubeconfigNames,
-			minimumCount:  len(standardOwnerKubeconfigNames),
+			name:          "Standard User cluster member sees one owned kubeconfig only",
+			client:        standardMemberClient,
+			exactNames:    standardMemberKubeconfigNames,
+			excludedNames: namesExcept(allFixtureNames, standardMemberKubeconfigNames),
 		},
 		{
-			name:   "cluster owner without owned fixtures count matches visible kubeconfigs",
-			client: ownerWithoutKubeconfigsClient,
+			name:          "cluster member without owned kubeconfigs sees zero",
+			client:        memberWithoutKubeconfigsClient,
+			exactNames:    []string{},
+			excludedNames: allFixtureNames,
 		},
 		{
 			name:          "Standard User with no cluster access sees zero",
@@ -234,13 +236,13 @@ func (k *KubeconfigCountTestSuite) TestKubeconfigCountsRespectOwnership() {
 
 	k.runKubeconfigCountCases("after creation", initialCases)
 
-	deletedName := baseOwnerKubeconfigNames[0]
-	err = extkubeconfigs.DeleteKubeconfig(baseOwnerClient, deletedName, true)
+	deletedName := baseMemberKubeconfigNames[0]
+	err = extkubeconfigs.DeleteKubeconfig(baseMemberClient, deletedName, true)
 	require.NoError(k.T(), err, "Failed to delete owned kubeconfig %q", deletedName)
 
-	remainingBaseOwnerNames := baseOwnerKubeconfigNames[1:]
+	remainingBaseMemberNames := baseMemberKubeconfigNames[1:]
 	remainingFixtureNames := namesExcept(allFixtureNames, []string{deletedName})
-	afterDeletionCases := []kubeconfigCountTestCase{
+	afterDeletionCases := []resourceCountTestCase{
 		{
 			name:          "configured admin list and count reflect deletion",
 			client:        adminClient,
@@ -256,23 +258,22 @@ func (k *KubeconfigCountTestSuite) TestKubeconfigCountsRespectOwnership() {
 			minimumCount:  len(remainingFixtureNames),
 		},
 		{
-			name:          "owner list and count reflect deletion",
-			client:        baseOwnerClient,
-			includedNames: remainingBaseOwnerNames,
-			excludedNames: []string{deletedName},
-			minimumCount:  len(remainingBaseOwnerNames),
+			name:          "member count decrements after deleting one of two",
+			client:        baseMemberClient,
+			exactNames:    remainingBaseMemberNames,
+			excludedNames: append(namesExcept(remainingFixtureNames, remainingBaseMemberNames), deletedName),
 		},
 		{
-			name:          "other owner count remains in sync after deletion",
-			client:        standardOwnerClient,
-			includedNames: standardOwnerKubeconfigNames,
-			excludedNames: []string{deletedName},
-			minimumCount:  len(standardOwnerKubeconfigNames),
+			name:          "other member count remains isolated",
+			client:        standardMemberClient,
+			exactNames:    standardMemberKubeconfigNames,
+			excludedNames: append(namesExcept(remainingFixtureNames, standardMemberKubeconfigNames), deletedName),
 		},
 		{
-			name:          "owner without fixtures count remains in sync after deletion",
-			client:        ownerWithoutKubeconfigsClient,
-			excludedNames: []string{deletedName},
+			name:          "member without kubeconfigs remains at zero",
+			client:        memberWithoutKubeconfigsClient,
+			exactNames:    []string{},
+			excludedNames: append(remainingFixtureNames, deletedName),
 		},
 		{
 			name:          "Standard User remains at zero",
@@ -291,17 +292,17 @@ func (k *KubeconfigCountTestSuite) TestKubeconfigCountsRespectOwnership() {
 	k.runKubeconfigCountCases("after deletion", afterDeletionCases)
 }
 
-func (k *KubeconfigCountTestSuite) runKubeconfigCountCases(phase string, testCases []kubeconfigCountTestCase) {
-	var convergedObservations []kubeconfigCountObservation
+func (k *KubeconfigCountTestSuite) runKubeconfigCountCases(phase string, testCases []resourceCountTestCase) {
+	var convergedObservations []resourceCountObservation
 	converged := assert.EventuallyWithT(k.T(), func(collect *assert.CollectT) {
-		observations := make([]kubeconfigCountObservation, len(testCases))
+		observations := make([]resourceCountObservation, len(testCases))
 		for index, testCase := range testCases {
-			observation, err := observeKubeconfigCount(testCase.client)
+			observation, err := observeResourceCount(testCase.client, kubeconfigSchemaID, "kubeconfigs")
 			if !assert.NoError(collect, err, "%s: %s", phase, testCase.name) {
 				continue
 			}
 			observations[index] = observation
-			assertKubeconfigCountObservation(collect, phase, testCase, observation)
+			assertResourceCountObservation(collect, phase, "kubeconfig", testCase, observation)
 		}
 		convergedObservations = observations
 	}, defaults.OneMinuteTimeout, defaults.FiveSecondTimeout, "%s kubeconfig counts did not converge", phase)
@@ -313,26 +314,26 @@ func (k *KubeconfigCountTestSuite) runKubeconfigCountCases(phase string, testCas
 		testCase := testCase
 		observation := convergedObservations[index]
 		k.Run(fmt.Sprintf("%s/%s", phase, testCase.name), func() {
-			assertKubeconfigCountObservation(k.T(), phase, testCase, observation)
+			assertResourceCountObservation(k.T(), phase, "kubeconfig", testCase, observation)
 		})
 	}
 }
 
-func observeKubeconfigCount(client *rancher.Client) (kubeconfigCountObservation, error) {
-	listNames, err := listAllKubeconfigNames(client)
+func observeResourceCount(client *rancher.Client, schemaID, resourceName string) (resourceCountObservation, error) {
+	listNames, err := listAllSteveResourceNames(client, schemaID)
 	if err != nil {
-		return kubeconfigCountObservation{}, fmt.Errorf("failed to list kubeconfigs as user %q: %w", client.UserID, err)
+		return resourceCountObservation{}, fmt.Errorf("failed to list %s as user %q: %w", resourceName, client.UserID, err)
 	}
 
-	observation := kubeconfigCountObservation{
+	observation := resourceCountObservation{
 		listNames: listNames,
 		counts:    make(map[string]int, len(countQueries)),
 	}
 
 	for _, query := range countQueries {
-		count, err := getKubeconfigCount(client, query.values)
+		count, err := getSteveResourceCount(client, schemaID, query.values)
 		if err != nil {
-			return kubeconfigCountObservation{}, fmt.Errorf("%s as user %q failed: %w", query.name, client.UserID, err)
+			return resourceCountObservation{}, fmt.Errorf("%s as user %q failed: %w", query.name, client.UserID, err)
 		}
 		observation.counts[query.name] = count
 	}
@@ -340,11 +341,8 @@ func observeKubeconfigCount(client *rancher.Client) (kubeconfigCountObservation,
 	return observation, nil
 }
 
-// listAllKubeconfigNames walks pagination explicitly. Shepherd's Steve ListAll
-// helper cannot advance a paginated response because List does not attach the
-// resource client needed by SteveCollection.Next.
-func listAllKubeconfigNames(client *rancher.Client) ([]string, error) {
-	collection, err := client.Steve.SteveType(kubeconfigSchemaID).List(nil)
+func listAllSteveResourceNames(client *rancher.Client, schemaID string) ([]string, error) {
+	collection, err := client.Steve.SteveType(schemaID).List(nil)
 	if err != nil {
 		return nil, err
 	}
@@ -354,13 +352,13 @@ func listAllKubeconfigNames(client *rancher.Client) ([]string, error) {
 	for collection.Pagination != nil && collection.Pagination.Next != "" {
 		nextURL := collection.Pagination.Next
 		if _, seen := seenNextURLs[nextURL]; seen {
-			return nil, fmt.Errorf("Steve kubeconfig pagination repeated next URL %q", nextURL)
+			return nil, fmt.Errorf("Steve %q pagination repeated next URL %q", schemaID, nextURL)
 		}
 		seenNextURLs[nextURL] = struct{}{}
 
 		nextCollection := &steveV1.SteveCollection{}
 		if err := client.Steve.Ops.DoNext(nextURL, nextCollection); err != nil {
-			return nil, fmt.Errorf("failed to get next Steve kubeconfig page: %w", err)
+			return nil, fmt.Errorf("failed to get next Steve %q page: %w", schemaID, err)
 		}
 		names = append(names, nextCollection.Names()...)
 		collection = nextCollection
@@ -370,7 +368,7 @@ func listAllKubeconfigNames(client *rancher.Client) ([]string, error) {
 	return names, nil
 }
 
-func getKubeconfigCount(client *rancher.Client, values url.Values) (int, error) {
+func getSteveResourceCount(client *rancher.Client, schemaID string, values url.Values) (int, error) {
 	countEndpoint, err := client.Steve.Ops.GetCollectionURL(countSchemaID, http.MethodGet)
 	if err != nil {
 		return 0, fmt.Errorf("failed to discover Steve count endpoint: %w", err)
@@ -397,37 +395,38 @@ func getKubeconfigCount(client *rancher.Client, values url.Values) (int, error) 
 		return 0, fmt.Errorf("expected one Steve count object, got %d", len(response.Data))
 	}
 
-	kubeconfigCount, found := response.Data[0].Counts[kubeconfigSchemaID]
+	resourceCount, found := response.Data[0].Counts[schemaID]
 	if !found {
-		return 0, fmt.Errorf("Steve count response has no %q entry", kubeconfigSchemaID)
+		return 0, fmt.Errorf("Steve count response has no %q entry", schemaID)
 	}
-	if kubeconfigCount.Summary == nil {
-		return 0, fmt.Errorf("Steve count response has no summary for %q", kubeconfigSchemaID)
+	if resourceCount.Summary == nil {
+		return 0, fmt.Errorf("Steve count response has no summary for %q", schemaID)
 	}
 
-	return kubeconfigCount.Summary.Count, nil
+	return resourceCount.Summary.Count, nil
 }
 
-func assertKubeconfigCountObservation(t assert.TestingT, phase string, testCase kubeconfigCountTestCase, observation kubeconfigCountObservation) {
+func assertResourceCountObservation(t assert.TestingT, phase, resourceName string, testCase resourceCountTestCase, observation resourceCountObservation) {
 	if testCase.exactNames != nil {
 		assert.Equal(
 			t,
 			sortedNames(testCase.exactNames),
 			observation.listNames,
-			"%s: %s: Steve list returned unexpected kubeconfigs",
+			"%s: %s: Steve list returned unexpected %ss",
 			phase,
 			testCase.name,
+			resourceName,
 		)
 	}
 
 	for _, expectedName := range testCase.includedNames {
-		assert.Contains(t, observation.listNames, expectedName, "%s: %s: expected owned/admin-visible kubeconfig", phase, testCase.name)
+		assert.Contains(t, observation.listNames, expectedName, "%s: %s: expected owned/admin-visible %s", phase, testCase.name, resourceName)
 	}
 	for _, unexpectedName := range testCase.excludedNames {
-		assert.NotContains(t, observation.listNames, unexpectedName, "%s: %s: unexpected kubeconfig was visible", phase, testCase.name)
+		assert.NotContains(t, observation.listNames, unexpectedName, "%s: %s: unexpected %s was visible", phase, testCase.name, resourceName)
 	}
 	if testCase.minimumCount > 0 {
-		assert.GreaterOrEqual(t, len(observation.listNames), testCase.minimumCount, "%s: %s: Steve list omitted fixtures", phase, testCase.name)
+		assert.GreaterOrEqual(t, len(observation.listNames), testCase.minimumCount, "%s: %s: Steve list omitted %s fixtures", phase, testCase.name, resourceName)
 	}
 
 	for _, query := range countQueries {
