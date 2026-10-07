@@ -1,17 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ "$#" -ne 3 ]]; then
-	echo "Usage: $0 <username> <password> <ssh-public-key>" >&2
+if [[ "$#" -ne 5 ]]; then
+	echo "Usage: $0 <username> <password> <ssh-public-key> <rhsm-org> <rhsm-activation-key>" >&2
 	exit 2
 fi
 
 username=$1
 password=$2
 ssh_public_key=$3
+rhsm_org=$4
+rhsm_activation_key=$5
 
-if [[ -z "$password" || -z "$ssh_public_key" ]]; then
-	echo "Password and SSH public key must be non-empty." >&2
+if [[ -z "$password" || -z "$ssh_public_key" || -z "$rhsm_org" || -z "$rhsm_activation_key" ]]; then
+	echo "Password, SSH public key, RHSM org, and RHSM activation key must be non-empty." >&2
 	exit 2
 fi
 
@@ -43,8 +45,14 @@ printf '%s\n' "$ssh_public_key" | sudo tee "$user_home/.ssh/authorized_keys" >/d
 sudo chown "$username:$user_group" "$user_home/.ssh/authorized_keys"
 sudo chmod 600 "$user_home/.ssh/authorized_keys"
 
+if ! sudo subscription-manager identity >/dev/null 2>&1; then
+	sudo subscription-manager register --org "$rhsm_org" --activationkey "$rhsm_activation_key"
+fi
+
+sudo dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
+
 sudo dnf update -y
-sudo dnf install -y cloud-init iptables vim-enhanced
+sudo dnf install -y cloud-init iptables vim-enhanced yq
 
 sudo systemctl disable nm-cloud-setup
 sudo systemctl stop nm-cloud-setup
