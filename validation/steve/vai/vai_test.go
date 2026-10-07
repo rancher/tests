@@ -30,15 +30,16 @@ import (
 
 type VaiTestSuite struct {
 	suite.Suite
-	client       *rancher.Client
-	steveClient  *steveV1.Client
-	session      *session.Session
-	cluster      *management.Cluster
-	vaiEnabled   bool
-	testData     *TestData
-	dbCollection *database.SnapshotCollection
-	dbExtractor  *database.Extractor
-	dbQuery      *database.Query
+	client           *rancher.Client
+	steveClient      *steveV1.Client
+	session          *session.Session
+	cluster          *management.Cluster
+	vaiEnabled       bool
+	vaiAlwaysEnabled bool
+	testData         *TestData
+	dbCollection     *database.SnapshotCollection
+	dbExtractor      *database.Extractor
+	dbQuery          *database.Query
 }
 
 type TestData struct {
@@ -65,6 +66,8 @@ func (v *VaiTestSuite) SetupSuite() {
 	v.cluster, err = v.client.Management.Cluster.ByID(clusterID)
 	require.NoError(v.T(), err)
 
+	v.vaiAlwaysEnabled, err = isVaiAlwaysEnabled(v.client)
+	require.NoError(v.T(), err)
 	enabled, err := isVaiEnabled(v.client)
 	require.NoError(v.T(), err)
 	v.vaiEnabled = enabled
@@ -89,6 +92,10 @@ func (v *VaiTestSuite) ensureVaiEnabled() {
 }
 
 func (v *VaiTestSuite) ensureVaiDisabled() {
+	if v.vaiAlwaysEnabled {
+		v.T().Skip("VAI is always enabled on Rancher 2.16 and newer")
+	}
+
 	if v.vaiEnabled {
 		err := ensureVAIState(v.client, false)
 		require.NoError(v.T(), err)
@@ -615,6 +622,10 @@ func (v *VaiTestSuite) runSecretLimitTestCases(testCases []secretLimitTestCase) 
 }
 
 func (v *VaiTestSuite) checkVaiDescription() {
+	if v.vaiAlwaysEnabled {
+		v.T().Skip("The ui-sql-cache feature flag was removed in Rancher 2.16")
+	}
+
 	const expectedVAIDescription = "Improve performance by enabling SQLite-backed caching. This also enables server-side pagination and other scaling based performance improvements."
 
 	feature, err := v.steveClient.SteveType("management.cattle.io.feature").ByID("ui-sql-cache")
