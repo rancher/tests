@@ -1,4 +1,4 @@
-//go:build (infra.any || cluster.any || sanity || validation) && !stress && !extended
+//go:build (infra.any || cluster.any || sanity || validation || pit.weekly) && !stress && !extended
 
 package configmaps
 
