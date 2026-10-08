@@ -10,6 +10,7 @@ import (
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/pkg/session"
 	authactions "github.com/rancher/tests/actions/auth"
+	"github.com/rancher/tests/actions/kubeapi/tokens/exttokens"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
@@ -261,6 +262,31 @@ func (k *KubeAPIAuthTokenReviewSuite) TestTokenReviewRejectsMalformedRequests() 
 		require.Equal(k.T(), 400, result.StatusCode, "A request carrying %v should be refused outright, got body [%v]", request.description, result.Body)
 		require.NoError(k.T(), authactions.VerifyKubeAPIAuthLogged(k.client, k.clusterID, baseline, request.reason),
 			"kube-api-auth answers a refused request with an empty body, so its log is what should say %v was rejected", request.description)
+	}
+}
+
+func (k *KubeAPIAuthTokenReviewSuite) TestTokenReviewRefusesAnExtTokenWithNoClusterAuthToken() {
+	k.skipOnPreFixImage()
+
+	subSession := k.session.NewSession()
+	defer subSession.Cleanup()
+
+	extToken, err := exttokens.CreateExtToken(k.client, 0)
+	require.NoError(k.T(), err, "Failed to mint an ext token")
+
+	bearer := authactions.ExtTokenPrefix + extToken.Name + ":" + extToken.Status.Value
+
+	for _, apiVersion := range []string{authactions.TokenReviewAPIV1, authactions.TokenReviewAPIV1Beta} {
+		logrus.Infof("Reviewing an ext token with apiVersion %v", apiVersion)
+
+		result, err := authactions.ReviewToken(k.client, k.clusterID, apiVersion, authactions.TokenReviewKind, bearer)
+		require.NoError(k.T(), err, "Failed to send the TokenReview")
+
+		require.Equal(k.T(), 200, result.StatusCode, "An ext token should be reviewed rather than refused outright, got body [%v]", result.Body)
+		require.Equal(k.T(), apiVersion, result.APIVersion, "A refusal must echo the apiVersion the request carried")
+		require.False(k.T(), result.Authenticated, "An ext token that is not scoped to the cluster should not authenticate, got body [%v]", result.Body)
+		require.Contains(k.T(), result.Error, extToken.Name,
+			"kube-api-auth should drop the %v prefix and look the token up by its name, so the refusal names [%v]", authactions.ExtTokenPrefix, extToken.Name)
 	}
 }
 

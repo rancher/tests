@@ -261,6 +261,49 @@ func EnsureAuthProviderEnabled(client *rancher.Client, providerName string) erro
 	return err
 }
 
+// AuthProviderEnabled reports whether the given auth provider is on
+func AuthProviderEnabled(client *rancher.Client, providerName string) (bool, error) {
+	authConfig, err := client.Management.AuthConfig.ByID(providerName)
+	if err != nil {
+		return false, fmt.Errorf("failed to get auth config: %w", err)
+	}
+
+	return authConfig.Enabled, nil
+}
+
+// EnsureAuthProviderDisabled turns the given auth provider off when it is on
+func EnsureAuthProviderDisabled(client *rancher.Client, providerName string) error {
+	authConfig, err := client.Management.AuthConfig.ByID(providerName)
+	if err != nil {
+		return fmt.Errorf("failed to get auth config: %w", err)
+	}
+
+	if !authConfig.Enabled {
+		return nil
+	}
+
+	switch providerName {
+	case OpenLdap:
+		err = client.Auth.OLDAP.Disable()
+	case ActiveDirectory:
+		err = client.Auth.ActiveDirectory.Disable()
+	case KeycloakSAML:
+		err = client.Auth.KeycloakSAML.Disable()
+	case GenericSAML:
+		err = client.Auth.GenericSAML.Disable()
+	case KeycloakOIDC:
+		err = client.Auth.KeycloakOIDC.Disable()
+	default:
+		return fmt.Errorf("unsupported auth provider: %s", providerName)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to disable auth provider %s: %w", providerName, err)
+	}
+
+	return nil
+}
+
 // WaitForNamespaceReady polls until the namespace is available within the specified timeout
 func WaitForNamespaceReady(client *rancher.Client, namespaceName string) error {
 	return kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(context.Context) (bool, error) {
