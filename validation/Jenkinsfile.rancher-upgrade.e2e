@@ -295,7 +295,17 @@ server_flags: |
         text(
             name: 'CATTLE_TEST_CONFIG',
             description: 'Test configuration YAML (cattle-config). rancher.adminToken is injected at runtime (initial + rotated after the server upgrade); rancherUpgradeInput.targetVersion is substituted from the resolved upgrade target.',
-            defaultValue: '''rancher:
+            defaultValue: '''# The downstream per-phase executor can land on a different Jenkins agent
+# than this orchestrator; awsNodeTemplate carries the three keys its
+# Authorize Security Group stage needs (sg name, vpc, region) so the
+# runner's public IP gets authorized on the tofu-created ephemeral SG
+# (tf-<prefix>-sg) before the phases talk to the Rancher LB.
+awsNodeTemplate:
+    region: us-east-2
+    vpcId: vpc-bfccf4d7
+    securityGroup:
+    - tf-${HOSTNAME_PREFIX}-sg
+rancher:
     host: ${HOSTNAME_PREFIX}.qa.rancher.space
     adminPassword: ${ADMIN_PASSWORD}
     insecure: true
