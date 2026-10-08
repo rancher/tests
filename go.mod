@@ -84,7 +84,7 @@ require (
 	github.com/rancher/norman v0.10.0
 	github.com/rancher/rancher v0.0.0-20260527150105-ae26ccbc3fed
 	github.com/rancher/rancher/pkg/apis v0.0.0
-	github.com/rancher/shepherd v0.0.0-20261002144048-2ae83452a53e
+	github.com/rancher/shepherd v0.0.0-20261008151755-4016df39968f
 	github.com/rancher/tests/actions v0.0.0-20260925190906-17002625ce49
 	github.com/rancher/tests/interoperability v0.0.0
 	github.com/rancher/tfp-automation v0.0.0-20261007181317-b50499b3ff43
@@ -285,5 +285,3 @@ require (
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v6 v6.4.2 // indirect
 )
-
-replace github.com/rancher/shepherd => github.com/dasarinaidu/shepherd v0.0.0-20261006215002-f32c9238669c

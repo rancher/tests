@@ -75,7 +75,7 @@ require (
 	github.com/rancher/norman v0.10.0
 	github.com/rancher/rancher v0.0.0-20260527150105-ae26ccbc3fed
 	github.com/rancher/rancher/pkg/apis v0.0.0
-	github.com/rancher/shepherd v0.0.0-20261002144048-2ae83452a53e
+	github.com/rancher/shepherd v0.0.0-20261008151755-4016df39968f
 	github.com/rancher/tfp-automation v0.0.0-20261007181317-b50499b3ff43
 	github.com/rancher/wrangler v1.1.2
 	github.com/sirupsen/logrus v1.10.2
@@ -244,5 +244,3 @@ require (
 )
 
 replace sigs.k8s.io/cluster-api/api => sigs.k8s.io/cluster-api/api v1.14.2
-
-replace github.com/rancher/shepherd => github.com/dasarinaidu/shepherd v0.0.0-20261006215002-f32c9238669c
