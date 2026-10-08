@@ -33,14 +33,22 @@
  *   infrastructure.writeSshKey, infrastructure.detectPublicIp
  *   property.useWithProperties
  *
- * Admin token generation uses a direct ansible-playbook call inside
- * rancher-go-test:latest (no make token target exists upstream yet).
+ * Admin token generation uses a direct ansible-playbook call inside the
+ * rancher-go-test image (no make token target exists upstream yet).
  */
 
 def libraryBranch = env.QA_JENKINS_LIBRARY_BRANCH ?: 'main'
 library "qa-jenkins-library@${libraryBranch}"
 
 def DEFAULT_RANCHER_PASSWORD = 'X%S3bPyg@n8kWcRs675l#fH0'
+
+// Build-scoped image tags: every direct docker invocation below runs the
+// pinned tag so this job never depends on (or mutates) whatever some other
+// job last built under the shared :latest tag on the same agent. The :latest
+// alias is still applied at build time because qa-jenkins-library's
+// make.runTarget resolves that name for its own container runs.
+def INFRA_TOOLS_IMAGE = "rancher-infra-tools:pitupgrade-${env.BUILD_NUMBER}"
+def GO_TEST_IMAGE = "rancher-go-test:pitupgrade-${env.BUILD_NUMBER}"
 
 // Suite/method selectors passed as GOTEST_TESTCASE to the downstream executor.
 // Each phase is its own go test invocation (-run regex), so cross-phase state
@@ -116,7 +124,7 @@ def collectUpgradeDiagnostics() {
                 -v ${workspace}:/workspace \
                 -e KUBECONFIG=/workspace/${env.INFRA_DIR}/ansible/rke2/default/kubeconfig.yaml \
                 -w /workspace \
-                rancher-infra-tools:latest \
+                ${INFRA_TOOLS_IMAGE} \
                 sh -c '
                     set +e
                     kubectl get nodes -o wide > diagnostics-nodes.txt 2>&1
@@ -387,10 +395,13 @@ rancherUpgradeInput:
 
         stage('Build Docker Images') {
             steps {
-                // rancher-infra-tools:latest — used by make.groovy / infra.* for all make targets
-                sh "docker build --no-cache --platform linux/amd64 -t rancher-infra-tools:latest -f ${env.TESTS_DIR}/validation/pipeline/Dockerfile.infra ."
-                // rancher-go-test:latest — used for qase binary build and admin-token playbook
-                sh "docker build --no-cache --platform linux/amd64 -t rancher-go-test:latest -f ${env.TESTS_DIR}/validation/pipeline/Dockerfile.airgap-go-tests ."
+                // rancher-infra-tools — used by make.groovy / infra.* for all make
+                // targets (library resolves the :latest alias); direct invocations
+                // in this file use the build-pinned tag.
+                sh "docker build --no-cache --platform linux/amd64 -t ${INFRA_TOOLS_IMAGE} -t rancher-infra-tools:latest -f ${env.TESTS_DIR}/validation/pipeline/Dockerfile.infra ."
+                // rancher-go-test — used for the qase binary build, token playbook,
+                // and redaction step, always via the build-pinned tag.
+                sh "docker build --no-cache --platform linux/amd64 -t ${GO_TEST_IMAGE} -t rancher-go-test:latest -f ${env.TESTS_DIR}/validation/pipeline/Dockerfile.airgap-go-tests ."
             }
         }
 
@@ -693,7 +704,7 @@ rancher_use_bundled_system_charts: true
                             -e ANSIBLE_CONFIG=/workspace/${env.INFRA_DIR}/ansible/ansible.cfg \
                             -v ${workspace}:/workspace \
                             -w /workspace/${env.INFRA_DIR}/ansible/rke2/default \
-                            rancher-go-test:latest \
+                            ${GO_TEST_IMAGE} \
                             ansible-playbook -i inventory/inventory.yml /workspace/${env.INFRA_DIR}/ansible/rancher/token/generate-admin-token.yml \
                                 -e rancher_cattle_config_file=${containerConfigPath} \
                                 -e rancher_token_ttl=${tokenTtl} \
@@ -710,7 +721,7 @@ rancher_use_bundled_system_charts: true
                         // Redact secret fields from token JSON via Docker container.
                         // Pipeline Utility Steps plugin (readJSON/writeJSON) is not installed,
                         // and python3 is not available on the Jenkins agent host.
-                        sh "docker run --rm -v \$(pwd):/workspace -w /workspace rancher-go-test:latest python3 -c \"import json; d=json.load(open('rancher-token.json')); [d.pop(k,None) for k in ('token','bearerToken','accessKey','secretKey','value')]; json.dump(d,open('rancher-token-metadata.json','w'),indent=2)\""
+                        sh "docker run --rm -v \$(pwd):/workspace -w /workspace ${GO_TEST_IMAGE} python3 -c \"import json; d=json.load(open('rancher-token.json')); [d.pop(k,None) for k in ('token','bearerToken','accessKey','secretKey','value')]; json.dump(d,open('rancher-token-metadata.json','w'),indent=2)\""
                         if (params.REPORT_ARTIFACTS) {
                             archiveArtifacts artifacts: 'rancher-token-metadata.json'
                             echo 'Archived redacted token metadata: rancher-token-metadata.json'
@@ -750,7 +761,7 @@ rancher_use_bundled_system_charts: true
                             docker run --rm --platform linux/amd64 \
                                 -v ${workspace}:/workspace \
                                 -w /workspace/${env.TESTS_DIR} \
-                                rancher-go-test:latest \
+                                ${GO_TEST_IMAGE} \
                                 sh -c 'env GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o /workspace/testrun ./validation/pipeline/qase/testrun'
                         """
 
@@ -971,7 +982,7 @@ rancher_use_bundled_system_charts: true
                 }
 
                 // Docker cleanup
-                sh 'docker rmi -f rancher-go-test:latest rancher-infra-tools:latest || true'
+                sh "docker rmi -f ${GO_TEST_IMAGE} ${INFRA_TOOLS_IMAGE} rancher-go-test:latest rancher-infra-tools:latest || true"
 
                 // Sensitive artifact cleanup — shred or remove credentials from workspace
                 sh '''

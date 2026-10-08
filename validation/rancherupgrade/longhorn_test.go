@@ -16,6 +16,7 @@ import (
 	actionsClusters "github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/storage"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -65,6 +66,7 @@ func (s *LonghornUpgradeTestSuite) TearDownSuite() {
 }
 
 func (s *LonghornUpgradeTestSuite) TestLonghornPreUpgrade() {
+	logrus.Infof("pre-upgrade phase: creating project on cluster %s", s.cluster.ID)
 	project, _, err := projects.CreateProjectAndNamespace(s.client, s.cluster.ID)
 	require.NoError(s.T(), err)
 
@@ -77,6 +79,7 @@ func (s *LonghornUpgradeTestSuite) TestLonghornPreUpgrade() {
 	require.NoError(s.T(), err)
 	version, err := catalogClient.GetLatestChartVersion(charts.LonghornChartName, catalog.RancherChartRepo)
 	require.NoError(s.T(), err)
+	logrus.Infof("pre-upgrade phase: installing longhorn %s from the %s repo", version, catalog.RancherChartRepo)
 
 	err = charts.InstallLonghornChart(s.client, charts.PayloadOpts{
 		Namespace: charts.LonghornNamespace,
@@ -88,29 +91,36 @@ func (s *LonghornUpgradeTestSuite) TestLonghornPreUpgrade() {
 		},
 	}, nil)
 	require.NoError(s.T(), err)
+	logrus.Infof("pre-upgrade phase: longhorn %s installed; seeding checksum workload %s", version, checksumWorkloadName)
 
 	err = storage.CreateChecksumWorkload(s.client, s.cluster.ID, charts.LonghornStorageClass, checksumWorkloadName, checksumContent)
 	require.NoError(s.T(), err)
+	logrus.Infof("pre-upgrade phase: checksum workload %s ready; pre-upgrade state seeded", checksumWorkloadName)
 }
 
 func (s *LonghornUpgradeTestSuite) TestLonghornPostUpgrade() {
 	cfg := loadUpgradeInput()
 	require.NotEmpty(s.T(), cfg.TargetVersion, "rancherUpgradeInput.targetVersion must be set for post-upgrade phases")
+	logrus.Infof("post-upgrade phase: waiting for rancher server version %s", cfg.TargetVersion)
 
 	err := actionsClusters.WaitRancherVersion(s.client, cfg.TargetVersion, defaults.TenMinuteTimeout)
 	require.NoError(s.T(), err)
+	logrus.Infof("post-upgrade phase: server version %s observed; checking longhorn survival", cfg.TargetVersion)
 
 	chart, err := shepherdCharts.GetChartStatus(s.client, s.cluster.ID, charts.LonghornNamespace, charts.LonghornChartName)
 	require.NoError(s.T(), err)
 	require.True(s.T(), chart.IsAlreadyInstalled, "longhorn chart must still be installed after the Rancher server upgrade")
+	logrus.Infof("post-upgrade phase: longhorn chart still installed; verifying workload data")
 
 	err = storage.VerifyChecksumWorkload(s.client, s.cluster.ID, checksumWorkloadName, checksumContent)
 	require.NoError(s.T(), err)
+	logrus.Infof("post-upgrade phase: checksum verified on %s", checksumWorkloadName)
 }
 
 func (s *LonghornUpgradeTestSuite) TestLonghornChartUpgrade() {
 	cfg := loadUpgradeInput()
 	require.NotEmpty(s.T(), cfg.TargetVersion, "rancherUpgradeInput.targetVersion must be set for post-upgrade phases")
+	logrus.Infof("chart-upgrade phase: waiting for rancher server version %s", cfg.TargetVersion)
 
 	err := actionsClusters.WaitRancherVersion(s.client, cfg.TargetVersion, defaults.TenMinuteTimeout)
 	require.NoError(s.T(), err)
@@ -122,6 +132,7 @@ func (s *LonghornUpgradeTestSuite) TestLonghornChartUpgrade() {
 	require.NoError(s.T(), err)
 	latest, err := catalogClient.GetLatestChartVersion(charts.LonghornChartName, catalog.RancherChartRepo)
 	require.NoError(s.T(), err)
+	logrus.Infof("chart-upgrade phase: upgrading longhorn to %s from the upgraded catalog", latest)
 
 	installOptions := &charts.InstallOptions{
 		Cluster: s.cluster,
@@ -135,9 +146,11 @@ func (s *LonghornUpgradeTestSuite) TestLonghornChartUpgrade() {
 	chart, err := shepherdCharts.GetChartStatus(s.client, s.cluster.ID, charts.LonghornNamespace, charts.LonghornChartName)
 	require.NoError(s.T(), err)
 	require.Equal(s.T(), latest, chart.ChartDetails.Spec.Chart.Metadata.Version)
+	logrus.Infof("chart-upgrade phase: longhorn at %s; verifying workload data", latest)
 
 	err = storage.VerifyChecksumWorkload(s.client, s.cluster.ID, checksumWorkloadName, checksumContent)
 	require.NoError(s.T(), err)
+	logrus.Infof("chart-upgrade phase: checksum verified on %s", checksumWorkloadName)
 }
 
 func TestLonghornUpgradeTestSuite(t *testing.T) {
