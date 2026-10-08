@@ -2,8 +2,6 @@
 name: Day 2 Operations - Upgraded Rancher
 
 on:
-  schedule:
-    - cron: "0 8 * * 4"
   workflow_dispatch:
     inputs:
       rancher_version:
