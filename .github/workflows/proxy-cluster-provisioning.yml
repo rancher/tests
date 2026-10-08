@@ -2,8 +2,6 @@
 name: Proxy Cluster Provisioning
 
 on:
-  schedule:
-    - cron: "0 10 * * 4"
   workflow_dispatch:
     inputs:
       rancher_version:

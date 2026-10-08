@@ -2,8 +2,6 @@
 name: Upgrade Local Cluster
 
 on:
-  schedule:
-    - cron: "0 8 * * 3"
   workflow_dispatch:
     inputs:
       rancher_version:

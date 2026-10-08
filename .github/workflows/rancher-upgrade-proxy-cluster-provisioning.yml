@@ -2,8 +2,6 @@
 name: Upgraded Rancher Proxy Cluster Provisioning
 
 on:
-  schedule:
-    - cron: "0 10 * * 5"
   workflow_dispatch:
     inputs:
       rancher_version:

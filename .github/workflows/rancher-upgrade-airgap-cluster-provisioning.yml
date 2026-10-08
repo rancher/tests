@@ -2,8 +2,6 @@
 name: Upgraded Rancher Airgap Cluster Provisioning
 
 on:
-  schedule:
-    - cron: "0 7 * * 4"
   workflow_dispatch:
     inputs:
       rancher_version:
