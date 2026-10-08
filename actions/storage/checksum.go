@@ -66,7 +66,10 @@ func CreateChecksumWorkload(client *rancher.Client, clusterID string, storageCla
 	}
 
 	pvc := &corev1.PersistentVolumeClaim{}
-	err = wait.PollUntilContextTimeout(context.Background(), pollInterval, defaults.OneMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
+	// TenMinuteTimeout: the first volume on a freshly installed Longhorn waits
+	// on engine-image pull, instance-manager startup, and CSI registration,
+	// which routinely exceeds a minute on a cold cluster.
+	err = wait.PollUntilContextTimeout(context.Background(), pollInterval, defaults.TenMinuteTimeout, true, func(ctx context.Context) (done bool, err error) {
 		pvc, err = wrangler.Core.PersistentVolumeClaim().Get(namespaces.Default, name, metav1.GetOptions{})
 		if err != nil {
 			return false, err
