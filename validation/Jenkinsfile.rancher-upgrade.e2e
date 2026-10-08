@@ -914,7 +914,6 @@ rancher_use_bundled_system_charts: true
         failure {
             script {
                 if (params.DESTROY_ON_FAILURE) {
-                    collectUpgradeDiagnostics()
                     destroyInfrastructure('DESTROY_ON_FAILURE')
                 }
             }
@@ -922,6 +921,15 @@ rancher_use_bundled_system_charts: true
 
         always {
             script {
+                // Failure diagnostics run here, not in the failure block:
+                // Jenkins evaluates post conditions in a fixed order with
+                // always first, so anything in failure{} would already have
+                // lost the docker images (rmi below) and the live cluster
+                // (destroy below). Collect while both still exist.
+                if (currentBuild.currentResult != 'SUCCESS') {
+                    collectUpgradeDiagnostics()
+                }
+
                 // Complete the shared Qase run when a phase failed before the
                 // final stage could close it (no-op once already completed).
                 if (env.QASE_RUN_COMPLETED != 'true' && fileExists('testrun') && fileExists('testrunconfig.yaml')) {
