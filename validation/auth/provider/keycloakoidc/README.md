@@ -72,3 +72,17 @@ Your GO suite should be set to `-run ^TestKeycloakOIDCAuthProviderSuite$`
 
 **Example:**
 `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/auth/provider/keycloakoidc --junitfile results.xml -- -timeout=60m -tags=validation -v -run ^TestKeycloakOIDCAuthProviderSuite$`
+
+**Run Keycloak OIDC Terraform Tests**
+Your GO suite should be set to `-run ^TestKeycloakOIDCTerraformSuite$`
+
+**Example:**
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/auth/provider/keycloakoidc --junitfile results.xml -- -timeout=60m -tags=validation -v -run ^TestKeycloakOIDCTerraformSuite$`
+
+The terraform suite drives the same realm fixture through `rancher2_auth_config_keycloak_oidc`, so it
+needs the terraform configuration the other tfp suites read. It covers enable, disable and destroy
+only. `rancher2_auth_config_keycloak_oidc` exposes no `client_authenticated_search` attribute, so the
+provider terraform applies has it off while the fixture turns it on; principal search is therefore
+left to the auth provider suite rather than asserted here. Disable is skipped while
+rancher/terraform-provider-rancher2#2512 is open, because `enabled = false` is a no-op on every
+non-LDAP auth config resource.
