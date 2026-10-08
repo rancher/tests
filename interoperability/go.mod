@@ -11,8 +11,8 @@ replace (
 	github.com/openshift/api => github.com/openshift/api v0.0.0-20191219222812-2987a591a72c
 	github.com/openshift/client-go => github.com/openshift/client-go v0.0.0-20191219222812-2987a591a72c
 
-	github.com/rancher/rancher/pkg/apis => github.com/rancher/rancher/pkg/apis v0.0.0-20260527150105-ae26ccbc3fed
-	github.com/rancher/rancher/pkg/client => github.com/rancher/rancher/pkg/client v0.0.0-20260527150105-ae26ccbc3fed
+	github.com/rancher/rancher/pkg/apis => github.com/rancher/rancher/pkg/apis v0.0.0-20261008184213-aaaf0be31813
+	github.com/rancher/rancher/pkg/client => github.com/rancher/rancher/pkg/client v0.0.0-20261008184213-aaaf0be31813
 	github.com/rancher/tests/actions => ./../actions
 	github.com/rancher/tfp-automation => github.com/rancher/tfp-automation v0.0.0-20261007181317-b50499b3ff43
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc => go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.53.0
@@ -64,19 +64,19 @@ require (
 	github.com/harvester/harvester v1.5.0
 	github.com/mattn/go-sqlite3 v1.14.28
 	github.com/rancher/backup-restore-operator v1.2.1
-	github.com/rancher/fleet/pkg/apis v0.15.0
-	github.com/rancher/norman v0.10.0
+	github.com/rancher/fleet/pkg/apis v0.17.0-alpha.1
+	github.com/rancher/norman v0.10.1
 	github.com/rancher/qa-infra-automation v0.0.0-20260514152023-976143409dc3
 	github.com/rancher/rancher/pkg/apis v0.0.0
 	github.com/rancher/shepherd v0.0.0-20261008164254-9b3e7ea78db5
-	github.com/rancher/tests/actions v0.0.0-20260925190906-17002625ce49
+	github.com/rancher/tests/actions v0.0.0-20261008182219-05530174171d
 	github.com/rancher/tfp-automation v0.0.0-20261007181317-b50499b3ff43
 	github.com/sirupsen/logrus v1.10.2
 	github.com/stretchr/testify v1.12.1
 	golang.org/x/crypto v0.57.0
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/api v0.37.1
-	k8s.io/apiextensions-apiserver v0.36.3
+	k8s.io/apiextensions-apiserver v0.37.0
 	k8s.io/apimachinery v0.37.1
 )
 
@@ -159,16 +159,16 @@ require (
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.70.0 // indirect
 	github.com/prometheus/procfs v0.21.1 // indirect
-	github.com/rancher/aks-operator v1.15.0-rc.1 // indirect
-	github.com/rancher/ali-operator v1.14.1-rc.1 // indirect
+	github.com/rancher/aks-operator v1.16.0-rc.2 // indirect
+	github.com/rancher/ali-operator v1.16.0-rc.1 // indirect
 	github.com/rancher/apiserver v0.9.6 // indirect
-	github.com/rancher/eks-operator v1.15.0-rc.1 // indirect
-	github.com/rancher/gke-operator v1.15.3 // indirect
-	github.com/rancher/lasso v0.2.9 // indirect
+	github.com/rancher/eks-operator v1.16.0-rc.2 // indirect
+	github.com/rancher/gke-operator v1.16.0-rc.2 // indirect
+	github.com/rancher/lasso v0.2.10 // indirect
 	github.com/rancher/rancher v0.0.0-20260527150105-ae26ccbc3fed // indirect
 	github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20260519183600-f1362a3fe1a8 // indirect
 	github.com/rancher/wrangler v1.1.2 // indirect
-	github.com/rancher/wrangler/v3 v3.7.0 // indirect
+	github.com/rancher/wrangler/v3 v3.8.0-rc.2 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/spf13/cobra v1.10.2 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
@@ -182,7 +182,7 @@ require (
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/mod v0.41.0 // indirect
-	golang.org/x/net v0.58.0 // indirect
+	golang.org/x/net v0.59.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
@@ -190,7 +190,7 @@ require (
 	golang.org/x/text v0.42.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	golang.org/x/tools v0.49.0 // indirect
-	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
+	google.golang.org/protobuf v1.36.12 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	k8s.io/apiserver v0.37.1 // indirect
@@ -199,7 +199,7 @@ require (
 	k8s.io/component-base v0.37.1 // indirect
 	k8s.io/component-helpers v0.37.1 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
-	k8s.io/kube-aggregator v0.36.1 // indirect
+	k8s.io/kube-aggregator v0.37.0 // indirect
 	k8s.io/kube-openapi v0.31.5 // indirect
 	k8s.io/kubectl v0.36.1 // indirect
 	k8s.io/streaming v0.37.1 // indirect
