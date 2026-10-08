@@ -37,7 +37,7 @@ type GenericSAMLKeycloakAuthProviderSuite struct {
 	adminUser        *v3.User
 	adminPrincipalID string
 	entityID         string
-	authConfig       *authactions.SAMLAuthConfig
+	authConfig       *authactions.ExternalAuthConfig
 }
 
 func (g *GenericSAMLKeycloakAuthProviderSuite) SetupSuite() {
@@ -208,7 +208,7 @@ func (g *GenericSAMLKeycloakAuthProviderSuite) TestGenericSAMLKeycloakRestricted
 	require.NoError(g.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
 
-	principalIDs, err := authactions.SetupSAMLRequiredAccessModePrincipals(authAdmin, g.cluster.ID, g.authConfig, authactions.GenericSAML)
+	principalIDs, err := authactions.SetupExternalRequiredAccessModePrincipals(authAdmin, g.cluster.ID, g.authConfig, authactions.GenericSAML)
 	require.NoError(g.T(), err, "Failed to setup restricted access mode test")
 
 	principalIDs = append(principalIDs, g.adminPrincipalID)
@@ -232,7 +232,7 @@ func (g *GenericSAMLKeycloakAuthProviderSuite) TestGenericSAMLKeycloakRestricted
 
 	require.NotEmpty(g.T(), g.authConfig.ExcludedUsers, "Generic SAML auth input must list users outside the allowed group to prove they are turned away")
 
-	principalIDs, err := authactions.SetupSAMLRequiredAccessModePrincipals(authAdmin, g.cluster.ID, g.authConfig, authactions.GenericSAML)
+	principalIDs, err := authactions.SetupExternalRequiredAccessModePrincipals(authAdmin, g.cluster.ID, g.authConfig, authactions.GenericSAML)
 	require.NoError(g.T(), err, "Failed to setup restricted access mode test")
 
 	principalIDs = append(principalIDs, g.adminPrincipalID)
@@ -254,7 +254,7 @@ func (g *GenericSAMLKeycloakAuthProviderSuite) TestGenericSAMLKeycloakRequiredAc
 	require.NoError(g.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
 
-	principalIDs, err := authactions.SetupSAMLRequiredAccessModePrincipals(authAdmin, g.cluster.ID, g.authConfig, authactions.GenericSAML)
+	principalIDs, err := authactions.SetupExternalRequiredAccessModePrincipals(authAdmin, g.cluster.ID, g.authConfig, authactions.GenericSAML)
 	require.NoError(g.T(), err, "Failed to setup required access mode test")
 
 	principalIDs = append(principalIDs, g.adminPrincipalID)
@@ -278,7 +278,7 @@ func (g *GenericSAMLKeycloakAuthProviderSuite) TestGenericSAMLKeycloakRequiredAc
 
 	require.NotEmpty(g.T(), g.authConfig.ExcludedUsers, "Generic SAML auth input must list users outside the allowed group to prove they are turned away")
 
-	principalIDs, err := authactions.SetupSAMLRequiredAccessModePrincipals(authAdmin, g.cluster.ID, g.authConfig, authactions.GenericSAML)
+	principalIDs, err := authactions.SetupExternalRequiredAccessModePrincipals(authAdmin, g.cluster.ID, g.authConfig, authactions.GenericSAML)
 	require.NoError(g.T(), err, "Failed to setup required access mode test")
 
 	principalIDs = append(principalIDs, g.adminPrincipalID)
@@ -376,7 +376,7 @@ func (g *GenericSAMLKeycloakAuthProviderSuite) TestGenericSAMLKeycloakGroupClust
 	require.NoError(g.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
 
-	groupPrincipalID := authactions.GetSAMLGroupPrincipalID(authactions.GenericSAML, g.authConfig.Group)
+	groupPrincipalID := authactions.GetExternalGroupPrincipalID(authactions.GenericSAML, g.authConfig.Group)
 
 	logrus.Infof("Granting Keycloak group [%v] the %v role on cluster [%v]", g.authConfig.Group, rbac.ClusterOwner, g.cluster.ID)
 	crtb, err := rbacapi.CreateGroupClusterRoleTemplateBinding(authAdmin, g.cluster.ID, groupPrincipalID, rbac.ClusterOwner.String())
@@ -409,7 +409,7 @@ func (g *GenericSAMLKeycloakAuthProviderSuite) TestGenericSAMLKeycloakGroupProje
 	projectResp, _, err := projectapi.CreateProjectAndNamespace(authAdmin, g.cluster.ID)
 	require.NoError(g.T(), err, "Failed to create project and namespace")
 
-	groupPrincipalID := authactions.GetSAMLGroupPrincipalID(authactions.GenericSAML, g.authConfig.Group)
+	groupPrincipalID := authactions.GetExternalGroupPrincipalID(authactions.GenericSAML, g.authConfig.Group)
 
 	prtbNamespace := projectResp.Name
 	if projectResp.Status.BackingNamespace != "" {
@@ -446,7 +446,7 @@ func (g *GenericSAMLKeycloakAuthProviderSuite) TestGenericSAMLKeycloakNonMemberC
 
 	require.NotEmpty(g.T(), g.authConfig.ExcludedUsers, "Generic SAML auth input must list users outside the allowed group to prove the group binding does not reach them")
 
-	groupPrincipalID := authactions.GetSAMLGroupPrincipalID(authactions.GenericSAML, g.authConfig.Group)
+	groupPrincipalID := authactions.GetExternalGroupPrincipalID(authactions.GenericSAML, g.authConfig.Group)
 
 	logrus.Infof("Granting Keycloak group [%v] the %v role on cluster [%v]", g.authConfig.Group, rbac.ClusterOwner, g.cluster.ID)
 	_, err = rbacapi.CreateGroupClusterRoleTemplateBinding(authAdmin, g.cluster.ID, groupPrincipalID, rbac.ClusterOwner.String())
@@ -471,7 +471,7 @@ func (g *GenericSAMLKeycloakAuthProviderSuite) TestGenericSAMLKeycloakRestricted
 	require.NoError(g.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
 
-	groupPrincipalID := authactions.GetSAMLGroupPrincipalID(authactions.GenericSAML, g.authConfig.Group)
+	groupPrincipalID := authactions.GetExternalGroupPrincipalID(authactions.GenericSAML, g.authConfig.Group)
 	_, err = rbacapi.CreateGroupClusterRoleTemplateBinding(authAdmin, g.cluster.ID, groupPrincipalID, rbac.ClusterMember.String())
 	require.NoError(g.T(), err, "Failed to create cluster role template binding")
 
@@ -489,7 +489,7 @@ func (g *GenericSAMLKeycloakAuthProviderSuite) TestGenericSAMLKeycloakRestricted
 	projectName := fmt.Sprintf("%s:%s", projectResp.Namespace, projectResp.Name)
 
 	for _, userInfo := range g.authConfig.Users {
-		userPrincipalID := authactions.GetSAMLUserPrincipalID(authactions.GenericSAML, userInfo)
+		userPrincipalID := authactions.GetExternalUserPrincipalID(authactions.GenericSAML, userInfo)
 		userPRTB := &managementv3.ProjectRoleTemplateBinding{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace:    prtbNamespace,
@@ -513,7 +513,7 @@ func (g *GenericSAMLKeycloakAuthProviderSuite) TestGenericSAMLKeycloakAllowClust
 
 	require.NotEmpty(g.T(), g.authConfig.ExcludedUsers, "Generic SAML auth input must list a user outside the allowed group, since this test admits one on a project binding alone")
 
-	groupPrincipalID := authactions.GetSAMLGroupPrincipalID(authactions.GenericSAML, g.authConfig.Group)
+	groupPrincipalID := authactions.GetExternalGroupPrincipalID(authactions.GenericSAML, g.authConfig.Group)
 	_, err = rbacapi.CreateGroupClusterRoleTemplateBinding(authAdmin, g.cluster.ID, groupPrincipalID, rbac.ClusterMember.String())
 	require.NoError(g.T(), err, "Failed to create group cluster role template binding")
 
@@ -531,7 +531,7 @@ func (g *GenericSAMLKeycloakAuthProviderSuite) TestGenericSAMLKeycloakAllowClust
 	projectName := fmt.Sprintf("%s:%s", projectResp.Namespace, projectResp.Name)
 
 	outsider := g.authConfig.ExcludedUsers[0]
-	outsiderPrincipalID := authactions.GetSAMLUserPrincipalID(authactions.GenericSAML, outsider)
+	outsiderPrincipalID := authactions.GetExternalUserPrincipalID(authactions.GenericSAML, outsider)
 
 	logrus.Infof("Signing user [%v] in while access is still unrestricted, so that a Rancher user record exists for them", outsider.Username)
 	err = authactions.VerifyUserLogins(authAdmin, authactions.GenericSAML, []authactions.User{outsider}, "unrestricted access mode", true)
@@ -585,11 +585,11 @@ func (g *GenericSAMLKeycloakAuthProviderSuite) TestGenericSAMLKeycloakRequiredMo
 	})
 
 	grantedPrincipalIDs := []string{
-		authactions.GetSAMLGroupPrincipalID(authactions.GenericSAML, g.authConfig.Group),
+		authactions.GetExternalGroupPrincipalID(authactions.GenericSAML, g.authConfig.Group),
 		g.adminPrincipalID,
 	}
 	for _, user := range g.authConfig.Users {
-		grantedPrincipalIDs = append(grantedPrincipalIDs, authactions.GetSAMLUserPrincipalID(authactions.GenericSAML, user))
+		grantedPrincipalIDs = append(grantedPrincipalIDs, authactions.GetExternalUserPrincipalID(authactions.GenericSAML, user))
 	}
 
 	logrus.Infof("Granting Keycloak group [%v] and its members access in required mode", g.authConfig.Group)
@@ -624,7 +624,7 @@ func (g *GenericSAMLKeycloakAuthProviderSuite) TestGenericSAMLKeycloakPrincipalS
 
 	groupName := g.authConfig.Group
 	logrus.Infof("Searching principals for Keycloak group [%v]", groupName)
-	expectedPrincipalID := authactions.GetSAMLGroupPrincipalID(authactions.GenericSAML, groupName)
+	expectedPrincipalID := authactions.GetExternalGroupPrincipalID(authactions.GenericSAML, groupName)
 
 	err = authactions.VerifyPrincipalSearchReturnsID(authAdmin, groupName, expectedPrincipalID)
 	require.NoError(g.T(), err, "Group [%v] should be returned by principal search", groupName)
@@ -639,7 +639,7 @@ func (g *GenericSAMLKeycloakAuthProviderSuite) TestGenericSAMLKeycloakPrincipalS
 	for _, userInfo := range allUsers {
 		principalName := authactions.PrincipalNameOf(userInfo)
 		logrus.Infof("Searching principals for Keycloak user [%v] by the name their principal is built from, [%v]", userInfo.Username, principalName)
-		expectedPrincipalID := authactions.GetSAMLUserPrincipalID(authactions.GenericSAML, userInfo)
+		expectedPrincipalID := authactions.GetExternalUserPrincipalID(authactions.GenericSAML, userInfo)
 
 		err = authactions.VerifyPrincipalSearchReturnsID(authAdmin, principalName, expectedPrincipalID)
 		require.NoError(g.T(), err, "User [%v] should be returned by principal search", userInfo.Username)
@@ -652,7 +652,7 @@ func (g *GenericSAMLKeycloakAuthProviderSuite) TestGenericSAMLKeycloakPrincipalS
 	defer subSession.Cleanup()
 
 	groupName := g.authConfig.Group
-	expectedGroupPrincipalID := authactions.GetSAMLGroupPrincipalID(authactions.GenericSAML, groupName)
+	expectedGroupPrincipalID := authactions.GetExternalGroupPrincipalID(authactions.GenericSAML, groupName)
 
 	logrus.Infof("Searching principals for Keycloak group [%v] restricted to type [%v]", groupName, authactions.PrincipalTypeGroup)
 	err = authactions.VerifyPrincipalSearchByTypeReturnsOnly(authAdmin, groupName, authactions.PrincipalTypeGroup, expectedGroupPrincipalID)
@@ -660,7 +660,7 @@ func (g *GenericSAMLKeycloakAuthProviderSuite) TestGenericSAMLKeycloakPrincipalS
 
 	userInfo := g.authConfig.Users[0]
 	principalName := authactions.PrincipalNameOf(userInfo)
-	expectedUserPrincipalID := authactions.GetSAMLUserPrincipalID(authactions.GenericSAML, userInfo)
+	expectedUserPrincipalID := authactions.GetExternalUserPrincipalID(authactions.GenericSAML, userInfo)
 
 	logrus.Infof("Searching principals for Keycloak user [%v] restricted to type [%v]", userInfo.Username, authactions.PrincipalTypeUser)
 	err = authactions.VerifyPrincipalSearchByTypeReturnsOnly(authAdmin, principalName, authactions.PrincipalTypeUser, expectedUserPrincipalID)
@@ -677,12 +677,12 @@ func (g *GenericSAMLKeycloakAuthProviderSuite) TestGenericSAMLKeycloakPrincipalS
 	groupPrefix := groupName[:len(groupName)/2+1]
 
 	logrus.Infof("Searching principals for Keycloak group [%v] using partial name [%v]", groupName, groupPrefix)
-	prefixPrincipalID := authactions.GetSAMLGroupPrincipalID(authactions.GenericSAML, groupPrefix)
+	prefixPrincipalID := authactions.GetExternalGroupPrincipalID(authactions.GenericSAML, groupPrefix)
 
 	err = authactions.VerifyPrincipalSearchReturnsID(authAdmin, groupPrefix, prefixPrincipalID)
 	require.NoError(g.T(), err, "A SAML principal search returns the term it was given, so partial name [%v] should come back as a principal in its own right", groupPrefix)
 
-	fullPrincipalID := authactions.GetSAMLGroupPrincipalID(authactions.GenericSAML, groupName)
+	fullPrincipalID := authactions.GetExternalGroupPrincipalID(authactions.GenericSAML, groupName)
 
 	err = authactions.VerifyPrincipalSearchReturnsID(authAdmin, groupPrefix, fullPrincipalID)
 	require.Error(g.T(), err, "Generic SAML has no directory to search, so partial name [%v] must not resolve to group [%v]; anyone treating this search as a lookup would bind principal [%v], which matches nobody", groupPrefix, groupName, prefixPrincipalID)
@@ -694,7 +694,7 @@ func (g *GenericSAMLKeycloakAuthProviderSuite) TestGenericSAMLKeycloakPrincipalS
 	defer subSession.Cleanup()
 
 	unknownName := "generic-saml-no-such-principal"
-	expectedPrincipalID := authactions.GetSAMLUserPrincipalID(authactions.GenericSAML, authactions.User{Username: unknownName})
+	expectedPrincipalID := authactions.GetExternalUserPrincipalID(authactions.GenericSAML, authactions.User{Username: unknownName})
 
 	logrus.Infof("Searching principals for [%v], which exists nowhere in the Keycloak realm", unknownName)
 	err = authactions.VerifyPrincipalSearchReturnsID(authAdmin, unknownName, expectedPrincipalID)
@@ -706,13 +706,13 @@ func (g *GenericSAMLKeycloakAuthProviderSuite) TestGenericSAMLKeycloakPrincipalB
 	require.NoError(g.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
 
-	groupPrincipalID := authactions.GetSAMLGroupPrincipalID(authactions.GenericSAML, g.authConfig.Group)
+	groupPrincipalID := authactions.GetExternalGroupPrincipalID(authactions.GenericSAML, g.authConfig.Group)
 
 	logrus.Infof("Resolving generic SAML group principal [%v] by ID", groupPrincipalID)
 	err = authactions.VerifyPrincipalByID(authAdmin, groupPrincipalID, authactions.GenericSAML, authactions.PrincipalTypeGroup)
 	require.NoError(g.T(), err, "Group principal [%v] should resolve by ID", groupPrincipalID)
 
-	userPrincipalID := authactions.GetSAMLUserPrincipalID(authactions.GenericSAML, g.authConfig.Users[0])
+	userPrincipalID := authactions.GetExternalUserPrincipalID(authactions.GenericSAML, g.authConfig.Users[0])
 
 	logrus.Infof("Resolving generic SAML user principal [%v] by ID", userPrincipalID)
 	err = authactions.VerifyPrincipalByID(authAdmin, userPrincipalID, authactions.GenericSAML, authactions.PrincipalTypeUser)
@@ -761,7 +761,7 @@ func (g *GenericSAMLKeycloakAuthProviderSuite) TestGenericSAMLKeycloakPrincipalS
 	require.Greater(g.T(), len(provisionedUser.PrincipalIDs), 1, "Externally provisioned user [%v] should carry an external principal alongside the local one", userInfo.Username)
 
 	principalName := authactions.PrincipalNameOf(userInfo)
-	expectedPrincipalID := authactions.GetSAMLUserPrincipalID(authactions.GenericSAML, userInfo)
+	expectedPrincipalID := authactions.GetExternalUserPrincipalID(authactions.GenericSAML, userInfo)
 
 	logrus.Infof("Searching principals for provisioned user [%v] using term [%v]", userInfo.Username, principalName)
 	err = authactions.VerifyPrincipalSearchReturnsID(authAdmin, principalName, expectedPrincipalID)
@@ -777,7 +777,7 @@ func (g *GenericSAMLKeycloakAuthProviderSuite) TestGenericSAMLKeycloakPrincipalS
 	defer subSession.Cleanup()
 
 	groupName := g.authConfig.Group
-	expectedGroupPrincipalID := authactions.GetSAMLGroupPrincipalID(authactions.GenericSAML, groupName)
+	expectedGroupPrincipalID := authactions.GetExternalGroupPrincipalID(authactions.GenericSAML, groupName)
 
 	logrus.Infof("Confirming Keycloak group [%v] is returned while the provider is enabled", groupName)
 	err = authactions.VerifyPrincipalSearchReturnsID(authAdmin, groupName, expectedGroupPrincipalID)
@@ -809,7 +809,7 @@ func (g *GenericSAMLKeycloakAuthProviderSuite) TestGenericSAMLKeycloakLoginAttac
 	defer subSession.Cleanup()
 
 	genericSAMLUser := g.authConfig.Users[0]
-	userPrincipalID := authactions.GetSAMLUserPrincipalID(authactions.GenericSAML, genericSAMLUser)
+	userPrincipalID := authactions.GetExternalUserPrincipalID(authactions.GenericSAML, genericSAMLUser)
 
 	logrus.Infof("Logging in as generic SAML user %s so that the login flow attaches its external principal", genericSAMLUser.Username)
 	err = authactions.VerifyUserLogins(authAdmin, authactions.GenericSAML, []authactions.User{genericSAMLUser}, "external principal attachment", true)
@@ -828,7 +828,7 @@ func (g *GenericSAMLKeycloakAuthProviderSuite) TestGenericSAMLKeycloakDisableRem
 	defer subSession.Cleanup()
 
 	genericSAMLUser := g.authConfig.Users[0]
-	userPrincipalID := authactions.GetSAMLUserPrincipalID(authactions.GenericSAML, genericSAMLUser)
+	userPrincipalID := authactions.GetExternalUserPrincipalID(authactions.GenericSAML, genericSAMLUser)
 
 	logrus.Infof("Logging in as generic SAML user %s so that a user record carrying its external principal exists", genericSAMLUser.Username)
 	err = authactions.VerifyUserLogins(authAdmin, authactions.GenericSAML, []authactions.User{genericSAMLUser}, "external principal attachment", true)
@@ -905,7 +905,7 @@ func (g *GenericSAMLKeycloakAuthProviderSuite) TestGenericSAMLKeycloakParentGrou
 	require.NoError(g.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
 
-	groupPrincipalID := authactions.GetSAMLGroupPrincipalID(authactions.GenericSAML, g.authConfig.Group)
+	groupPrincipalID := authactions.GetExternalGroupPrincipalID(authactions.GenericSAML, g.authConfig.Group)
 
 	logrus.Infof("Granting Keycloak group [%v] the %v role on cluster [%v]", g.authConfig.Group, rbac.ClusterOwner, g.cluster.ID)
 	crtb, err := rbacapi.CreateGroupClusterRoleTemplateBinding(authAdmin, g.cluster.ID, groupPrincipalID, rbac.ClusterOwner.String())
@@ -944,7 +944,7 @@ func (g *GenericSAMLKeycloakAuthProviderSuite) TestGenericSAMLKeycloakNestedGrou
 	require.NoError(g.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
 
-	nestedPrincipalID := authactions.GetSAMLGroupPrincipalID(authactions.GenericSAML, g.authConfig.NestedGroup)
+	nestedPrincipalID := authactions.GetExternalGroupPrincipalID(authactions.GenericSAML, g.authConfig.NestedGroup)
 
 	logrus.Infof("Granting nested Keycloak group [%v] the %v role on cluster [%v]", g.authConfig.NestedGroup, rbac.ClusterOwner, g.cluster.ID)
 	crtb, err := rbacapi.CreateGroupClusterRoleTemplateBinding(authAdmin, g.cluster.ID, nestedPrincipalID, rbac.ClusterOwner.String())
@@ -1008,7 +1008,7 @@ func (g *GenericSAMLKeycloakAuthProviderSuite) TestGenericSAMLKeycloakFullGroupP
 		require.NotContains(g.T(), assertionGroups, tier.bareName, "The bare name [%v] should no longer appear, so a binding written against it stops granting anything the moment this setting changes", tier.bareName)
 	}
 
-	pathPrincipalID := authactions.GetSAMLGroupPrincipalID(authactions.GenericSAML, nestedPath)
+	pathPrincipalID := authactions.GetExternalGroupPrincipalID(authactions.GenericSAML, nestedPath)
 
 	logrus.Infof("Granting the group at path [%v] the %v role on cluster [%v]", nestedPath, rbac.ClusterOwner, g.cluster.ID)
 	crtb, err := rbacapi.CreateGroupClusterRoleTemplateBinding(authAdmin, g.cluster.ID, pathPrincipalID, rbac.ClusterOwner.String())
