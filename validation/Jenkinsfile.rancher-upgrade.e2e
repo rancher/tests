@@ -152,24 +152,29 @@ pipeline {
             defaultValue: 'main',
             description: 'Branch of qa-jenkins-library to use'
         )
+        // Repo params keep whatever the job was last triggered with: a
+        // declarative pipeline re-applies its parameters{} block to the job
+        // after each run, and hard-coded defaults here would clobber the
+        // JJB-configured per-controller values (fork + slice branches on the
+        // staging controller, upstream main on the main controller).
         string(
             name: 'TESTS_REPO_URL',
-            defaultValue: 'https://github.com/rancher/tests',
+            defaultValue: params.TESTS_REPO_URL ?: 'https://github.com/rancher/tests',
             description: 'URL of rancher/tests repository'
         )
         string(
             name: 'TESTS_BRANCH',
-            defaultValue: 'main',
+            defaultValue: params.TESTS_BRANCH ?: 'main',
             description: 'Branch of rancher/tests repository'
         )
         string(
             name: 'QA_INFRA_REPO_URL',
-            defaultValue: 'https://github.com/rancher/qa-infra-automation',
+            defaultValue: params.QA_INFRA_REPO_URL ?: 'https://github.com/rancher/qa-infra-automation',
             description: 'URL of qa-infra-automation repository'
         )
         string(
             name: 'QA_INFRA_BRANCH',
-            defaultValue: 'main',
+            defaultValue: params.QA_INFRA_BRANCH ?: 'main',
             description: 'Branch of qa-infra-automation repository'
         )
 
@@ -328,7 +333,7 @@ rancherUpgradeInput:
         // ── Downstream job parameters ─────────────────────────
         string(
             name: 'INDIVIDUAL_JOB',
-            defaultValue: 'go-pit-validation-job',
+            defaultValue: params.INDIVIDUAL_JOB ?: 'go-pit-validation-job',
             description: 'Name of the downstream Jenkins job that runs individual Go test suites'
         )
         string(
