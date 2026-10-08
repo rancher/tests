@@ -832,10 +832,19 @@ rancher_use_bundled_system_charts: true
                     echo "Rotated admin token extracted (length ${rotatedToken.length()}); re-injecting into test config"
 
                     // The token never leaves this shell step (no Groovy/env
-                    // interpolation), so it cannot leak into the build log.
+                    // interpolation, set +x keeps it out of the xtrace),
+                    // and the injected token is smoke-checked against the
+                    // live API before any phase is dispatched on it.
                     sh """
+                        set +x
                         token=\$(awk -F'\"' '/^api_key/{print \$2}' ${generatedTfvars})
                         ./yq e '.rancher.adminToken = strenv(token)' -i ${cattleConfigPath}
+                        status=\$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer \$token" https://${params.HOSTNAME_PREFIX}.qa.rancher.space/v3/settings/server-version)
+                        if [ "\$status" != "200" ]; then
+                            echo "Rotated token rejected by the upgraded Rancher API: HTTP \$status (token length \${#token})"
+                            exit 1
+                        fi
+                        echo "Rotated token smoke-check: HTTP 200 from the upgraded Rancher API"
                     """
                     echo "Test config now carries the post-upgrade admin token; rancherUpgradeInput.targetVersion=${env.RANCHER_TO_VERSION}"
                 }
@@ -852,6 +861,19 @@ rancher_use_bundled_system_charts: true
                             returnStdout: true
                         ).trim()
                         def configYaml = readFile(file: "${env.TESTS_DIR}/cattle-config.yaml")
+
+                        // Fail fast (without printing the token) if the config
+                        // about to be dispatched does not carry the rotated one.
+                        sh """
+                            set +x
+                            expected=\$(awk -F'\"' '/^api_key/{print \$2}' ${env.INFRA_DIR}/ansible/rancher/default-ha/generated.tfvars)
+                            actual=\$(./yq '.rancher.adminToken' ${env.TESTS_DIR}/cattle-config.yaml)
+                            if [ "\$expected" != "\$actual" ]; then
+                                echo "Dispatched config adminToken does not match the rotated token (expected length \${#expected}, got length \${#actual})"
+                                exit 1
+                            fi
+                            echo "Dispatched config carries the rotated admin token (length \${#expected})"
+                        """
 
                         echo "Dispatching post-upgrade phase: GOTEST_TESTCASE ${POST_UPGRADE_TESTCASE} (Qase run ${testRunID})"
                         build job: params.INDIVIDUAL_JOB, parameters: [
