@@ -1,13 +1,18 @@
 package clusters
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/rancher/shepherd/clients/rancher"
+	"github.com/rancher/shepherd/extensions/defaults"
+	"github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 const (
@@ -35,6 +40,37 @@ func IsRancherVersionAbove(client *rancher.Client, minVersion string) (bool, err
 	}
 
 	return serverVersion.GreaterThan(minimumVersion), nil
+}
+
+// WaitRancherVersion polls the management server-version setting until it equals
+// targetVersion (semver-compared) or timeout elapses. Gates post-upgrade assertions
+// on Rancher server convergence; transient read errors during the upgrade rollout
+// are retried, not returned.
+func WaitRancherVersion(client *rancher.Client, targetVersion string, timeout time.Duration) error {
+	target, err := parseRancherVersion(targetVersion)
+	if err != nil {
+		return err
+	}
+
+	return wait.PollUntilContextTimeout(context.Background(), defaults.TenSecondTimeout, timeout, true, func(ctx context.Context) (done bool, err error) {
+		serverVersionRawValue, err := client.Management.Setting.ByID(serverVersionSetting)
+		if err != nil {
+			// The server may be mid-restart during the upgrade rollout; retry the read.
+			return false, nil
+		}
+
+		serverVersion, err := parseRancherVersion(serverVersionRawValue.Value)
+		if err != nil {
+			return false, nil
+		}
+
+		if serverVersion.Equal(target) {
+			return true, nil
+		}
+
+		logrus.Debugf("Rancher server version is %q, waiting for %q", serverVersionRawValue.Value, targetVersion)
+		return false, nil
+	})
 }
 
 func parseRancherVersion(versionInput string) (*semver.Version, error) {

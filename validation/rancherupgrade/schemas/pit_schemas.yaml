@@ -1,0 +1,61 @@
+- projects: [RANCHERINT]
+  suite: Rancher Upgrade/Longhorn
+  cases:
+  - title: "Longhorn pre-upgrade setup"
+    description: "Install Longhorn and seed a checksum workload on a Longhorn volume before the Rancher server upgrade"
+    automation: 2
+    steps:
+    - action: "Create a project on the downstream cluster"
+      data: ""
+      expectedresult: "The project is created successfully"
+      position: 1
+    - action: "Install the Longhorn chart at the latest version offered by the pre-upgrade Rancher"
+      data: "Chart: longhorn from the rancher-charts repo"
+      expectedresult: "Longhorn installs and its deployments and daemonsets become Ready"
+      position: 2
+    - action: "Create the checksum workload on a Longhorn-backed PVC"
+      data: "1GiB PVC and nginx deployment named rancher-upgrade-longhorn with data file /auto-mnt/checksum-data"
+      expectedresult: "PVC is Bound, deployment rolls out, and the checksum data is written to the Longhorn volume"
+      position: 3
+    custom_field:
+      "15": "TestLonghornPreUpgrade"
+  - title: "Longhorn post-upgrade validation"
+    description: "Verify Longhorn and its volume data survive the Rancher server upgrade"
+    automation: 2
+    steps:
+    - action: "Wait for the Rancher server to report the upgraded version"
+      data: "rancherUpgradeInput.targetVersion"
+      expectedresult: "The server-version setting equals the target version"
+      position: 1
+    - action: "Check the Longhorn chart installation state"
+      data: "Chart: longhorn in longhorn-system"
+      expectedresult: "The chart is still installed"
+      position: 2
+    - action: "Verify the checksum workload on the Longhorn volume"
+      data: "PVC rancher-upgrade-longhorn and data file /auto-mnt/checksum-data"
+      expectedresult: "PVC is Bound and the sha256 of the data file matches the pre-upgrade content"
+      position: 3
+    custom_field:
+      "15": "TestLonghornPostUpgrade"
+  - title: "Longhorn chart upgrade after Rancher upgrade"
+    description: "Upgrade Longhorn to the version offered by the upgraded Rancher catalog and verify workload data"
+    automation: 2
+    steps:
+    - action: "Wait for the Rancher server to report the upgraded version"
+      data: "rancherUpgradeInput.targetVersion"
+      expectedresult: "The server-version setting equals the target version"
+      position: 1
+    - action: "Resolve the latest Longhorn chart version from the cluster-scoped catalog"
+      data: "Chart: longhorn from the rancher-charts repo"
+      expectedresult: "The latest cluster-scoped chart version is resolved"
+      position: 2
+    - action: "Upgrade the Longhorn chart with retry"
+      data: "longhorn and longhorn-crd to the latest version"
+      expectedresult: "Both charts reach Deployed state and workloads become Ready"
+      position: 3
+    - action: "Verify the chart version and the checksum workload"
+      data: "Chart version equals latest; PVC rancher-upgrade-longhorn and data file /auto-mnt/checksum-data"
+      expectedresult: "Installed chart version matches latest and the sha256 of the data file still matches the pre-upgrade content"
+      position: 4
+    custom_field:
+      "15": "TestLonghornChartUpgrade"
