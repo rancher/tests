@@ -839,7 +839,7 @@ rancher_use_bundled_system_charts: true
                         set +x
                         token=\$(awk -F'\"' '/^api_key/{print \$2}' ${generatedTfvars})
                         ./yq e '.rancher.adminToken = strenv(token)' -i ${cattleConfigPath}
-                        status=\$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer \$token" https://${params.HOSTNAME_PREFIX}.qa.rancher.space/v3/settings/server-version)
+                        status=\$(curl -sk -o /dev/null -w '%{http_code}' -H "Authorization: Bearer \$token" https://${params.HOSTNAME_PREFIX}.qa.rancher.space/v3/settings/server-version)
                         if [ "\$status" != "200" ]; then
                             echo "Rotated token rejected by the upgraded Rancher API: HTTP \$status (token length \${#token})"
                             exit 1
