@@ -72,7 +72,7 @@ func (n *NeuVectorTestSuite) SetupSuite() {
 	}
 }
 
-func (n *NeuVectorTestSuite) TestNeuVectorInstallation() {
+func (n *NeuVectorTestSuite) TestNeuVectorChartInstallation() {
 	subSession := n.session.NewSession()
 	defer subSession.Cleanup()
 
