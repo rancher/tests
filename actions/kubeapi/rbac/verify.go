@@ -540,58 +540,73 @@ func verifyBindings(client *rancher.Client, clusterID, userName, roleTemplateNam
 		return err
 	}
 
-	for _, ns := range namespaces {
-		rbs, err := ctx.RBAC.RoleBinding().List(ns, metav1.ListOptions{})
+	var lastErr error
+	err = kwait.PollUntilContextTimeout(context.Background(), defaults.TenSecondTimeout, defaults.TwoMinuteTimeout, false, func(context.Context) (bool, error) {
+		for _, ns := range namespaces {
+			rbs, err := ctx.RBAC.RoleBinding().List(ns, metav1.ListOptions{})
+			if err != nil {
+				lastErr = fmt.Errorf("failed to list RoleBindings in namespace %s: %w", ns, err)
+				return false, nil
+			}
+
+			filtered := filterRoleBindings(rbs, userName, roleTemplateName)
+			if len(filtered) != expectedRBCount {
+				lastErr = fmt.Errorf("expected %d RoleBindings for user %s in namespace %s, got %d",
+					expectedRBCount, userName, ns, len(filtered))
+				return false, nil
+			}
+
+			if expectedRBCount > 0 {
+				expected := expectedRoleNames(clusterID, roleTemplateBindingName, roleTemplateName, expectedRBCount)
+				expectedSet := make(map[string]struct{}, len(expected))
+				for _, name := range expected {
+					expectedSet[name] = struct{}{}
+				}
+
+				for _, rb := range filtered {
+					if _, ok := expectedSet[rb.RoleRef.Name]; !ok {
+						lastErr = fmt.Errorf("unexpected RoleBinding RoleRef.Name %s, expected %v",
+							rb.RoleRef.Name, expected)
+						return false, nil
+					}
+				}
+			}
+		}
+
+		crbs, err := ctx.RBAC.ClusterRoleBinding().List(metav1.ListOptions{})
 		if err != nil {
-			return fmt.Errorf("failed to list RoleBindings in namespace %s: %w", ns, err)
+			lastErr = fmt.Errorf("failed to list ClusterRoleBindings: %w", err)
+			return false, nil
 		}
 
-		filtered := filterRoleBindings(rbs, userName, roleTemplateName)
-		if len(filtered) != expectedRBCount {
-			return fmt.Errorf("expected %d RoleBindings for user %s in namespace %s, got %d",
-				expectedRBCount, userName, ns, len(filtered))
+		filteredCRBs := filterClusterRoleBindings(crbs, userName, roleTemplateName)
+		if len(filteredCRBs) != expectedCRBCount {
+			lastErr = fmt.Errorf("expected %d ClusterRoleBindings, got %d",
+				expectedCRBCount, len(filteredCRBs))
+			return false, nil
 		}
 
-		if expectedRBCount > 0 {
-			expected := expectedRoleNames(clusterID, roleTemplateBindingName, roleTemplateName, expectedRBCount)
+		if expectedCRBCount > 0 {
+			expected := expectedRoleNames(clusterID, roleTemplateBindingName, roleTemplateName, expectedCRBCount)
 			expectedSet := make(map[string]struct{}, len(expected))
 			for _, name := range expected {
 				expectedSet[name] = struct{}{}
 			}
 
-			for _, rb := range filtered {
-				if _, ok := expectedSet[rb.RoleRef.Name]; !ok {
-					return fmt.Errorf("unexpected RoleBinding RoleRef.Name %s, expected %v",
-						rb.RoleRef.Name, expected)
+			for _, crb := range filteredCRBs {
+				if _, ok := expectedSet[crb.RoleRef.Name]; !ok {
+					lastErr = fmt.Errorf("unexpected ClusterRoleBinding RoleRef.Name %s, expected %v",
+						crb.RoleRef.Name, expected)
+					return false, nil
 				}
 			}
 		}
-	}
 
-	crbs, err := ctx.RBAC.ClusterRoleBinding().List(metav1.ListOptions{})
+		lastErr = nil
+		return true, nil
+	})
 	if err != nil {
-		return fmt.Errorf("failed to list ClusterRoleBindings: %w", err)
-	}
-
-	filteredCRBs := filterClusterRoleBindings(crbs, userName, roleTemplateName)
-	if len(filteredCRBs) != expectedCRBCount {
-		return fmt.Errorf("expected %d ClusterRoleBindings, got %d",
-			expectedCRBCount, len(filteredCRBs))
-	}
-
-	if expectedCRBCount > 0 {
-		expected := expectedRoleNames(clusterID, roleTemplateBindingName, roleTemplateName, expectedCRBCount)
-		expectedSet := make(map[string]struct{}, len(expected))
-		for _, name := range expected {
-			expectedSet[name] = struct{}{}
-		}
-
-		for _, crb := range filteredCRBs {
-			if _, ok := expectedSet[crb.RoleRef.Name]; !ok {
-				return fmt.Errorf("unexpected ClusterRoleBinding RoleRef.Name %s, expected %v",
-					crb.RoleRef.Name, expected)
-			}
-		}
+		return lastErr
 	}
 
 	return nil
