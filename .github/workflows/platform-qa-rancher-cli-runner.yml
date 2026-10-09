@@ -1,0 +1,68 @@
+name: Rancher CLI Validation
+run-name: "Rancher CLI Validation - ${{ github.event.inputs.rancher_host }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      rancher_host:
+        description: "Rancher host to run tests against. Example: cluster1.qa.rancher.space"
+        required: true
+      test_package:
+        description: "Path to the CLI test directory"
+        required: true
+        default: "validation/cli"
+
+permissions:
+  contents: read
+
+jobs:
+  test-cli:
+    name: Run CLI Go Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          submodules: recursive 
+
+      - name: Setup Go
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version-file: "./go.mod"
+          cache-dependency-path: "**/*.sum"
+
+      - name: Install gotestsum
+        run: go install gotest.tools/gotestsum@c4a0df2e75a225d979a444342dd3db752b53619f # v1.13.0
+
+      - name: Install Latest Rancher CLI
+        env:
+          GH_TOKEN: ${{ secrets.RANCHER_CLI_DOWNLOAD_TOKEN }}
+        run: |
+          chmod +x .github/scripts/platform-qa-install-rancher-cli.sh
+          ./.github/scripts/platform-qa-install-rancher-cli.sh
+
+      - name: Create Rancher admin token
+        id: create-token
+        env:
+          RANCHER_HOST: ${{ github.event.inputs.rancher_host }}
+          RANCHER_ADMIN_PASSWORD: ${{ secrets.PQA_RANCHER_ADMIN_PASSWORD }}
+        run: |
+          chmod +x .github/scripts/platform-qa-create-rancher-token.sh
+          ./.github/scripts/platform-qa-create-rancher-token.sh
+
+      - name: Run Go Tests
+        env:
+          RANCHER_HOST: ${{ github.event.inputs.rancher_host }}
+          RANCHER_TOKEN: ${{ steps.create-token.outputs.RANCHER_ADMIN_TOKEN }}
+        run: |
+          TEST_DIR="${{ github.event.inputs.test_package }}"
+
+          echo "Running CLI tests in $TEST_DIR against $RANCHER_HOST"
+
+          gotestsum \
+            --format=standard-verbose \
+            --junitfile "$GITHUB_WORKSPACE/results-cli.xml" \
+            --jsonfile "$GITHUB_WORKSPACE/results-cli.json" \
+            --packages="github.com/rancher/tests/$TEST_DIR" \
+            -- -v -tags=validation -timeout 60m
