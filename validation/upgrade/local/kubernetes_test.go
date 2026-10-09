@@ -11,6 +11,7 @@ import (
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/qase"
+	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/upgrade"
 	"github.com/rancher/tests/actions/upgradeinput"
 	"github.com/sirupsen/logrus"
@@ -20,9 +21,10 @@ import (
 
 type UpgradeKubernetesTestSuite struct {
 	suite.Suite
-	session  *session.Session
-	client   *rancher.Client
-	clusters []upgradeinput.Cluster
+	session            *session.Session
+	client             *rancher.Client
+	standardUserClient *rancher.Client
+	clusters           []upgradeinput.Cluster
 }
 
 func (u *UpgradeKubernetesTestSuite) TearDownSuite() {
@@ -42,6 +44,15 @@ func (u *UpgradeKubernetesTestSuite) SetupSuite() {
 	require.NoError(u.T(), err)
 
 	u.clusters = clusters
+
+	localCluster, err := client.Management.Cluster.ByID(u.clusters[0].Name)
+	require.NoError(u.T(), err)
+
+	logrus.Info("Granting the standard user cluster-owner on the local cluster")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(u.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), localCluster, nil)
+	require.NoError(u.T(), err)
+
+	u.standardUserClient = standardUserClient
 }
 
 func (u *UpgradeKubernetesTestSuite) TestUpgradeKubernetes() {
@@ -49,7 +60,7 @@ func (u *UpgradeKubernetesTestSuite) TestUpgradeKubernetes() {
 		name   string
 		client *rancher.Client
 	}{
-		{"Upgrading_Local_Cluster", u.client},
+		{"Upgrading_Local_Cluster", u.standardUserClient},
 	}
 
 	var testConfig *clusters.ClusterConfig
@@ -64,7 +75,7 @@ func (u *UpgradeKubernetesTestSuite) TestUpgradeKubernetes() {
 		testConfig.KubernetesVersion = u.clusters[0].VersionToUpgrade
 
 		u.Run(tt.name, func() {
-			upgrade.UpgradeLocalCluster(&u.Suite, u.client, testConfig, u.clusters[0])
+			upgrade.UpgradeLocalCluster(&u.Suite, u.standardUserClient, testConfig, u.clusters[0])
 		})
 
 		clusterMeta, err := extensionscluster.NewClusterMeta(tt.client, u.clusters[0].Name)

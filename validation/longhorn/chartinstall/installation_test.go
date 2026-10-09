@@ -22,6 +22,7 @@ import (
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/charts"
 	actionNamespaces "github.com/rancher/tests/actions/namespaces"
+	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/storage"
 	"github.com/rancher/tests/interoperability/longhorn"
 	"github.com/stretchr/testify/require"
@@ -36,6 +37,7 @@ const (
 type LonghornChartTestSuite struct {
 	suite.Suite
 	client             *rancher.Client
+	standardUserClient *rancher.Client
 	session            *session.Session
 	longhornTestConfig longhorn.TestConfig
 	cluster            *clusters.ClusterMeta
@@ -57,7 +59,15 @@ func (l *LonghornChartTestSuite) SetupTest() {
 	l.cluster, err = clusters.NewClusterMeta(client, client.RancherConfig.ClusterName)
 	require.NoError(l.T(), err)
 
-	chart, err := shepherdCharts.GetChartStatus(l.client, l.cluster.ID, charts.LonghornNamespace, charts.LonghornChartName)
+	mgmtCluster, err := l.client.Management.Cluster.ByID(l.cluster.ID)
+	require.NoError(l.T(), err)
+
+	l.T().Log("Granting the standard user cluster-owner on the cluster")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(l.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), mgmtCluster, nil)
+	require.NoError(l.T(), err)
+	l.standardUserClient = standardUserClient
+
+	chart, err := shepherdCharts.GetChartStatus(l.standardUserClient, l.cluster.ID, charts.LonghornNamespace, charts.LonghornChartName)
 	require.NoError(l.T(), err)
 
 	l.longhornTestConfig = longhorn.GetLonghornTestConfig()
@@ -71,15 +81,15 @@ func (l *LonghornChartTestSuite) SetupTest() {
 		Name:      l.longhornTestConfig.LonghornTestProject,
 	}
 
-	l.project, err = client.Management.Project.Create(projectConfig)
+	l.project, err = l.standardUserClient.Management.Project.Create(projectConfig)
 	require.NoError(l.T(), err)
 
 	// Get latest versions of longhorn
-	latestLonghornVersion, err := l.client.Catalog.GetLatestChartVersion(charts.LonghornChartName, catalog.RancherChartRepo)
+	latestLonghornVersion, err := l.standardUserClient.Catalog.GetLatestChartVersion(charts.LonghornChartName, catalog.RancherChartRepo)
 	require.NoError(l.T(), err)
 
 	l.T().Logf("Creating %s namespace", charts.LonghornNamespace)
-	_, err = actionNamespaces.CreateNamespace(client, charts.LonghornNamespace, "{}", map[string]string{}, map[string]string{}, l.project)
+	_, err = actionNamespaces.CreateNamespace(l.standardUserClient, charts.LonghornNamespace, "{}", map[string]string{}, map[string]string{}, l.project)
 	if err != nil {
 		// If namespace already exists, it's likely the main longhorn test suite is running concurrently.
 		// Skip rather than fail to avoid 409 conflict.
@@ -103,13 +113,13 @@ func (l *LonghornChartTestSuite) SetupTest() {
 
 func (l *LonghornChartTestSuite) TestChartInstall() {
 	l.T().Logf("Installing Longhorn chart in cluster [%v] with latest version [%v] in project [%v] and namespace [%v]", l.cluster.Name, l.payloadOpts.Version, l.project.Name, l.payloadOpts.Namespace)
-	err := charts.InstallLonghornChart(l.client, l.payloadOpts, nil)
+	err := charts.InstallLonghornChart(l.standardUserClient, l.payloadOpts, nil)
 	require.NoError(l.T(), err)
 
 	l.T().Logf("Create nginx deployment with %s PVC on default namespace", charts.LonghornStorageClass)
-	nginxResponse := storage.CreatePVCWorkload(l.T(), l.client, l.cluster.ID, charts.LonghornStorageClass)
+	nginxResponse := storage.CreatePVCWorkload(l.T(), l.standardUserClient, l.cluster.ID, charts.LonghornStorageClass)
 
-	steveClient, err := l.client.Steve.ProxyDownstream(l.cluster.ID)
+	steveClient, err := l.standardUserClient.Steve.ProxyDownstream(l.cluster.ID)
 	require.NoError(l.T(), err)
 
 	labelSelector := fmt.Sprintf("labelSelector=%s=%s", storage.DeploymentIdentifierLabel, nginxResponse.Name)
@@ -119,14 +129,14 @@ func (l *LonghornChartTestSuite) TestChartInstall() {
 	require.NotEmpty(l.T(), pods)
 	require.NoError(l.T(), err)
 
-	kubeConfig, err := kubeconfig.GetKubeconfig(l.client, l.cluster.ID)
+	kubeConfig, err := kubeconfig.GetKubeconfig(l.standardUserClient, l.cluster.ID)
 	require.NoError(l.T(), err)
 
 	storage.CheckMountedVolume(l.T(), kubeConfig, l.cluster.ID, namespaces.Default, pods.Data[0].Name, storage.MountPath)
 }
 
 func (l *LonghornChartTestSuite) TestChartInstallStaticCustomConfig() {
-	nodeCollection, err := l.client.Management.Node.List(&types.ListOpts{Filters: map[string]interface{}{
+	nodeCollection, err := l.standardUserClient.Management.Node.List(&types.ListOpts{Filters: map[string]interface{}{
 		"clusterId": l.cluster.ID,
 	}})
 	require.NoError(l.T(), err)
@@ -138,7 +148,7 @@ func (l *LonghornChartTestSuite) TestChartInstallStaticCustomConfig() {
 	for _, node := range nodeCollection.Data {
 		if node.Worker {
 			labelNodeCommand := []string{"kubectl", "label", "node", node.Hostname, createDefaultDiskNodeLabel}
-			_, err = kubectl.Command(l.client, nil, l.cluster.ID, labelNodeCommand, "")
+			_, err = kubectl.Command(l.standardUserClient, nil, l.cluster.ID, labelNodeCommand, "")
 			require.NoError(l.T(), err)
 			if workerName == "" {
 				workerName = node.Hostname
@@ -156,7 +166,7 @@ func (l *LonghornChartTestSuite) TestChartInstallStaticCustomConfig() {
 	}
 
 	l.T().Logf("Installing Lonhgorn chart in cluster [%v] with latest version [%v] in project [%v] and namespace [%v]", l.cluster.Name, l.payloadOpts.Version, l.project.Name, l.payloadOpts.Namespace)
-	err = charts.InstallLonghornChart(l.client, l.payloadOpts, longhornCustomSetting)
+	err = charts.InstallLonghornChart(l.standardUserClient, l.payloadOpts, longhornCustomSetting)
 	require.NoError(l.T(), err)
 
 	expectedSettings := map[string]string{
@@ -168,7 +178,7 @@ func (l *LonghornChartTestSuite) TestChartInstallStaticCustomConfig() {
 
 	for setting, expectedValue := range expectedSettings {
 		getSettingCommand := []string{"kubectl", "-n", charts.LonghornNamespace, "get", "settings.longhorn.io", setting, `-o=jsonpath='{.value}'`}
-		settingValue, err := kubectl.Command(l.client, nil, l.cluster.ID, getSettingCommand, "")
+		settingValue, err := kubectl.Command(l.standardUserClient, nil, l.cluster.ID, getSettingCommand, "")
 		require.NoError(l.T(), err)
 		// The output extracted from kubectl has single quotes and a newline on the end.
 		require.Equal(l.T(), fmt.Sprintf("'%s'\n", expectedValue), settingValue)
@@ -177,7 +187,7 @@ func (l *LonghornChartTestSuite) TestChartInstallStaticCustomConfig() {
 	// Use the "longhorn-static" storage class so we get the expected number of replicas.
 	// Using the "longhorn" storage class will always result in 3 volume replicas.
 	l.T().Logf("Create nginx deployment with %s PVC on default namespace", charts.LonghornStaticStorageClass)
-	nginxResponse := storage.CreatePVCWorkload(l.T(), l.client, l.cluster.ID, charts.LonghornStaticStorageClass)
+	nginxResponse := storage.CreatePVCWorkload(l.T(), l.standardUserClient, l.cluster.ID, charts.LonghornStaticStorageClass)
 
 	nginxSpec := &appv1.DeploymentSpec{}
 	err = steveV1.ConvertToK8sType(nginxResponse.Spec, nginxSpec)
@@ -187,12 +197,12 @@ func (l *LonghornChartTestSuite) TestChartInstallStaticCustomConfig() {
 	// Even though the Longhorn default for number of replicas is 2, Rancher enforces its own default of 3.
 	volumeName := nginxSpec.Template.Spec.Volumes[0].Name
 	checkReplicasCommand := []string{"kubectl", "-n", charts.LonghornNamespace, "get", "volumes.longhorn.io", volumeName, `-o=jsonpath="{.spec.numberOfReplicas}"`}
-	settingValue, err := kubectl.Command(l.client, nil, l.cluster.ID, checkReplicasCommand, "")
+	settingValue, err := kubectl.Command(l.standardUserClient, nil, l.cluster.ID, checkReplicasCommand, "")
 	require.NoError(l.T(), err)
 	require.Equal(l.T(), "\"2\"\n", settingValue)
 
 	// Check the node's filesystem contains the expected files.
-	storage.CheckNodeFilesystem(l.T(), l.client, l.cluster.ID, workerName, "test -d /host/var/lib/longhorn-custom/replicas && test -f /host/var/lib/longhorn-custom/longhorn-disk.cfg", l.project)
+	storage.CheckNodeFilesystem(l.T(), l.standardUserClient, l.cluster.ID, workerName, "test -d /host/var/lib/longhorn-custom/replicas && test -f /host/var/lib/longhorn-custom/longhorn-disk.cfg", l.project)
 }
 
 // In order for 'go test' to run this suite, we need to create

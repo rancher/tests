@@ -1,4 +1,4 @@
-//go:build validation || recurring || proxy || ipv6 || dualstack
+//go:build validation || recurring || proxy || ipv6 || dualstack || pit.weekly
 
 package rke2
 
@@ -42,15 +42,15 @@ func TestEncryptionKeyRotation(t *testing.T) {
 
 		t.Run(tt.name, func(t *testing.T) {
 			logrus.Infof("Creating snapshot on cluster (%s)", tt.cluster.Name)
-			_, err := snapshot.CreateRKE2K3SSnapshot(e.Client, tt.cluster.Name)
+			_, err := snapshot.CreateRKE2K3SSnapshot(e.StandardUserClient, tt.cluster.Name)
 			require.NoError(t, err)
 
 			logrus.Infof("Enabling secrets encryption on cluster (%s)", tt.cluster.Name)
-			err = encryptionkeyrotation.EnableSecretsEncryption(e.Client, tt.cluster.Name)
+			err = encryptionkeyrotation.EnableSecretsEncryption(e.StandardUserClient, tt.cluster.Name)
 			require.NoError(t, err)
 
 			logrus.Infof("Performing encryption key rotation on cluster (%s)", tt.cluster.Name)
-			err = encryptionkeyrotation.RotateEncryptionKey(e.Client, tt.cluster.Name)
+			err = encryptionkeyrotation.RotateEncryptionKey(e.StandardUserClient, tt.cluster.Name)
 			require.NoError(t, err)
 
 			clusterStatus := &provv1.ClusterStatus{}
@@ -58,19 +58,19 @@ func TestEncryptionKeyRotation(t *testing.T) {
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying encryption key rotated on cluster (%s)", tt.cluster.Name)
-			err = encryptionkeyrotation.VerifyEncryptionKeyRotation(e.Client, clusterStatus, defaults.RKE2)
+			err = encryptionkeyrotation.VerifyEncryptionKeyRotation(e.StandardUserClient, clusterStatus, defaults.RKE2)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", tt.cluster.Name)
-			err = provisioning.VerifyClusterReady(e.Client, tt.cluster)
+			err = provisioning.VerifyClusterReady(e.StandardUserClient, tt.cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster deployments (%s)", tt.cluster.Name)
-			err = deployment.VerifyClusterDeployments(e.Client, tt.cluster)
+			err = deployment.VerifyClusterDeployments(e.StandardUserClient, tt.cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster pods (%s)", tt.cluster.Name)
-			err = pods.VerifyClusterPods(e.Client, tt.cluster)
+			err = pods.VerifyClusterPods(e.StandardUserClient, tt.cluster)
 			require.NoError(t, err)
 		})
 
