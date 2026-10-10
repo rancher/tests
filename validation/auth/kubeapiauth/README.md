@@ -13,6 +13,7 @@ Your GO suite should be set to `-run ^Test<TestSuite>$`
 
 - To run the kubeapiauth_tokenreview_test.go, set the GO suite to `-run ^TestKubeAPIAuthTokenReviewSuite$`
 - To run the kubeapiauth_ace_test.go, set the GO suite to `-run ^TestKubeAPIAuthACESuite$`
+- To run the kubeapiauth_authprovider_test.go, set the GO suite to `-run ^TestKubeAPIAuthProviderSuite$`
 
 In your config file, set the following:
 
@@ -23,4 +24,15 @@ rancher:
   insecure: True #optional
   cleanup: True #optional
   clusterName: "downstream_cluster_name"
+```
+
+The kubeapiauth_authprovider_test.go also reads the configuration of the providers it signs in through, the same keys the provider suites under validation/auth/provider use:
+
+```yaml
+openLDAP: {}
+openLdapAuthInput: {}
+activeDirectory: {}
+activeDirectoryAuthInput: {}
+keycloaksaml: {}
+keycloakoidc: {}
 ```
