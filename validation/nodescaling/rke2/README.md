@@ -25,7 +25,6 @@ The node scaling test validates that node pools can be scaled up and down. All c
 1. `RKE2_Scale_Control_Plane`
 2. `RKE2_Scale_ETCD`
 3. `RKE2_Scale_Worker`
-4. `RKE2_Scale_Windows`
 
 #### Run Commands:
 1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/nodescaling/rke2 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestScalingNodePools -timeout=60m -v`

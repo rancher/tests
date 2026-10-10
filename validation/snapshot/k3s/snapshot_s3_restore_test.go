@@ -1,4 +1,4 @@
-//go:build validation || recurring
+//go:build (validation || recurring) && !pit.daily && !pit.weekly && !pit.event && !pit.harvester.daily && !pit.elemental
 
 package k3s
 

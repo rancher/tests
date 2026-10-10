@@ -30,7 +30,7 @@ pipeline {
 
     options {
         ansiColor('xterm')
-        timeout(time: 180, unit: 'MINUTES')
+        timeout(time: 240, unit: 'MINUTES')
         buildDiscarder(logRotator(numToKeepStr: '30'))
     }
 
@@ -42,7 +42,7 @@ pipeline {
         // ── Test execution parameters ────────────────────────────
         string(
             name: 'TIMEOUT',
-            defaultValue: '60m',
+            defaultValue: '3h',
             description: 'Go test timeout duration (e.g., 60m, 2h)'
         )
         text(

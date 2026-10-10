@@ -87,7 +87,7 @@ func (p *HarvesterProvisioningTestSuite) TestCloudProvider() {
 	provider.VerifyCloudProviderFunc(p.T(), p.client, cluster)
 
 	params := provisioning.GetProvisioningSchemaParams(p.client, p.cattleConfig)
-	err = qase.UpdateSchemaParameters("Harvester_oot", params)
+	err = qase.UpdateSchemaParameters("Harvester_Cloud_Provider", params)
 	if err != nil {
 		logrus.Warningf("Failed to upload schema parameters %s", err)
 	}
