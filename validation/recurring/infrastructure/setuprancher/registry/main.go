@@ -29,7 +29,7 @@ func main() {
 
 	packageDefaultsPath := filepath.Join(filepath.Dir(currentFilePath), defaults.DefaultFilePath)
 
-	cattleConfig, err := defaults.LoadPackageDefaults(cattleConfig, packageDefaultsPath)
+	cattleConfig, err := defaults.LoadPackageDefaults(cattleConfig, packageDefaultsPath, "")
 	if err != nil {
 		logrus.Fatalf("Failed to load package defaults: %v", err)
 	}

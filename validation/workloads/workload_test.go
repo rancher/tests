@@ -57,7 +57,7 @@ func (w *WorkloadTestSuite) SetupSuite() {
 
 	w.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	w.cattleConfig, err = defaults.LoadPackageDefaults(w.cattleConfig, "")
+	w.cattleConfig, err = defaults.LoadPackageDefaults(w.cattleConfig, "", "")
 	require.NoError(w.T(), err)
 
 	loggingConfig := new(logging.Logging)
