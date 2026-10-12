@@ -11,10 +11,6 @@ inputs:
     description: "Test tags to run (comma-separated)"
     required: false
     default: "recurring"
-  run_ace:
-    description: "Whether to run ACE tests"
-    required: false
-    default: "false"
 
 runs:
   using: composite
@@ -44,28 +40,6 @@ runs:
           return ${PIPESTATUS[0]}
         }
 
-        if [[ "${{ inputs.run_ace }}" == "true" ]]; then
-          redacted_gotestsum "github.com/rancher/tests/validation/provisioning/k3s" "results_k3s_ace.json" "k3s_ace" -timeout=3h -tags=ace -v
-          k3s_ace_exit=$?
-          echo "k3s_ace_exit=$k3s_ace_exit" >> "$GITHUB_ENV"
-          cp results_k3s_ace.json results.json
-    
-          if [[ "${{ inputs.reporting }}" == "true" ]]; then
-            ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
-            ./validation/reporter
-          fi
-
-          redacted_gotestsum "github.com/rancher/tests/validation/provisioning/rke2" "results_rke2_ace.json" "rke2_ace" -timeout=3h -tags=ace -v
-          rke2_ace_exit=$?
-          echo "rke2_ace_exit=$rke2_ace_exit" >> "$GITHUB_ENV"
-          cp results_rke2_ace.json results.json
-    
-          if [[ "${{ inputs.reporting }}" == "true" ]]; then
-            ./validation/pipeline/scripts/build_qase_reporter_v2.sh;
-            ./validation/reporter
-          fi
-        fi
-
         redacted_gotestsum "github.com/rancher/tests/validation/provisioning/..." "results_provisioning.json" "provisioning" -parallel 4 -timeout=3h -tags=${{ inputs.tags }} -v
         provisioning_exit=$?
         echo "provisioning_exit=$provisioning_exit" >> "$GITHUB_ENV"
@@ -80,20 +54,6 @@ runs:
       shell: bash
       run: |
         failed=0
-
-        if [[ "${{ inputs.run_ace }}" == "true" ]]; then
-          if [ "${k3s_ace_exit:-}" != "" ] && [ "$k3s_ace_exit" -ne 0 ]; then
-            echo "Failed K3S ACE tests:"
-            jq -r 'select(.Action=="fail" and .Test != null) | "- " + .Test' results_k3s_ace.json
-            failed=1
-          fi
-
-          if [ "${rke2_ace_exit:-}" != "" ] && [ "$rke2_ace_exit" -ne 0 ]; then
-            echo "Failed RKE2 ACE tests:"
-            jq -r 'select(.Action=="fail" and .Test != null) | "- " + .Test' results_rke2_ace.json
-            failed=1
-          fi
-        fi
 
         if [ "${provisioning_exit:-}" != "" ] && [ "$provisioning_exit" -ne 0 ]; then
           echo "Failed Provisioning tests:"

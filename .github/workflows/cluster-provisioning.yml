@@ -370,7 +370,6 @@ jobs:
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
           tags: recurring
-          run_ace: true
 
       - name: Cleanup Infrastructure
         if: always() && env.CLEANUP_ENABLED == 'true'
