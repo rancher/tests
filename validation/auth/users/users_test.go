@@ -776,7 +776,8 @@ func (pu *PapiUsersTestSuite) TestChangeUserPasswordWithInvalidUserID() {
 	dummyUsername := namegen.AppendRandomString("dummyuser")
 	_, err = extuserapi.ChangePasswordForUser(pu.client, dummyUsername, initialPassword, 15)
 	require.Error(pu.T(), err, "expected error when changing password for non-existent user")
-	require.Contains(pu.T(), err.Error(), "not found", "expected not found error, got: %v", err)
+	require.True(pu.T(), apierrors.IsBadRequest(err), "expected BadRequest error, got: %v", err)
+	require.Contains(pu.T(), err.Error(), "not found", "expected the message to report the user as missing, got: %v", err)
 }
 
 func (pu *PapiUsersTestSuite) TestCreatePasswordWithShortPassword() {
