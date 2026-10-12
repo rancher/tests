@@ -223,8 +223,9 @@ jobs:
           value: |
             ${{ 
               github.event.inputs.rancher_version || 
-              inputs.rancher_version || 
-              (fromJSON(env[format('HB_RANCHER_VERSION_2_{0}_HEAD', matrix.version)]).value) 
+              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_version) || 
+              (github.event_name == 'schedule' && fromJSON(env[format('HB_RANCHER_VERSION_2_{0}_HEAD', matrix.version)]).value) ||
+              (github.event.inputs.run_all_versions == 'true' && fromJSON(env[format('HB_RANCHER_VERSION_2_{0}_HEAD', matrix.version)]).value)
             }}
 
       - name: Set Rancher chart version
@@ -234,8 +235,9 @@ jobs:
           value: |
             ${{ 
               github.event.inputs.rancher_chart_version || 
-              inputs.rancher_chart_version ||
-              (fromJSON(env[format('HB_RELEASED_RANCHER_CHART_VERSION_2_{0}', matrix.version)]).value)
+              (github.event_name == 'workflow_dispatch' && github.event.inputs.rancher_chart_version) || 
+              (github.event_name == 'schedule' && fromJSON(env[format('HB_RELEASED_RANCHER_CHART_VERSION_2_{0}', matrix.version)]).value) ||
+              (github.event.inputs.run_all_versions == 'true' && fromJSON(env[format('HB_RELEASED_RANCHER_CHART_VERSION_2_{0}', matrix.version)]).value)
             }}
 
       - name: Get Qase ID
@@ -249,6 +251,8 @@ jobs:
           cat > config.yaml <<EOF
           rancher:
             host: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
+            adminPassword: "<HB_RANCHER_ADMIN_PASSWORD>"
+            insecure: true
 
           awsCredentials:
             accessKey: "$AWS_ACCESS_KEY"
