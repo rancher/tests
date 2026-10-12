@@ -52,7 +52,7 @@ func Setup(t *testing.T, clusterType string) *kdmTest {
 	k.CattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 	_, _, _, standaloneConfig := tfpConfig.LoadTFPConfigs(k.CattleConfig)
 
-	k.CattleConfig, err = defaults.LoadPackageDefaults(k.CattleConfig, "")
+	k.CattleConfig, err = defaults.LoadPackageDefaults(k.CattleConfig, "", "")
 	require.NoError(t, err)
 
 	setting, err := client.Management.Setting.ByID("rke-metadata-config")

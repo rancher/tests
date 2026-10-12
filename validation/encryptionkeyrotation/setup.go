@@ -52,7 +52,7 @@ func Setup(t *testing.T, clusterType string) *encryptionKeyRotationTest {
 
 	e.CattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	e.CattleConfig, err = defaults.LoadPackageDefaults(e.CattleConfig, "")
+	e.CattleConfig, err = defaults.LoadPackageDefaults(e.CattleConfig, "", "")
 	require.NoError(t, err)
 
 	loggingConfig := new(logging.Logging)

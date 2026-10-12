@@ -67,7 +67,7 @@ func templateSetup(t *testing.T) templateTest {
 	setupDir := filepath.Dir(setupFile)
 	templateChartDefaultsPath := filepath.Join(setupDir, templateChartDefaults)
 
-	k.cattleConfig, err = configDefaults.LoadPackageDefaults(k.cattleConfig, templateChartDefaultsPath)
+	k.cattleConfig, err = configDefaults.LoadPackageDefaults(k.cattleConfig, templateChartDefaultsPath, "")
 	require.NoError(t, err)
 
 	k.cattleConfig, err = configDefaults.LoadSecretsManagerDefaults(k.cattleConfig)

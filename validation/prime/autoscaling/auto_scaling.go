@@ -35,7 +35,7 @@ func autoScalingSetup(t *testing.T) autoScalingTest {
 
 	s.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	s.cattleConfig, err = defaults.LoadPackageDefaults(s.cattleConfig, "")
+	s.cattleConfig, err = defaults.LoadPackageDefaults(s.cattleConfig, "", "")
 	require.NoError(t, err)
 
 	loggingConfig := new(logging.Logging)

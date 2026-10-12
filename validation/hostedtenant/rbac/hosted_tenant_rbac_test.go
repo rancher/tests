@@ -119,7 +119,7 @@ func (h *HostedRancherTestSuite) TestGlobalRoleInheritedClusterRoles() {
 	require.NotNil(h.T(), cluster, "User should be able to access tenant cluster")
 
 	cattleConfig := config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
-	cattleConfig, err = defaults.LoadPackageDefaults(cattleConfig, "")
+	cattleConfig, err = defaults.LoadPackageDefaults(cattleConfig, "", "")
 
 	params := provisioning.GetProvisioningSchemaParams(h.tenantClient, cattleConfig)
 	_ = qase.UpdateSchemaParameters("TestGlobalRoleInheritedClusterRoles", params)

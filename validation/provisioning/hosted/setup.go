@@ -44,7 +44,7 @@ func Setup(t *testing.T) *hostedTest {
 
 	h.CattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	h.CattleConfig, err = defaults.LoadPackageDefaults(h.CattleConfig, "")
+	h.CattleConfig, err = defaults.LoadPackageDefaults(h.CattleConfig, "", "")
 	require.NoError(t, err)
 
 	loggingConfig := new(logging.Logging)

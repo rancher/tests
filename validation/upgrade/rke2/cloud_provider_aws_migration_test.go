@@ -52,7 +52,7 @@ func (u *MigrateCloudProviderSuite) SetupSuite() {
 
 	u.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	u.cattleConfig, err = defaults.LoadPackageDefaults(u.cattleConfig, "")
+	u.cattleConfig, err = defaults.LoadPackageDefaults(u.cattleConfig, "", "")
 	require.NoError(u.T(), err)
 
 	loggingConfig := new(logging.Logging)

@@ -50,7 +50,7 @@ func (n *NetworkPolicyTestSuite) SetupSuite() {
 
 	n.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	n.cattleConfig, err = defaults.LoadPackageDefaults(n.cattleConfig, "")
+	n.cattleConfig, err = defaults.LoadPackageDefaults(n.cattleConfig, "", "")
 	require.NoError(n.T(), err)
 
 	loggingConfig := new(logging.Logging)

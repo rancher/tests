@@ -2,7 +2,7 @@ package provisioning
 
 import (
 	"fmt"
-
+	"strings"
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
@@ -51,6 +51,43 @@ type Provider struct {
 	VerifyCloudProviderFunc            VerifyCloudProviderFunc
 	GetMachineRolesFunc                MachineRolesFunc
 	GetOSNamesFunc                     OSNamesFunc
+}
+
+// GetDefaultFileName selects provider-specific defaults from the cluster or Terraform config.
+func GetDefaultFileName(cattleConfig map[string]any) (string, error) {
+	providerName := ""
+	for _, section := range []string{"clusterConfig", "terraform"} {
+		providerConfig, ok := cattleConfig[section].(map[string]any)
+		if !ok {
+			continue
+		}
+		providerValue, ok := providerConfig["provider"].(string)
+		if !ok {
+			continue
+		}
+		recognizedProvider := ""
+		providerValue = strings.ToLower(providerValue)
+		for _, name := range []string{AWSProvider, VsphereProvider, AzureProvider, HarvesterProvider, LinodeProvider, GoogleProvider} {
+			if strings.Contains(providerValue, name) {
+				recognizedProvider = name
+				break
+			}
+		}
+		if recognizedProvider == "" && (providerValue == DOProvider || strings.Contains(providerValue, "digitalocean")) {
+			recognizedProvider = DOProvider
+		}
+		if recognizedProvider == "" {
+			continue
+		}
+		if providerName != "" && providerName != recognizedProvider {
+			return "", fmt.Errorf("clusterConfig and terraform providers differ: %s and %s this is currently not supported by the automation", providerName, recognizedProvider)
+		}
+		providerName = recognizedProvider
+	}
+	if providerName == VsphereProvider {
+		return VsphereProvider, nil
+	}
+	return "", nil
 }
 
 // CreateProvider returns all machine and cloud credential
