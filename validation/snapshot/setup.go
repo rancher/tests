@@ -35,6 +35,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
@@ -271,9 +272,29 @@ func CreateSnapshotDeployment(client *rancher.Client, _ *v1.Client, clusterID, d
 		deploymentConfig.Spec.Template.Spec.Containers[0].Image = ContainerImage
 	}
 
-	createdDeployment, err := deployment.CreateDeploymentFromConfig(workloadClient, clusterID, deploymentConfig)
+	// The downstream API can still time out shortly after an upgrade. A timed-out create may have succeeded, so look the deployment up before retrying.
+	var createdDeployment *appv1.Deployment
+	err = kwait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
+		created, pollErr := deployment.CreateDeploymentFromConfig(workloadClient, clusterID, deploymentConfig)
+		if pollErr == nil {
+			createdDeployment = created
+
+			return true, nil
+		}
+
+		existing, getErr := workloadClient.SteveType(stevetypes.Deployment).ByID(namespace.Name + "/" + deploymentName)
+		if getErr == nil && existing != nil {
+			createdDeployment = deploymentConfig
+
+			return true, nil
+		}
+
+		logrus.Debugf("Retrying deployment creation on cluster %s: %v", clusterID, pollErr)
+
+		return false, nil
+	})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create deployment %s on cluster %s: %w", deploymentName, clusterID, err)
 	}
 
 	err = deployment.VerifyDeployment(client, clusterID, createdDeployment.Namespace, createdDeployment.Name)
