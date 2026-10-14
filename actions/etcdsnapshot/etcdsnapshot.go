@@ -27,8 +27,6 @@ import (
 const (
 	SnapshotSteveResourceType = "rke.cattle.io.etcdsnapshot"
 	SnapshotClusterNameLabel  = "rke.cattle.io/cluster-name"
-
-	restoreStartTimeout = 30 * time.Second
 )
 
 // updateProvisioningClusterWithRetry fetches the latest provisioning cluster, applies mutate and updates it,
@@ -146,20 +144,6 @@ func RestoreRKE2K3SSnapshot(client *rancher.Client, snapshotRestore *rkev1.ETCDS
 	err = clusters.WaitOnClusterAfterSnapshot(client, updatedCluster.ID)
 	if err != nil {
 		return err
-	}
-
-	// Best effort: right after the update the cluster can still report active before the restore starts. WaitOnClusterAfterSnapshot
-	// may already have waited through the whole restore, so a missed transition is not an error.
-	err = kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, restoreStartTimeout, true, func(ctx context.Context) (bool, error) {
-		cluster, err := client.Steve.SteveType(clusters.ProvisioningSteveResourceType).ByID(updatedCluster.ID)
-		if err != nil || cluster.State == nil {
-			return false, nil
-		}
-
-		return cluster.State.Name != active, nil
-	})
-	if err != nil {
-		logrus.Warningf("Did not observe cluster %s leave the active state after requesting restore of snapshot %s", clusterName, snapshotRestore.Name)
 	}
 
 	err = kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, defaults.ThirtyMinuteTimeout, true, func(ctx context.Context) (bool, error) {
