@@ -8,13 +8,36 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
+	"github.com/rancher/shepherd/extensions/clusters"
 	extdefault "github.com/rancher/shepherd/extensions/defaults"
+	"github.com/rancher/shepherd/extensions/defaults/namespaces"
 	shepherdsnapshot "github.com/rancher/shepherd/extensions/etcdsnapshot"
 	"github.com/sirupsen/logrus"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
 const requiredStableSnapshotPolls = 3
+
+// VerifyRestoredKubernetesVersion waits for the cluster's Kubernetes version to match the expected (pre-upgrade) version after a restore.
+func VerifyRestoredKubernetesVersion(client *rancher.Client, clusterName, expectedVersion string) error {
+	var actualVersion string
+
+	err := kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, extdefault.ThirtyMinuteTimeout, true, func(ctx context.Context) (bool, error) {
+		cluster, _, err := clusters.GetProvisioningClusterByName(client, clusterName, namespaces.FleetDefault)
+		if err != nil {
+			return false, nil
+		}
+
+		actualVersion = cluster.Spec.KubernetesVersion
+
+		return actualVersion == expectedVersion, nil
+	})
+	if err != nil {
+		return fmt.Errorf("cluster %s kubernetes version after restore is %s, expected %s: %w", clusterName, actualVersion, expectedVersion, err)
+	}
+
+	return nil
+}
 
 func listClusterSnapshots(client *rancher.Client, clusterName string) ([]steveV1.SteveAPIObject, error) {
 	query, err := url.ParseQuery(fmt.Sprintf("labelSelector=%s=%s", shepherdsnapshot.SnapshotClusterNameLabel, clusterName))

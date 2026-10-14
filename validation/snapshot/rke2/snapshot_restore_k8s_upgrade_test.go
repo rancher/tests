@@ -57,9 +57,11 @@ func TestSnapshotRestoreK8sUpgrade(t *testing.T) {
 			require.NoError(t, err)
 
 			logrus.Infof("Restoring snapshot %s on cluster %s", snapshotName, tt.cluster.Name)
-			restoredCluster, err := etcdsnapshot.RestoreAndValidateSnapshotV2Prov(s.StandardUserClient, snapshotName, tt.etcdSnapshot, clusterObject, tt.cluster.ID)
+			_, err = etcdsnapshot.RestoreAndValidateSnapshotV2Prov(s.StandardUserClient, snapshotName, tt.etcdSnapshot, clusterObject, tt.cluster.ID)
 			require.NoError(t, err)
-			require.Equal(t, restoredCluster.Spec.KubernetesVersion, clusterObject.Spec.KubernetesVersion)
+
+			err = etcdsnapshot.VerifyRestoredKubernetesVersion(s.StandardUserClient, tt.cluster.Name, clusterObject.Spec.KubernetesVersion)
+			require.NoError(t, err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", tt.cluster.Name)
 			err = provisioning.VerifyClusterReady(s.StandardUserClient, tt.cluster)
