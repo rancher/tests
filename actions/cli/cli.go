@@ -5,16 +5,16 @@ import (
 )
 
 const (
-	context    = "context"
-	login      = "login"
-	namespaces = "namespaces"
-	projects   = "projects"
-	rancher    = "rancher"
+	contextCommand = "context"
+	login          = "login"
+	namespaces     = "namespaces"
+	projects       = "projects"
+	rancherCommand = "rancher"
 )
 
 // Login will log into the Rancher server using the provided URL and token.
 func Login(client *ranchercli.Client, url, token string) error {
-	err := client.ExecuteCommand(rancher, login, url, "--token", token)
+	err := client.ExecuteCommand(rancherCommand, login, url, "--token", token)
 	if err != nil {
 		return err
 	}
@@ -24,7 +24,7 @@ func Login(client *ranchercli.Client, url, token string) error {
 
 // SwitchContext will display the current context and switch to the default one.
 func SwitchContext(client *ranchercli.Client, project string) error {
-	err := client.ExecuteCommand(rancher, context, "switch", project)
+	err := client.ExecuteCommand(rancherCommand, contextCommand, "switch", project)
 	if err != nil {
 		return err
 	}
@@ -34,12 +34,12 @@ func SwitchContext(client *ranchercli.Client, project string) error {
 
 // CreateProjects will create and projects in the specified cluster.
 func CreateProjects(client *ranchercli.Client, projectName, cluster string) error {
-	err := client.ExecuteCommand(rancher, projects, "create", "--cluster", cluster, projectName)
+	err := client.ExecuteCommand(rancherCommand, projects, "create", "--cluster", cluster, projectName)
 	if err != nil {
 		return err
 	}
 
-	err = client.Exists(rancher, projects, projectName)
+	err = client.Exists(rancherCommand, projects, projectName)
 	if err != nil {
 		return err
 	}
@@ -54,7 +54,7 @@ func DeleteProjects(client *ranchercli.Client, projectName string) error {
 		return err
 	}
 
-	err = client.ExecuteCommand(rancher, projects, "ls", "|", "grep", projectName)
+	err = client.ExecuteCommand(rancherCommand, projects, "ls", "|", "grep", projectName)
 	if err != nil {
 		return err
 	}
@@ -64,12 +64,12 @@ func DeleteProjects(client *ranchercli.Client, projectName string) error {
 
 // CreateNamespaces will create namespaces in the specified cluster.
 func CreateNamespaces(client *ranchercli.Client, cluster, namespaceName string) error {
-	err := client.ExecuteCommand(rancher, namespaces, "create", namespaceName)
+	err := client.ExecuteCommand(rancherCommand, namespaces, "create", namespaceName)
 	if err != nil {
 		return err
 	}
 
-	err = client.Exists(rancher, namespaces, namespaceName)
+	err = client.Exists(rancherCommand, namespaces, namespaceName)
 	if err != nil {
 		return err
 	}

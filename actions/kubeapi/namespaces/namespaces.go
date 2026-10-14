@@ -104,6 +104,17 @@ func WaitForProjectIDUpdate(client *rancher.Client, clusterID, projectName, name
 	return nil
 }
 
+// WaitForProjectIDRemoved is a helper that waits for a namespace to no longer belong to a project, which WaitForProjectIDUpdate cannot express.
+func WaitForProjectIDRemoved(client *rancher.Client, clusterID, namespaceName string) error {
+	return kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, true, func(ctx context.Context) (bool, error) {
+		namespace, err := extnamespaceapi.GetNamespaceByName(client, clusterID, namespaceName)
+		if err != nil {
+			return false, err
+		}
+		return namespace.Annotations[ProjectIDAnnotation] == "", nil
+	})
+}
+
 // ContainerDefaultResourceLimit sets the container default resource limit in a string
 // limitsCPU and requestsCPU in form of "3m"
 // limitsMemory and requestsMemory in the form of "3Mi"
