@@ -13,6 +13,7 @@ import (
 	extuserapi "github.com/rancher/shepherd/extensions/kubeapi/users"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
@@ -298,4 +299,60 @@ func AddUserWithRoleToCluster(client *rancher.Client, globalRole, role string, c
 	}
 
 	return standardUser, standardUserClient, nil
+}
+
+// GetUserGroupPrincipals returns the group principal names stored on the user's UserAttribute for the given auth provider
+func GetUserGroupPrincipals(client *rancher.Client, userID, providerName string) ([]string, error) {
+	attribute, err := client.WranglerContext.Mgmt.UserAttribute().Get(userID, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	var names []string
+	for _, principal := range attribute.GroupPrincipals[providerName].Items {
+		names = append(names, principal.Name)
+	}
+
+	return names, nil
+}
+
+// GetUserExtraAttribute returns the values stored on the user's UserAttribute under the given provider and attribute key
+func GetUserExtraAttribute(client *rancher.Client, userID, providerName, key string) ([]string, error) {
+	attribute, err := client.WranglerContext.Mgmt.UserAttribute().Get(userID, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	return attribute.ExtraByProvider[providerName][key], nil
+}
+
+// GetUserAttributeLastRefresh returns the time the provider refresher last wrote the user's UserAttribute
+func GetUserAttributeLastRefresh(client *rancher.Client, userID string) (string, error) {
+	attribute, err := client.WranglerContext.Mgmt.UserAttribute().Get(userID, metav1.GetOptions{})
+	if err != nil {
+		return "", err
+	}
+
+	return attribute.LastRefresh, nil
+}
+
+// WaitForUserAttributeRefresh polls the user's UserAttribute until the provider refresher writes a newer refresh time than the given one
+func WaitForUserAttributeRefresh(client *rancher.Client, userID, previousRefresh string) error {
+	return kwait.PollUntilContextTimeout(
+		context.Background(),
+		defaults.FiveSecondTimeout,
+		defaults.FiveMinuteTimeout,
+		false,
+		func(ctx context.Context) (bool, error) {
+			current, err := GetUserAttributeLastRefresh(client, userID)
+			if err != nil {
+				return false, nil
+			}
+
+			return current != "" && current != previousRefresh, nil
+		},
+	)
 }

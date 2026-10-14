@@ -21,8 +21,10 @@ import (
 
 	cattlev3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	scimclient "github.com/rancher/shepherd/clients/rancher/auth/scim"
+	oidcext "github.com/rancher/shepherd/extensions/auth/oidc"
 	extfeatures "github.com/rancher/shepherd/extensions/kubeapi/features"
 	extrbacapi "github.com/rancher/shepherd/extensions/kubeapi/rbac"
+	"github.com/rancher/shepherd/extensions/users"
 	"github.com/rancher/shepherd/pkg/clientbase"
 	authactions "github.com/rancher/tests/actions/auth"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
@@ -67,8 +69,16 @@ func (s *SCIMOpenLDAPTestSuite) SetupSuite() {
 	require.NoError(s.T(), err, "Failed to setup SCIM client")
 	s.scimClient = scimClient
 
+	require.NoError(s.T(), scimactions.VerifyExpectedBuildType(s.client), "The Rancher build type should match the one the config expects")
+
+	servable, reason, err := scimactions.VerifySCIMServable(s.client)
+	require.NoError(s.T(), err, "Failed to read whether this Rancher server serves SCIM")
+	if !servable {
+		s.T().Skip(reason)
+	}
+
 	logrus.Info("Ensuring baseline SCIM ConfigMap (enabled=true) for OpenLDAP provider")
-	err = scimactions.SetSCIMConfigMap(s.client, authactions.OpenLdap, map[string]string{"enabled": "true"})
+	err = scimactions.SetSCIMConfigMap(s.client, authactions.OpenLdap, map[string]string{scimactions.SCIMConfigEnabledKey: scimactions.SCIMConfigTrue})
 	require.NoError(s.T(), err, "Failed to set baseline SCIM ConfigMap")
 	err = scimactions.WaitForSCIMEndpointStatus(s.scimClient, http.StatusOK)
 	require.NoError(s.T(), err, "SCIM endpoint should respond 200 after baseline ConfigMap set")
@@ -107,10 +117,10 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMTokenSecretExistsInKubeAPI() {
 	subSession := s.session.NewSession()
 	defer subSession.Cleanup()
 
-	logrus.Infof("Verifying SCIM token secret exists in %s via label selector for provider %s", scimactions.SCIMSecretNamespace, authactions.OpenLdap)
+	logrus.Infof("Verifying SCIM token secret exists via label selector for provider %s", authactions.OpenLdap)
 
 	token, err := scimactions.FetchSCIMBearerToken(s.client, authactions.OpenLdap)
-	require.NoError(s.T(), err, "SCIM token secret should exist in %s", scimactions.SCIMSecretNamespace)
+	require.NoError(s.T(), err, "SCIM token secret should exist for provider %s", authactions.OpenLdap)
 	require.NotEmpty(s.T(), token, "SCIM bearer token should not be empty")
 }
 
@@ -185,6 +195,80 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMInvalidTokenReturns401() {
 	resp, err := badClient.Users().List(nil)
 	require.NoError(s.T(), err)
 	require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusUnauthorized, "Invalid token should return 401"))
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMRejectsRancherAdminToken() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying the Rancher admin token does not authenticate the SCIM endpoints")
+
+	adminClient := scimactions.NewSCIMClientWithToken(s.client.RancherConfig.Host, authactions.OpenLdap, s.client.Management.APIBaseClient.Opts.TokenKey)
+
+	resp, err := adminClient.Users().List(nil)
+	require.NoError(s.T(), err)
+	require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusUnauthorized, "A Rancher admin token should not reach the SCIM endpoints"))
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMRejectsStandardUserToken() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying a standard user token does not authenticate the SCIM endpoints")
+
+	subClient, err := s.client.WithSession(subSession)
+	require.NoError(s.T(), err)
+
+	standardUser, err := users.CreateUserWithRole(subClient, users.UserConfig(), string(rbac.StandardUser))
+	require.NoError(s.T(), err, "Should be able to create a standard user")
+
+	standardUserClient, err := subClient.AsUser(standardUser)
+	require.NoError(s.T(), err, "Standard user %s should be able to login", standardUser.Name)
+
+	userSCIMClient := scimactions.NewSCIMClientWithToken(s.client.RancherConfig.Host, authactions.OpenLdap, standardUserClient.Management.APIBaseClient.Opts.TokenKey)
+
+	resp, err := userSCIMClient.Users().List(nil)
+	require.NoError(s.T(), err)
+	require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusUnauthorized, "A standard user token should not reach the SCIM endpoints"))
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMRejectsAuthProviderUserToken() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying an OpenLDAP user token does not authenticate the SCIM endpoints")
+
+	subClient, err := s.client.WithSession(subSession)
+	require.NoError(s.T(), err)
+
+	ldapAdmin := &v3.User{
+		Username: s.client.Auth.OLDAP.Config.Users.Admin.Username,
+		Password: s.client.Auth.OLDAP.Config.Users.Admin.Password,
+	}
+
+	authAdmin, err := authactions.LoginAsAuthUser(subClient, ldapAdmin, authactions.OpenLdap)
+	require.NoError(s.T(), err, "OpenLDAP admin should be able to login")
+
+	authSCIMClient := scimactions.NewSCIMClientWithToken(s.client.RancherConfig.Host, authactions.OpenLdap, authAdmin.Management.APIBaseClient.Opts.TokenKey)
+
+	resp, err := authSCIMClient.Users().List(nil)
+	require.NoError(s.T(), err)
+	require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusUnauthorized, "An OpenLDAP user token should not reach the SCIM endpoints"))
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMTokenCannotReachRancherAPI() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying the SCIM bearer token grants no access to the Rancher API")
+
+	token, err := scimactions.FetchSCIMBearerToken(s.client, authactions.OpenLdap)
+	require.NoError(s.T(), err)
+	require.NotEmpty(s.T(), token)
+
+	resp, err := s.client.Auth.OIDC.RawRequest(http.MethodGet, oidcext.UsersPath, "Bearer "+token, nil)
+	require.NoError(s.T(), err, "Should be able to reach the Rancher API with the SCIM token")
+	require.Equal(s.T(), http.StatusUnauthorized, resp.StatusCode, "The SCIM bearer token should not authenticate the Rancher API")
 }
 
 func (s *SCIMOpenLDAPTestSuite) TestSCIMListUsers() {
@@ -1139,7 +1223,9 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMNoConfigMapAllEndpointsReturn404() {
 
 	logrus.Info("Verifying all SCIM endpoints return 404 with SCIM error body when ConfigMap is absent")
 
-	defer func() { require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap)) }()
+	defer func() {
+		require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap))
+	}()
 	require.NoError(s.T(), scimactions.DeleteSCIMConfigMap(s.client, authactions.OpenLdap))
 	require.NoError(s.T(), scimactions.WaitForSCIMEndpointStatus(s.scimClient, http.StatusNotFound))
 
@@ -1161,20 +1247,22 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMNoConfigMapAllEndpointsReturn404() {
 	}
 }
 
-func (s *SCIMOpenLDAPTestSuite) TestSCIMCMNoConfigMapRouteGatingBeforeAuth() {
+func (s *SCIMOpenLDAPTestSuite) TestSCIMCMInvalidTokenReturns401WithoutConfigMap() {
 	subSession := s.session.NewSession()
 	defer subSession.Cleanup()
 
-	logrus.Info("Verifying invalid bearer token also returns 404 when ConfigMap absent (route gating before auth)")
+	logrus.Info("Verifying an invalid bearer token returns 401 when the ConfigMap is absent, so the answer does not report the provider state")
 
-	defer func() { require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap)) }()
+	defer func() {
+		require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap))
+	}()
 	require.NoError(s.T(), scimactions.DeleteSCIMConfigMap(s.client, authactions.OpenLdap))
 	require.NoError(s.T(), scimactions.WaitForSCIMEndpointStatus(s.scimClient, http.StatusNotFound))
 
 	badClient := scimactions.NewSCIMClientWithToken(s.client.RancherConfig.Host, authactions.OpenLdap, "invalid-token")
 	resp, err := badClient.Users().List(nil)
 	require.NoError(s.T(), err)
-	require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusNotFound, "Invalid token should still return 404 when ConfigMap absent (not 401)"))
+	require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusUnauthorized, "An invalid token should return 401 whether or not the ConfigMap is present"))
 }
 
 func (s *SCIMOpenLDAPTestSuite) TestSCIMCMEnabledTrueReturns200() {
@@ -1183,8 +1271,10 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMCMEnabledTrueReturns200() {
 
 	logrus.Info("Verifying enabled=true returns 200 on /Users after being disabled")
 
-	defer func() { require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap)) }()
-	require.NoError(s.T(), scimactions.SetSCIMConfigMapAndWait(s.client, s.scimClient, authactions.OpenLdap, map[string]string{"enabled": "false"}, http.StatusNotFound))
+	defer func() {
+		require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap))
+	}()
+	require.NoError(s.T(), scimactions.SetSCIMConfigMapAndWait(s.client, s.scimClient, authactions.OpenLdap, map[string]string{scimactions.SCIMConfigEnabledKey: scimactions.SCIMConfigFalse}, http.StatusNotFound))
 	require.NoError(s.T(), scimactions.SetSCIMConfigMapAndWait(s.client, s.scimClient, authactions.OpenLdap, scimactions.BaselineSCIMConfigMap(), http.StatusOK))
 
 	resp, err := s.scimClient.Users().List(nil)
@@ -1198,12 +1288,46 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMCMEnabledFalseReturns404() {
 
 	logrus.Info("Verifying enabled=false returns 404 on /Users")
 
-	defer func() { require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap)) }()
-	require.NoError(s.T(), scimactions.SetSCIMConfigMapAndWait(s.client, s.scimClient, authactions.OpenLdap, map[string]string{"enabled": "false"}, http.StatusNotFound))
+	defer func() {
+		require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap))
+	}()
+	require.NoError(s.T(), scimactions.SetSCIMConfigMapAndWait(s.client, s.scimClient, authactions.OpenLdap, map[string]string{scimactions.SCIMConfigEnabledKey: scimactions.SCIMConfigFalse}, http.StatusNotFound))
 
 	resp, err := s.scimClient.Users().List(nil)
 	require.NoError(s.T(), err)
 	require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusNotFound, "GET /Users should return 404 with enabled=false"))
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMCMMissingEnabledKeyReturns404() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying a ConfigMap without the enabled key falls back to disabled and returns 404 on /Users")
+
+	defer func() {
+		require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap))
+	}()
+	require.NoError(s.T(), scimactions.SetSCIMConfigMapAndWait(s.client, s.scimClient, authactions.OpenLdap, map[string]string{scimactions.SCIMConfigUserIDAttributeKey: scimactions.SCIMConfigUserNameValue}, http.StatusNotFound))
+
+	resp, err := s.scimClient.Users().List(nil)
+	require.NoError(s.T(), err)
+	require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusNotFound, "GET /Users should return 404 when the ConfigMap omits the enabled key"))
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMCMInvalidEnabledValueReturns404() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying an unparseable enabled value falls back to disabled and returns 404 on /Users")
+
+	defer func() {
+		require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap))
+	}()
+	require.NoError(s.T(), scimactions.SetSCIMConfigMapAndWait(s.client, s.scimClient, authactions.OpenLdap, map[string]string{scimactions.SCIMConfigEnabledKey: "notabool"}, http.StatusNotFound))
+
+	resp, err := s.scimClient.Users().List(nil)
+	require.NoError(s.T(), err)
+	require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusNotFound, "GET /Users should return 404 when the enabled value does not parse as a bool"))
 }
 
 func (s *SCIMOpenLDAPTestSuite) TestSCIMCMPausedReturns503() {
@@ -1212,8 +1336,10 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMCMPausedReturns503() {
 
 	logrus.Info("Verifying paused=true returns 503 on /Users")
 
-	defer func() { require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap)) }()
-	require.NoError(s.T(), scimactions.SetSCIMConfigMapAndWait(s.client, s.scimClient, authactions.OpenLdap, map[string]string{"enabled": "true", "paused": "true"}, http.StatusServiceUnavailable))
+	defer func() {
+		require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap))
+	}()
+	require.NoError(s.T(), scimactions.SetSCIMConfigMapAndWait(s.client, s.scimClient, authactions.OpenLdap, map[string]string{scimactions.SCIMConfigEnabledKey: scimactions.SCIMConfigTrue, scimactions.SCIMConfigPausedKey: scimactions.SCIMConfigTrue}, http.StatusServiceUnavailable))
 
 	resp, err := s.scimClient.Users().List(nil)
 	require.NoError(s.T(), err)
@@ -1227,9 +1353,11 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMCMUnpauseResumes() {
 
 	logrus.Info("Verifying unpause (paused=false) resumes SCIM endpoints")
 
-	defer func() { require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap)) }()
-	require.NoError(s.T(), scimactions.SetSCIMConfigMapAndWait(s.client, s.scimClient, authactions.OpenLdap, map[string]string{"enabled": "true", "paused": "true"}, http.StatusServiceUnavailable))
-	require.NoError(s.T(), scimactions.SetSCIMConfigMapAndWait(s.client, s.scimClient, authactions.OpenLdap, map[string]string{"enabled": "true", "paused": "false"}, http.StatusOK))
+	defer func() {
+		require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap))
+	}()
+	require.NoError(s.T(), scimactions.SetSCIMConfigMapAndWait(s.client, s.scimClient, authactions.OpenLdap, map[string]string{scimactions.SCIMConfigEnabledKey: scimactions.SCIMConfigTrue, scimactions.SCIMConfigPausedKey: scimactions.SCIMConfigTrue}, http.StatusServiceUnavailable))
+	require.NoError(s.T(), scimactions.SetSCIMConfigMapAndWait(s.client, s.scimClient, authactions.OpenLdap, map[string]string{scimactions.SCIMConfigEnabledKey: scimactions.SCIMConfigTrue, scimactions.SCIMConfigPausedKey: scimactions.SCIMConfigFalse}, http.StatusOK))
 
 	resp, err := s.scimClient.Users().List(nil)
 	require.NoError(s.T(), err)
@@ -1242,8 +1370,10 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMCMUserIdExternalIDPrincipal() {
 
 	logrus.Info("Verifying userIdAttribute=externalId builds Rancher user principalID from externalId")
 
-	defer func() { require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap)) }()
-	require.NoError(s.T(), scimactions.SetSCIMConfigMapAndWaitCreateReady(s.client, s.scimClient, authactions.OpenLdap, map[string]string{"enabled": "true", "userIdAttribute": "externalId"}))
+	defer func() {
+		require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap))
+	}()
+	require.NoError(s.T(), scimactions.SetSCIMConfigMapAndWaitCreateReady(s.client, s.scimClient, authactions.OpenLdap, map[string]string{scimactions.SCIMConfigEnabledKey: scimactions.SCIMConfigTrue, scimactions.SCIMConfigUserIDAttributeKey: scimactions.SCIMConfigExternalIDValue}))
 
 	externalID := namegen.AppendRandomString("ext")
 	_, userID, err := scimactions.CreateSCIMUser(s.scimClient, subSession, externalID, true)
@@ -1269,8 +1399,10 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMCMUserNameChangeAcceptedWithExternalIDPr
 
 	logrus.Info("Verifying PATCH userName succeeds when userIdAttribute=externalId")
 
-	defer func() { require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap)) }()
-	require.NoError(s.T(), scimactions.SetSCIMConfigMapAndWaitCreateReady(s.client, s.scimClient, authactions.OpenLdap, map[string]string{"enabled": "true", "userIdAttribute": "externalId"}))
+	defer func() {
+		require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap))
+	}()
+	require.NoError(s.T(), scimactions.SetSCIMConfigMapAndWaitCreateReady(s.client, s.scimClient, authactions.OpenLdap, map[string]string{scimactions.SCIMConfigEnabledKey: scimactions.SCIMConfigTrue, scimactions.SCIMConfigUserIDAttributeKey: scimactions.SCIMConfigExternalIDValue}))
 
 	_, userID, err := scimactions.CreateSCIMUser(s.scimClient, subSession, namegen.AppendRandomString("ext"), true)
 	require.NoError(s.T(), err)
@@ -1304,8 +1436,10 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMCMGroupIdExternalIDPrincipal() {
 
 	logrus.Info("Verifying groupIdAttribute=externalId is accepted and group created with externalId")
 
-	defer func() { require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap)) }()
-	require.NoError(s.T(), scimactions.SetSCIMConfigMapAndWaitCreateReady(s.client, s.scimClient, authactions.OpenLdap, map[string]string{"enabled": "true", "groupIdAttribute": "externalId"}))
+	defer func() {
+		require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap))
+	}()
+	require.NoError(s.T(), scimactions.SetSCIMConfigMapAndWaitCreateReady(s.client, s.scimClient, authactions.OpenLdap, map[string]string{scimactions.SCIMConfigEnabledKey: scimactions.SCIMConfigTrue, scimactions.SCIMConfigGroupIDAttributeKey: scimactions.SCIMConfigExternalIDValue}))
 
 	externalID := namegen.AppendRandomString("grp-ext")
 	_, groupID, err := scimactions.CreateSCIMGroup(s.scimClient, subSession, externalID)
@@ -1416,8 +1550,10 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMCMInvalidUserIdAttributeFallsBack() {
 
 	logrus.Info("Verifying invalid userIdAttribute value falls back to default and does not crash SCIM")
 
-	defer func() { require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap)) }()
-	require.NoError(s.T(), scimactions.SetSCIMConfigMapAndWaitCreateReady(s.client, s.scimClient, authactions.OpenLdap, map[string]string{"enabled": "true", "userIdAttribute": "badvalue"}))
+	defer func() {
+		require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap))
+	}()
+	require.NoError(s.T(), scimactions.SetSCIMConfigMapAndWaitCreateReady(s.client, s.scimClient, authactions.OpenLdap, map[string]string{scimactions.SCIMConfigEnabledKey: scimactions.SCIMConfigTrue, scimactions.SCIMConfigUserIDAttributeKey: "badvalue"}))
 
 	_, userID, err := scimactions.CreateSCIMUser(s.scimClient, subSession, "", true)
 	require.NoError(s.T(), err)
@@ -1460,7 +1596,7 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMURNPatchUserDisplayName() {
 	require.NoError(s.T(), err)
 	require.NoError(s.T(), scimactions.CheckStatus(patchResp, http.StatusOK, "PATCH URN-prefixed displayName should return 200"))
 
-	require.NoError(s.T(), scimactions.WaitForRancherUserName(s.client,userID, newDisplayName), "Rancher user.Name should reflect URN-prefixed displayName %q after PATCH", newDisplayName)
+	require.NoError(s.T(), scimactions.WaitForRancherUserName(s.client, userID, newDisplayName), "Rancher user.Name should reflect URN-prefixed displayName %q after PATCH", newDisplayName)
 }
 
 func (s *SCIMOpenLDAPTestSuite) TestSCIMURNPatchUserName() {
@@ -1469,8 +1605,10 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMURNPatchUserName() {
 
 	logrus.Info("Verifying PATCH URN-prefixed userName succeeds when userIdAttribute=externalId")
 
-	defer func() { require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap)) }()
-	require.NoError(s.T(), scimactions.SetSCIMConfigMapAndWaitCreateReady(s.client, s.scimClient, authactions.OpenLdap, map[string]string{"enabled": "true", "userIdAttribute": "externalId"}))
+	defer func() {
+		require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap))
+	}()
+	require.NoError(s.T(), scimactions.SetSCIMConfigMapAndWaitCreateReady(s.client, s.scimClient, authactions.OpenLdap, map[string]string{scimactions.SCIMConfigEnabledKey: scimactions.SCIMConfigTrue, scimactions.SCIMConfigUserIDAttributeKey: scimactions.SCIMConfigExternalIDValue}))
 
 	_, userID, err := scimactions.CreateSCIMUser(s.scimClient, subSession, namegen.AppendRandomString("ext"), true)
 	require.NoError(s.T(), err)
@@ -1639,7 +1777,9 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMRLDisabledByDefault() {
 
 	logrus.Info("Verifying rate limiting is disabled by default (no rate keys in ConfigMap)")
 
-	defer func() { require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap)) }()
+	defer func() {
+		require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap))
+	}()
 	require.NoError(s.T(), scimactions.SetSCIMConfigMapAndWait(s.client, s.scimClient, authactions.OpenLdap, scimactions.BaselineSCIMConfigMap(), http.StatusOK))
 
 	results, err := scimactions.BurstSCIMRequests(s.scimClient, 50)
@@ -1655,7 +1795,9 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMRLEnabledReturns429AfterBurst() {
 
 	logrus.Info("Verifying rate limit returns 429 when burst exceeded")
 
-	defer func() { require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap)) }()
+	defer func() {
+		require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap))
+	}()
 	require.NoError(s.T(), scimactions.SetSCIMConfigMap(s.client, authactions.OpenLdap, scimactions.RateLimitSCIMConfigMap(2, 5)))
 
 	results, err := scimactions.BurstSCIMRequests(s.scimClient, 20)
@@ -1672,7 +1814,9 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMRL429ResponseFormat() {
 
 	logrus.Info("Verifying 429 response format (Retry-After header, scim+json content-type, SCIM error body)")
 
-	defer func() { require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap)) }()
+	defer func() {
+		require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap))
+	}()
 	require.NoError(s.T(), scimactions.SetSCIMConfigMap(s.client, authactions.OpenLdap, scimactions.RateLimitSCIMConfigMap(1, 1)))
 
 	throttledResp, err := scimactions.FindFirstThrottledResponse(s.scimClient, 10)
@@ -1692,7 +1836,9 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMRLTokenBucketRefillAfterRetryAfter() {
 
 	logrus.Info("Verifying token bucket refills after Retry-After period elapses")
 
-	defer func() { require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap)) }()
+	defer func() {
+		require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap))
+	}()
 	require.NoError(s.T(), scimactions.SetSCIMConfigMap(s.client, authactions.OpenLdap, scimactions.RateLimitSCIMConfigMap(1, 1)))
 
 	throttledResp, err := scimactions.FindFirstThrottledResponse(s.scimClient, 10)
@@ -1724,7 +1870,9 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMRLAppliesToAllMethods() {
 	_, userID, err := scimactions.CreateSCIMUser(s.scimClient, subSession, "", true)
 	require.NoError(s.T(), err)
 
-	defer func() { require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap)) }()
+	defer func() {
+		require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap))
+	}()
 	require.NoError(s.T(), scimactions.SetSCIMConfigMap(s.client, authactions.OpenLdap, scimactions.RateLimitSCIMConfigMap(1, 1)))
 
 	var ok, throttled int
@@ -1747,7 +1895,9 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMRLDynamicConfigChange() {
 
 	logrus.Info("Verifying ConfigMap rate-limit change takes effect on next request without restart")
 
-	defer func() { require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap)) }()
+	defer func() {
+		require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap))
+	}()
 	require.NoError(s.T(), scimactions.SetSCIMConfigMap(s.client, authactions.OpenLdap, scimactions.RateLimitSCIMConfigMap(1, 1)))
 
 	throttled, err := scimactions.VerifySCIMThrottle(s.scimClient, 10)
@@ -1769,7 +1919,9 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMRLInvalidValuesFallback() {
 
 	logrus.Info("Verifying invalid rate-limit values fall back to defaults and do not crash")
 
-	defer func() { require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap)) }()
+	defer func() {
+		require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap))
+	}()
 	require.NoError(s.T(), scimactions.SetSCIMConfigMapAndWait(s.client, s.scimClient, authactions.OpenLdap, map[string]string{
 		"enabled":                    "true",
 		"rateLimitRequestsPerSecond": "not-a-number",
@@ -1787,7 +1939,9 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMRLReDisableRateLimit() {
 
 	logrus.Info("Verifying rateLimitRequestsPerSecond=0 re-disables rate limiting")
 
-	defer func() { require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap)) }()
+	defer func() {
+		require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap))
+	}()
 	require.NoError(s.T(), scimactions.SetSCIMConfigMap(s.client, authactions.OpenLdap, scimactions.RateLimitSCIMConfigMap(1, 1)))
 
 	throttled, err := scimactions.VerifySCIMThrottle(s.scimClient, 10)
@@ -1841,16 +1995,11 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMZRegTokenRotation() {
 	require.NoError(s.T(), err, "Should fetch existing SCIM token")
 	require.NotEmpty(s.T(), oldToken)
 
-	clusterContext, err := s.client.WranglerContext.Core.Secret().List(scimactions.SCIMSecretNamespace, metav1.ListOptions{
-		LabelSelector: fmt.Sprintf("cattle.io/kind=scim-auth-token,authn.management.cattle.io/provider=%s", authactions.OpenLdap),
-	})
+	secretNames, err := scimactions.FetchSCIMTokenSecretNames(s.client, authactions.OpenLdap)
 	require.NoError(s.T(), err)
-	require.NotEmpty(s.T(), clusterContext.Items, "Should find SCIM token secret")
+	require.NotEmpty(s.T(), secretNames, "Should find SCIM token secret")
 
-	for i := range clusterContext.Items {
-		err = s.client.WranglerContext.Core.Secret().Delete(scimactions.SCIMSecretNamespace, clusterContext.Items[i].Name, &metav1.DeleteOptions{})
-		require.NoError(s.T(), err, "Should delete old SCIM token secret")
-	}
+	require.NoError(s.T(), scimactions.DeleteSCIMTokenSecrets(s.client, authactions.OpenLdap), "Should delete old SCIM token secrets")
 
 	newToken, err := scimactions.CreateSCIMTokenSecret(s.client, authactions.OpenLdap)
 	require.NoError(s.T(), err, "Should create a new SCIM token")
@@ -1877,7 +2026,9 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMRegConfigMapKeyParsingNonInterference() 
 
 	logrus.Info("Verifying rate-limit ConfigMap keys do not interfere with parsing of enabled/paused/userIdAttribute")
 
-	defer func() { require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap)) }()
+	defer func() {
+		require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap))
+	}()
 	require.NoError(s.T(), scimactions.SetSCIMConfigMapAndWait(s.client, s.scimClient, authactions.OpenLdap, map[string]string{
 		"enabled":                    "true",
 		"paused":                     "false",
@@ -1908,8 +2059,10 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMPostReprovisionsDisabledUser() {
 
 	logrus.Info("Verifying POST with externalId matching a disabled user re-provisions and returns 200")
 
-	defer func() { require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap)) }()
-	require.NoError(s.T(), scimactions.SetSCIMConfigMapAndWaitCreateReady(s.client, s.scimClient, authactions.OpenLdap, map[string]string{"enabled": "true", "userIdAttribute": "externalId"}))
+	defer func() {
+		require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap))
+	}()
+	require.NoError(s.T(), scimactions.SetSCIMConfigMapAndWaitCreateReady(s.client, s.scimClient, authactions.OpenLdap, map[string]string{scimactions.SCIMConfigEnabledKey: scimactions.SCIMConfigTrue, scimactions.SCIMConfigUserIDAttributeKey: scimactions.SCIMConfigExternalIDValue}))
 
 	externalID := namegen.AppendRandomString("ext-reprovision")
 	_, userID, err := scimactions.CreateSCIMUser(s.scimClient, subSession, externalID, true)
@@ -1941,8 +2094,10 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMPostDuplicateActiveExternalIDReturns409(
 
 	logrus.Info("Verifying POST with externalId matching an active user returns 409")
 
-	defer func() { require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap)) }()
-	require.NoError(s.T(), scimactions.SetSCIMConfigMapAndWaitCreateReady(s.client, s.scimClient, authactions.OpenLdap, map[string]string{"enabled": "true", "userIdAttribute": "externalId"}))
+	defer func() {
+		require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap))
+	}()
+	require.NoError(s.T(), scimactions.SetSCIMConfigMapAndWaitCreateReady(s.client, s.scimClient, authactions.OpenLdap, map[string]string{scimactions.SCIMConfigEnabledKey: scimactions.SCIMConfigTrue, scimactions.SCIMConfigUserIDAttributeKey: scimactions.SCIMConfigExternalIDValue}))
 
 	externalID := namegen.AppendRandomString("ext-dup-active")
 	_, _, err := scimactions.CreateSCIMUser(s.scimClient, subSession, externalID, true)
@@ -1997,11 +2152,25 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMPatchUserNameMutabilityError() {
 	require.Equal(s.T(), "mutability", body["scimType"], "error body should have scimType=mutability")
 }
 
-func (s *SCIMOpenLDAPTestSuite) TestSCIMPatchDeactivateAdminReturns409() {
+func (s *SCIMOpenLDAPTestSuite) TestSCIMPatchRejectsEmptyUserName() {
 	subSession := s.session.NewSession()
 	defer subSession.Cleanup()
 
-	logrus.Info("Verifying PATCH active=false on default admin returns 409")
+	logrus.Info("Verifying PATCH op:replace userName with an empty value returns 400, as PUT and POST already do")
+
+	_, userID, err := scimactions.CreateSCIMUser(s.scimClient, subSession, "", true)
+	require.NoError(s.T(), err)
+
+	resp, err := scimactions.PatchUser(s.scimClient, userID, "replace", "userName", "")
+	require.NoError(s.T(), err)
+	require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusBadRequest, "PATCH op:replace userName with an empty value should return 400"))
+}
+
+func (s *SCIMOpenLDAPTestSuite) TestSCIMCannotDeactivateDefaultAdmin() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying PATCH active=false on the default admin is refused and leaves the admin enabled")
 
 	adminUsers, err := s.client.Management.User.List(&types.ListOpts{
 		Filters: map[string]interface{}{"username": "admin"},
@@ -2009,9 +2178,16 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMPatchDeactivateAdminReturns409() {
 	require.NoError(s.T(), err)
 	require.NotEmpty(s.T(), adminUsers.Data, "default admin user should exist")
 
-	resp, err := scimactions.PatchUser(s.scimClient, adminUsers.Data[0].ID, "replace", "active", false)
+	adminID := adminUsers.Data[0].ID
+
+	resp, err := scimactions.PatchUser(s.scimClient, adminID, "replace", "active", false)
 	require.NoError(s.T(), err)
-	require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusConflict, "PATCH active=false on default admin should return 409"))
+	require.Contains(s.T(), []int{http.StatusNotFound, http.StatusConflict}, resp.StatusCode,
+		"PATCH active=false on the default admin should be refused as 404 when the provider owns no such user or 409 when it does, got: %s", string(resp.Body))
+
+	admin, err := s.client.Management.User.ByID(adminID)
+	require.NoError(s.T(), err, "Should be able to read the default admin after the refused PATCH")
+	require.True(s.T(), *admin.Enabled, "The default admin should still be enabled")
 }
 
 func (s *SCIMOpenLDAPTestSuite) TestSCIMPatchExternalIDConflictReturns409() {
@@ -2020,7 +2196,9 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMPatchExternalIDConflictReturns409() {
 
 	logrus.Info("Verifying PATCH externalId to a value already held by another user returns 409 (userName mode, where externalId is mutable)")
 
-	defer func() { require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap)) }()
+	defer func() {
+		require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap))
+	}()
 	require.NoError(s.T(), scimactions.SetSCIMConfigMapAndWaitCreateReady(s.client, s.scimClient, authactions.OpenLdap, scimactions.BaselineSCIMConfigMap()))
 
 	externalIDA := namegen.AppendRandomString("ext-conflict-a")
@@ -2041,8 +2219,10 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMPutUserNameConflictReturns409() {
 
 	logrus.Info("Verifying PUT userName to a value already held by another user returns 409")
 
-	defer func() { require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap)) }()
-	require.NoError(s.T(), scimactions.SetSCIMConfigMapAndWaitCreateReady(s.client, s.scimClient, authactions.OpenLdap, map[string]string{"enabled": "true", "userIdAttribute": "externalId"}))
+	defer func() {
+		require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap))
+	}()
+	require.NoError(s.T(), scimactions.SetSCIMConfigMapAndWaitCreateReady(s.client, s.scimClient, authactions.OpenLdap, map[string]string{scimactions.SCIMConfigEnabledKey: scimactions.SCIMConfigTrue, scimactions.SCIMConfigUserIDAttributeKey: scimactions.SCIMConfigExternalIDValue}))
 
 	userNameA, _, err := scimactions.CreateSCIMUser(s.scimClient, subSession, namegen.AppendRandomString("un-conflict-a-ext"), true)
 	require.NoError(s.T(), err)
@@ -2105,8 +2285,10 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMPutUserMissingUserAttributeReturns200() 
 
 	logrus.Info("Verifying PUT /Users/{id} returns 200 for a SCIM user whose UserAttribute is absent (externalId mode, userName mutable)")
 
-	defer func() { require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap)) }()
-	require.NoError(s.T(), scimactions.SetSCIMConfigMapAndWaitCreateReady(s.client, s.scimClient, authactions.OpenLdap, map[string]string{"enabled": "true", "userIdAttribute": "externalId"}))
+	defer func() {
+		require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap))
+	}()
+	require.NoError(s.T(), scimactions.SetSCIMConfigMapAndWaitCreateReady(s.client, s.scimClient, authactions.OpenLdap, map[string]string{scimactions.SCIMConfigEnabledKey: scimactions.SCIMConfigTrue, scimactions.SCIMConfigUserIDAttributeKey: scimactions.SCIMConfigExternalIDValue}))
 
 	externalID := namegen.AppendRandomString("ext-put-recover")
 	_, userID, err := scimactions.ProvisionSCIMUserWithoutAttribute(s.client, s.scimClient, subSession, externalID)
