@@ -197,6 +197,11 @@ func Setup(t *testing.T, clusterType string, isS3, isWindows bool) *snapshotTest
 
 		s.StandardUserClient, err = s.StandardUserClient.ReLogin()
 		require.NoError(t, err)
+
+		// A previous test may have left the shared cluster mid-restore or upgrade.
+		logrus.Infof("Waiting for existing cluster %s to be ready", rancherConfig.ClusterName)
+		err = provisioning.VerifyClusterReady(s.StandardUserClient, s.Cluster)
+		require.NoError(t, err)
 	}
 
 	clusterStatus := &provv1.ClusterStatus{}
@@ -210,9 +215,30 @@ func Setup(t *testing.T, clusterType string, isS3, isWindows bool) *snapshotTest
 }
 
 // CreateSnapshotDeployment is a helper function to create a deployment on a downstream cluster.
-func CreateSnapshotDeployment(client *rancher.Client, workloadClient *v1.Client, clusterID, deploymentName string, workloadsConfig *workloads.Workloads) error {
-	var namespace *corev1.Namespace
+// The workload client is recreated here because the suite-level client can hold stale downstream schemas after the cluster was upgraded or restored.
+func CreateSnapshotDeployment(client *rancher.Client, _ *v1.Client, clusterID, deploymentName string, workloadsConfig *workloads.Workloads) error {
+	var workloadClient *v1.Client
 	err := kwait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
+		downstreamClient, pollErr := client.Steve.ProxyDownstream(clusterID)
+		if pollErr != nil {
+			return false, nil
+		}
+
+		_, pollErr = downstreamClient.SteveType(stevetypes.Deployment).List(nil)
+		if pollErr != nil {
+			return false, nil
+		}
+
+		workloadClient = downstreamClient
+
+		return true, nil
+	})
+	if err != nil {
+		return fmt.Errorf("downstream deployment schema not available on cluster %s: %w", clusterID, err)
+	}
+
+	var namespace *corev1.Namespace
+	err = kwait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
 		var pollErr error
 		_, namespace, pollErr = projectsapi.CreateProjectAndNamespace(client, clusterID)
 		if pollErr != nil {
