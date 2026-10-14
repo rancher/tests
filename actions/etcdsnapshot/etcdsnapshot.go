@@ -21,6 +21,7 @@ import (
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/util/retry"
 )
 
 const (
@@ -28,33 +29,54 @@ const (
 	SnapshotClusterNameLabel  = "rke.cattle.io/cluster-name"
 )
 
+// updateProvisioningClusterWithRetry fetches the latest provisioning cluster, applies mutate and updates it,
+// refetching and retrying when Rancher reports a 409 conflict because the object was modified concurrently.
+func updateProvisioningClusterWithRetry(client *rancher.Client, clusterName string, mutate func(*apisV1.Cluster)) (*rancherv1.SteveAPIObject, error) {
+	var updatedCluster *rancherv1.SteveAPIObject
+
+	err := retry.OnError(retry.DefaultBackoff, isConflictError, func() error {
+		clusterObject, clusterSteveObject, err := clusters.GetProvisioningClusterByName(client, clusterName, namespaces.FleetDefault)
+		if err != nil {
+			return err
+		}
+
+		mutate(clusterObject)
+
+		updatedCluster, err = client.Steve.SteveType(clusters.ProvisioningSteveResourceType).Update(clusterSteveObject, clusterObject)
+
+		return err
+	})
+
+	return updatedCluster, err
+}
+
+// isConflictError reports whether a Steve error is a 409 conflict caused by a stale resource version.
+func isConflictError(err error) bool {
+	return err != nil && (strings.Contains(err.Error(), "[409]") || strings.Contains(err.Error(), "the object has been modified"))
+}
+
 // CreateRKE2K3SSnapshot is a helper function to create a snapshot on an RKE2 or k3s cluster.
 // returns the list of snapshots and an error, if any.
 func CreateRKE2K3SSnapshot(client *rancher.Client, clusterName string) ([]rancherv1.SteveAPIObject, error) {
-	clusterObject, clusterSteveObject, err := clusters.GetProvisioningClusterByName(client, clusterName, namespaces.FleetDefault)
-	if err != nil {
-		return nil, err
-	}
-
-	if clusterObject.Spec.RKEConfig != nil {
-		if clusterObject.Spec.RKEConfig.ETCDSnapshotCreate == nil {
-			clusterObject.Spec.RKEConfig.ETCDSnapshotCreate = &rkev1.ETCDSnapshotCreate{
-				Generation: 1,
+	updatedCluster, err := updateProvisioningClusterWithRetry(client, clusterName, func(clusterObject *apisV1.Cluster) {
+		if clusterObject.Spec.RKEConfig != nil {
+			if clusterObject.Spec.RKEConfig.ETCDSnapshotCreate == nil {
+				clusterObject.Spec.RKEConfig.ETCDSnapshotCreate = &rkev1.ETCDSnapshotCreate{
+					Generation: 1,
+				}
+			} else {
+				clusterObject.Spec.RKEConfig.ETCDSnapshotCreate = &rkev1.ETCDSnapshotCreate{
+					Generation: clusterObject.Spec.RKEConfig.ETCDSnapshotCreate.Generation + 1,
+				}
 			}
 		} else {
-			clusterObject.Spec.RKEConfig.ETCDSnapshotCreate = &rkev1.ETCDSnapshotCreate{
-				Generation: clusterObject.Spec.RKEConfig.ETCDSnapshotCreate.Generation + 1,
+			clusterObject.Spec.RKEConfig = &apisV1.RKEConfig{
+				ETCDSnapshotCreate: &rkev1.ETCDSnapshotCreate{
+					Generation: 1,
+				},
 			}
 		}
-	} else {
-		clusterObject.Spec.RKEConfig = &apisV1.RKEConfig{
-			ETCDSnapshotCreate: &rkev1.ETCDSnapshotCreate{
-				Generation: 1,
-			},
-		}
-	}
-
-	updatedCluster, err := client.Steve.SteveType(clusters.ProvisioningSteveResourceType).Update(clusterSteveObject, clusterObject)
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -108,18 +130,13 @@ func CreateRKE2K3SSnapshot(client *rancher.Client, clusterName string) ([]ranche
 
 // RestoreRKE2K3SSnapshot is a helper function to restore a snapshot on an RKE2 or k3s cluster. Returns error if any.
 func RestoreRKE2K3SSnapshot(client *rancher.Client, snapshotRestore *rkev1.ETCDSnapshotRestore, clusterName string) error {
-	clusterObject, existingSteveAPIObject, err := clusters.GetProvisioningClusterByName(client, clusterName, namespaces.FleetDefault)
-	if err != nil {
-		return err
-	}
+	updatedCluster, err := updateProvisioningClusterWithRetry(client, clusterName, func(clusterObject *apisV1.Cluster) {
+		if clusterObject.Spec.RKEConfig == nil {
+			clusterObject.Spec.RKEConfig = &apisV1.RKEConfig{}
+		}
 
-	if clusterObject.Spec.RKEConfig == nil {
-		clusterObject.Spec.RKEConfig = &apisV1.RKEConfig{}
-	}
-
-	clusterObject.Spec.RKEConfig.ETCDSnapshotRestore = snapshotRestore
-
-	updatedCluster, err := client.Steve.SteveType(clusters.ProvisioningSteveResourceType).Update(existingSteveAPIObject, clusterObject)
+		clusterObject.Spec.RKEConfig.ETCDSnapshotRestore = snapshotRestore
+	})
 	if err != nil {
 		return err
 	}

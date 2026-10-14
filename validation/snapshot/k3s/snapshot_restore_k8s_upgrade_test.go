@@ -20,7 +20,6 @@ import (
 
 func TestSnapshotRestoreK8sUpgrade(t *testing.T) {
 	t.Skip("Skipped due to https://github.com/rancher/rancher/issues/56077")
-	t.Parallel()
 
 	s := snapshot.Setup(t, defaults.K3S, false, false)
 
