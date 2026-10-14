@@ -19,7 +19,6 @@ import (
 )
 
 func TestSnapshotRecurringRestores(t *testing.T) {
-	t.Parallel()
 
 	s := snapshot.Setup(t, defaults.RKE2, false, false)
 

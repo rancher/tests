@@ -21,7 +21,6 @@ import (
 )
 
 func TestS3SnapshotRestore(t *testing.T) {
-	t.Parallel()
 
 	s := snapshot.Setup(t, defaults.RKE2, true, false)
 

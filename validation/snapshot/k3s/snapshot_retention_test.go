@@ -22,7 +22,6 @@ type SnapshotRetentionConfig struct {
 }
 
 func TestAutomaticSnapshotRetention(t *testing.T) {
-	t.Parallel()
 
 	s := snapshot.Setup(t, defaults.K3S, false, false)
 
