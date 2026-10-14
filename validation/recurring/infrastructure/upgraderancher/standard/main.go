@@ -24,7 +24,6 @@ import (
 	setupstandard "github.com/rancher/tfp-automation/tests/infrastructure/ranchers/setup/standard"
 	upgradestandard "github.com/rancher/tfp-automation/tests/infrastructure/ranchers/upgrade/standard"
 	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/require"
 )
 
 func main() {
@@ -68,15 +67,21 @@ func main() {
 	infraConfig.WriteConfigToFile(os.Getenv(config.ConfigEnvironmentKey), cattleConfig)
 
 	cluster, err := client.Steve.SteveType(stevetypes.Provisioning).ByID(namespaces.FleetLocal + "/local")
-	require.NoError(t, err)
+	if err != nil {
+		logrus.Fatalf("Failed to retrieve local cluster: %v", err)
+	}
 
 	logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
 	err = deployment.VerifyClusterDeployments(client, cluster)
-	require.NoError(t, err)
+	if err != nil {
+		logrus.Fatalf("Failed to verify cluster deployments: %v", err)
+	}
 
 	logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
 	err = pods.VerifyClusterPods(client, cluster)
-	require.NoError(t, err)
+	if err != nil {
+		logrus.Fatalf("Failed to verify cluster pods: %v", err)
+	}
 
 	// If awsEC2Configs is present in the cattleConfig, provision clusters before upgrading Rancher.
 	// If it is not present, skip provisioning clusters and proceed with upgrading Rancher.
@@ -95,16 +100,22 @@ func main() {
 
 	logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
 	err = deployment.VerifyClusterDeployments(client, cluster)
-	require.NoError(t, err)
+	if err != nil {
+		logrus.Fatalf("Failed to verify cluster deployments after upgrade: %v", err)
+	}
 
 	logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
 	err = pods.VerifyClusterPods(client, cluster)
-	require.NoError(t, err)
+	if err != nil {
+		logrus.Fatalf("Failed to verify cluster pods after upgrade: %v", err)
+	}
 
 	_, _, _, standalone := tfpConfig.LoadTFPConfigs(cattleConfig)
 
 	if standalone.UpgradeLocalCluster {
 		err = v3cluster.UpgradeV3Cluster(client, "local")
-		require.NoError(t, err)
+		if err != nil {
+			logrus.Fatalf("Failed to upgrade local cluster: %v", err)
+		}
 	}
 }
