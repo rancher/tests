@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/clients/rancher/auth"
@@ -190,6 +191,13 @@ func NewPrincipalID(authConfigID, principalType, name, userSearchBase, groupSear
 		cnAttribute = "CN"
 	}
 	return fmt.Sprintf("%s_%s://%s=%s,%s", authConfigID, principalType, cnAttribute, name, baseDN)
+}
+
+// AuthUserDistinguishedName returns the directory name the auth provider builds a user's principal ID from
+func AuthUserDistinguishedName(authConfigID, username, userSearchBase, groupSearchBase string) string {
+	principalID := NewPrincipalID(authConfigID, PrincipalTypeUser, username, userSearchBase, groupSearchBase)
+
+	return strings.TrimPrefix(principalID, fmt.Sprintf("%s_%s://", authConfigID, PrincipalTypeUser))
 }
 
 // NewAuthConfigWithAccessMode retrieves the current auth config and returns both the existing config and an updated version with the specified access mode
