@@ -93,25 +93,30 @@ func VerifyNamespaceResourceQuotaValidationStatus(client *rancher.Client, cluste
 	expectedStatus bool,
 	expectedErrorMessages ...string,
 ) error {
-	return kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(ctx context.Context) (bool, error) {
+	var lastErr error
+	pollErr := kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.TwoMinuteTimeout, false, func(ctx context.Context) (bool, error) {
 		annotationData, err := GetNamespaceAnnotation(client, clusterID, namespaceName, ResourceQuotaAnnotation)
 		if err != nil {
+			lastErr = fmt.Errorf("getting %q annotation: %w", ResourceQuotaAnnotation, err)
 			return false, nil
 		}
 
 		limitMap, ok := annotationData["limit"].(map[string]interface{})
 		if !ok {
+			lastErr = fmt.Errorf("resource quota annotation has no %q object", "limit")
 			return false, nil
 		}
 
 		for resource, expectedValue := range expectedExistingLimits {
 			actual, ok := limitMap[resource]
 			if !ok {
+				lastErr = fmt.Errorf("expected limit %q not found in resource quota annotation", resource)
 				return false, nil
 			}
 
 			actualStr := fmt.Sprintf("%v", actual)
 			if actualStr != expectedValue {
+				lastErr = fmt.Errorf("limit %q mismatch: expected=%s actual=%s", resource, expectedValue, actualStr)
 				return false, nil
 			}
 		}
@@ -119,17 +124,20 @@ func VerifyNamespaceResourceQuotaValidationStatus(client *rancher.Client, cluste
 		if len(expectedExtendedLimits) > 0 {
 			extendedMap, ok := limitMap["extended"].(map[string]interface{})
 			if !ok {
+				lastErr = fmt.Errorf("resource quota annotation has no %q object", "extended")
 				return false, nil
 			}
 
 			for resource, expectedValue := range expectedExtendedLimits {
 				actual, ok := extendedMap[resource]
 				if !ok {
+					lastErr = fmt.Errorf("expected extended limit %q not found in resource quota annotation", resource)
 					return false, nil
 				}
 
 				actualStr := fmt.Sprintf("%v", actual)
 				if actualStr != expectedValue {
+					lastErr = fmt.Errorf("extended limit %q mismatch: expected=%s actual=%s", resource, expectedValue, actualStr)
 					return false, nil
 				}
 			}
@@ -137,28 +145,42 @@ func VerifyNamespaceResourceQuotaValidationStatus(client *rancher.Client, cluste
 
 		namespace, err := extnamespaceapi.GetNamespaceByName(client, clusterID, namespaceName)
 		if err != nil {
+			lastErr = fmt.Errorf("getting namespace: %w", err)
 			return false, nil
 		}
 		statusAnnotation, ok := namespace.Annotations[ResourceQuotaStatusAnnotation]
 		if !ok {
+			lastErr = fmt.Errorf("status annotation %q not found on namespace", ResourceQuotaStatusAnnotation)
 			return false, nil
 		}
 
 		status, message, err := GetConditionStatusAndMessageFromAnnotation(statusAnnotation, "ResourceQuotaValidated")
 		if err != nil {
+			lastErr = fmt.Errorf("reading ResourceQuotaValidated condition: %w", err)
 			return false, nil
 		}
 
 		if (status == "True") != expectedStatus {
+			lastErr = fmt.Errorf("ResourceQuotaValidated status mismatch: expected validated=%t, got status=%q (message: %q)", expectedStatus, status, message)
 			return false, nil
 		}
 
 		if !containsExpectedMessage(message, expectedErrorMessages...) {
+			lastErr = fmt.Errorf("ResourceQuotaValidated message %q does not contain any of expected %v", message, expectedErrorMessages)
 			return false, nil
 		}
 
 		return true, nil
 	})
+
+	if pollErr != nil {
+		if lastErr != nil {
+			return fmt.Errorf("timed out verifying resource quota validation on namespace %s: %w", namespaceName, lastErr)
+		}
+		return fmt.Errorf("timed out verifying resource quota validation on namespace %s: %w", namespaceName, pollErr)
+	}
+
+	return nil
 }
 
 // VerifyNamespacePodResourceQuota checks if the namespace resource quota contains the expected hard limits for pods, with polling.
