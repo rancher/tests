@@ -32,16 +32,16 @@ import (
 
 type AggregatedClusterRolesCrtbTestSuite struct {
 	suite.Suite
-	client                    *rancher.Client
-	session                   *session.Session
-	cluster                   *management.Cluster
-	featureEnabledBeforeSuite bool
+	client                *rancher.Client
+	session               *session.Session
+	cluster               *management.Cluster
+	featureEnabledBySuite bool
 }
 
 func (acrc *AggregatedClusterRolesCrtbTestSuite) TearDownSuite() {
 	acrc.session.Cleanup()
 
-	if !acrc.featureEnabledBeforeSuite {
+	if acrc.featureEnabledBySuite {
 		log.Infof("Disabling the feature flag %s", rbacapi.AggregatedRoleTemplatesFeatureFlag)
 		err := extfeaturesapi.DisableFeatureFlag(acrc.client, rbacapi.AggregatedRoleTemplatesFeatureFlag)
 		if err != nil {
@@ -67,11 +67,11 @@ func (acrc *AggregatedClusterRolesCrtbTestSuite) SetupSuite() {
 
 	featureEnabled, err := extfeaturesapi.IsFeatureEnabled(acrc.client, rbacapi.AggregatedRoleTemplatesFeatureFlag)
 	require.NoError(acrc.T(), err, "Failed to check if feature flag is enabled")
-	acrc.featureEnabledBeforeSuite = featureEnabled
 	if !featureEnabled {
 		log.Infof("Enabling the feature flag %s", rbacapi.AggregatedRoleTemplatesFeatureFlag)
 		err := extfeaturesapi.EnableFeatureFlag(acrc.client, rbacapi.AggregatedRoleTemplatesFeatureFlag)
 		require.NoError(acrc.T(), err, "Failed to enable the feature flag")
+		acrc.featureEnabledBySuite = true
 	}
 }
 
