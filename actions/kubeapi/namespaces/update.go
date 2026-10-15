@@ -13,21 +13,10 @@ import (
 
 // UpdateNamespaceResourceQuotaAnnotation updates the resource quota annotation on a namespace
 func UpdateNamespaceResourceQuotaAnnotation(client *rancher.Client, clusterID string, namespaceName string, existingLimits map[string]string, extendedLimits map[string]string) error {
-	limit := make(map[string]interface{}, len(existingLimits)+1)
-	for k, v := range existingLimits {
-		limit[k] = v
-	}
-	if len(extendedLimits) > 0 {
-		limit["extended"] = extendedLimits
-	}
-
-	quota := map[string]interface{}{"limit": limit}
-	quotaJSON, err := json.Marshal(quota)
+	quotaStr, err := BuildResourceQuotaAnnotation(existingLimits, extendedLimits)
 	if err != nil {
-		return fmt.Errorf("marshal resource quota annotation: %w", err)
+		return err
 	}
-
-	quotaStr := string(quotaJSON)
 
 	ns, err := extnamespaceapi.GetNamespaceByName(client, clusterID, namespaceName)
 	if err != nil {
@@ -89,4 +78,23 @@ func MoveNamespaceToProject(client *rancher.Client, clusterID, namespaceName, ne
 	}
 
 	return nil
+}
+
+// BuildResourceQuotaAnnotation returns the value for the field.cattle.io/resourceQuota annotation built from the given standard limits and extended limits.
+func BuildResourceQuotaAnnotation(existingLimits map[string]string, extendedLimits map[string]string) (string, error) {
+	limit := make(map[string]interface{}, len(existingLimits)+1)
+	for k, v := range existingLimits {
+		limit[k] = v
+	}
+	if len(extendedLimits) > 0 {
+		limit["extended"] = extendedLimits
+	}
+
+	quota := map[string]interface{}{"limit": limit}
+	quotaJSON, err := json.Marshal(quota)
+	if err != nil {
+		return "", fmt.Errorf("marshal resource quota annotation: %w", err)
+	}
+
+	return string(quotaJSON), nil
 }
