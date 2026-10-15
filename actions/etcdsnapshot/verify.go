@@ -16,6 +16,29 @@ import (
 	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
+// VerifyRestoredUpgradeStrategy waits for the cluster's upgrade strategy concurrency values to match the expected (pre-upgrade) values after a restore.
+func VerifyRestoredUpgradeStrategy(client *rancher.Client, clusterName, expectedControlPlane, expectedWorker string) error {
+	var actualControlPlane, actualWorker string
+
+	err := kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, extdefault.ThirtyMinuteTimeout, true, func(ctx context.Context) (bool, error) {
+		cluster, _, err := clusters.GetProvisioningClusterByName(client, clusterName, namespaces.FleetDefault)
+		if err != nil || cluster.Spec.RKEConfig == nil {
+			return false, nil
+		}
+
+		actualControlPlane = cluster.Spec.RKEConfig.UpgradeStrategy.ControlPlaneConcurrency
+		actualWorker = cluster.Spec.RKEConfig.UpgradeStrategy.WorkerConcurrency
+
+		return actualControlPlane == expectedControlPlane && actualWorker == expectedWorker, nil
+	})
+	if err != nil {
+		return fmt.Errorf("cluster %s upgrade strategy after restore is controlPlaneConcurrency=%s workerConcurrency=%s, expected controlPlaneConcurrency=%s workerConcurrency=%s: %w",
+			clusterName, actualControlPlane, actualWorker, expectedControlPlane, expectedWorker, err)
+	}
+
+	return nil
+}
+
 const requiredStableSnapshotPolls = 3
 
 // VerifyRestoredKubernetesVersion waits for the cluster's Kubernetes version to match the expected (pre-upgrade) version after a restore.

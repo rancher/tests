@@ -19,6 +19,7 @@ import (
 	"github.com/rancher/shepherd/extensions/etcdsnapshot"
 	"github.com/rancher/tests/actions/kubeapi/nodes"
 	"github.com/sirupsen/logrus"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
@@ -146,6 +147,14 @@ func RestoreRKE2K3SSnapshot(client *rancher.Client, snapshotRestore *rkev1.ETCDS
 		return err
 	}
 
+	// WaitOnClusterAfterSnapshot can return before the controller starts the restore, so also wait on the control plane status.
+	err = waitForRestoreFinished(client, clusterName, snapshotRestore)
+	if apierrors.IsForbidden(err) {
+		logrus.Warningf("Not allowed to read the RKEControlPlane for cluster %s; relying on cluster state only: %v", clusterName, err)
+	} else if err != nil {
+		return err
+	}
+
 	err = kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, defaults.ThirtyMinuteTimeout, true, func(ctx context.Context) (bool, error) {
 		cluster, err := client.Steve.SteveType(clusters.ProvisioningSteveResourceType).ByID(updatedCluster.ID)
 		if err != nil || cluster.State == nil {
@@ -161,6 +170,38 @@ func RestoreRKE2K3SSnapshot(client *rancher.Client, snapshotRestore *rkev1.ETCDS
 	logrus.Debugf("Successfully restored snapshot %s for cluster: %s", snapshotRestore.Name, clusterName)
 
 	return nil
+}
+
+// waitForRestoreFinished waits until the RKEControlPlane reports the requested etcd snapshot restore as finished.
+func waitForRestoreFinished(client *rancher.Client, clusterName string, snapshotRestore *rkev1.ETCDSnapshotRestore) error {
+	rkeClient, err := client.GetKubeAPIRKEClient()
+	if err != nil {
+		return err
+	}
+
+	var lastPhase rkev1.ETCDSnapshotPhase
+
+	err = kwait.PollUntilContextTimeout(context.TODO(), 10*time.Second, defaults.ThirtyMinuteTimeout, true, func(ctx context.Context) (bool, error) {
+		controlPlane, getErr := rkeClient.RKEControlPlanes(namespaces.FleetDefault).Get(ctx, clusterName, metav1.GetOptions{})
+		if apierrors.IsForbidden(getErr) {
+			return false, getErr
+		}
+
+		if getErr != nil {
+			return false, nil
+		}
+
+		lastPhase = controlPlane.Status.ETCDSnapshotRestorePhase
+		restored := controlPlane.Status.ETCDSnapshotRestore
+
+		return restored != nil && restored.Generation == snapshotRestore.Generation && restored.Name == snapshotRestore.Name &&
+			lastPhase == rkev1.ETCDSnapshotPhaseFinished, nil
+	})
+	if err != nil && !apierrors.IsForbidden(err) {
+		return fmt.Errorf("restore of snapshot %s on cluster %s did not finish (phase %q): %w", snapshotRestore.Name, clusterName, lastPhase, err)
+	}
+
+	return err
 }
 
 // RKE2K3SRetentionLimitCheck is a check that validates that the number of automatic snapshots

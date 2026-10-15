@@ -41,6 +41,7 @@ func TestSnapshotRestoreUpgradeStrategy(t *testing.T) {
 	for _, tt := range tests {
 		t.Cleanup(func() {
 			logrus.Infof("Running cleanup (%s)", tt.name)
+			s.WaitClusterReady()
 			s.Session.Cleanup()
 		})
 
@@ -59,10 +60,11 @@ func TestSnapshotRestoreUpgradeStrategy(t *testing.T) {
 			require.NoError(t, err)
 
 			logrus.Infof("Restoring snapshot %s on cluster %s", snapshotName, tt.cluster.Name)
-			restoredCluster, err := etcdsnapshot.RestoreAndValidateSnapshotV2Prov(s.Client, snapshotName, tt.etcdSnapshot, clusterObject, tt.cluster.ID)
+			_, err = etcdsnapshot.RestoreAndValidateSnapshotV2Prov(s.Client, snapshotName, tt.etcdSnapshot, clusterObject, tt.cluster.ID)
 			require.NoError(t, err)
-			require.Equal(t, restoredCluster.Spec.RKEConfig.UpgradeStrategy.ControlPlaneConcurrency, clusterObject.Spec.RKEConfig.UpgradeStrategy.ControlPlaneConcurrency)
-			require.Equal(t, restoredCluster.Spec.RKEConfig.UpgradeStrategy.WorkerConcurrency, clusterObject.Spec.RKEConfig.UpgradeStrategy.WorkerConcurrency)
+
+			err = etcdsnapshot.VerifyRestoredUpgradeStrategy(s.Client, tt.cluster.Name, clusterObject.Spec.RKEConfig.UpgradeStrategy.ControlPlaneConcurrency, clusterObject.Spec.RKEConfig.UpgradeStrategy.WorkerConcurrency)
+			require.NoError(t, err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", tt.cluster.Name)
 			err = provisioning.VerifyClusterReady(s.Client, tt.cluster)
