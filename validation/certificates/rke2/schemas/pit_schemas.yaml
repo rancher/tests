@@ -34,4 +34,4 @@
       expectedresult: "New certificates differ from the old certificates, confirming successful rotation"
       position: 7
     custom_field:
-      "15": "TestCertRotation"
+      "15": "RKE2_Certificate_Rotation"

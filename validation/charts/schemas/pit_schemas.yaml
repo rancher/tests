@@ -122,7 +122,7 @@
       expectedresult: "All NeuVector daemonsets are in Ready state"
       position: 9
     custom_field:
-      "15": "TestNeuVectorInstallation"
+      "15": "TestNeuVectorChartInstallation"
   - title: "Rancher Monitoring Chart Installation"
     description: "Validate that Monitoring chart can be installed"
     automation: 2
