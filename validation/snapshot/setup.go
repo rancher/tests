@@ -224,6 +224,15 @@ func Setup(t *testing.T, clusterType string, isS3, isWindows bool) *snapshotTest
 	return s
 }
 
+// WaitClusterReady waits for the shared cluster to be ready so cleanup does not run while it is restoring or upgrading.
+// A failure is only logged because it runs during cleanup.
+func (s *snapshotTest) WaitClusterReady() {
+	err := provisioning.VerifyClusterReady(s.StandardUserClient, s.Cluster)
+	if err != nil {
+		logrus.Warningf("Cluster %s was not ready before cleanup: %v", s.Cluster.Name, err)
+	}
+}
+
 // CreateSnapshotDeployment is a helper function to create a deployment on a downstream cluster.
 // The workload client is recreated here because the suite-level client can hold stale downstream schemas after the cluster was upgraded or restored.
 func CreateSnapshotDeployment(client *rancher.Client, _ *v1.Client, clusterID, deploymentName string, workloadsConfig *workloads.Workloads) error {

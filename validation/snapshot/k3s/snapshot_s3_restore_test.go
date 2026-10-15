@@ -44,6 +44,7 @@ func TestS3SnapshotRestore(t *testing.T) {
 			err := s3.DeleteS3Bucket(s.S3BucketName, s.S3Region, s.AWSAccessKey, s.AWSSecretKey)
 			assert.NoError(t, err)
 
+			s.WaitClusterReady()
 			s.Session.Cleanup()
 		})
 

@@ -37,6 +37,7 @@ func TestAutomaticSnapshotRetention(t *testing.T) {
 	for _, tt := range tests {
 		t.Cleanup(func() {
 			logrus.Infof("Running cleanup (%s)", tt.name)
+			s.WaitClusterReady()
 			s.Session.Cleanup()
 		})
 
