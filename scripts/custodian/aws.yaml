@@ -4,9 +4,12 @@ policies:
 - name: mark-unknown-instances-for-deletion
   resource: aws.ec2
   description: |
-    Mark unknown user instances for deletion in 1 day
+    Mark unknown user instances for deletion in 12 hours
   filters:
-    - "State.Name": running
+    - type: value
+      key: State.Name
+      op: not-in
+      value: [shutting-down, terminated]
     # instance name not in accepted user keys
     - type: value
       key: tag:Name
@@ -23,23 +26,26 @@ policies:
       - type: value
         key: tag:Name
         op: regex
-        value:  "^.*DONOTDELETEKEYS.*$"
+        value:  "^.*(DONOTDELETEKEYS).*$"
   actions:
     - type: mark-for-op
       tag: ec2_unknown_user
       op: terminate
-      days: 1
+      hours: 12
 
 - name: mark-known-instances-for-deletion
   resource: aws.ec2
   description: |
-    Mark known user instances for deletion in 2 days
+    Mark known user instances for deletion in 36 hours
   filters:
-    - "State.Name": running
+    - type: value
+      key: State.Name
+      op: not-in
+      value: [shutting-down, terminated]
     - type: value
       key: tag:Name
       op: regex
-      value:  "^.*USERKEYS.*$"
+      value:  "^.*(USERKEYS).*$"
     - 'tag:doNotDelete': absent
     - 'tag:DoNotDelete': absent
     - 'tag:ec2_unknown_user': absent
@@ -49,12 +55,12 @@ policies:
       - type: value
         key: tag:Name
         op: regex
-        value:  "^.*DONOTDELETEKEYS.*$"
+        value:  "^.*(DONOTDELETEKEYS).*$"
   actions:
     - type: mark-for-op
       tag: ec2_known_user
       op: terminate
-      days: 2
+      hours: 36
 
 - name: ec2-unmark-if-friday-tagged
   resource: aws.ec2
@@ -78,6 +84,8 @@ policies:
     marked for deletion for more than 1 day.
     Skips instances with termination protection enabled.
   filters:
+    - 'tag:doNotDelete': absent
+    - 'tag:DoNotDelete': absent
     - or:
       - type: marked-for-op
         tag: ec2_unknown_user
@@ -102,7 +110,7 @@ policies:
 - name: eks-mark-unknown-instances-for-deletion
   resource: aws.eks
   description: |
-    Mark unknown user instances for deletion in 1 day
+    Mark unknown user instances for deletion in 12 hours
   filters:
     - type: value
       key: name
@@ -119,22 +127,22 @@ policies:
       - type: value
         key: name
         op: regex
-        value:  "^.*DONOTDELETEKEYS.*$"
+        value:  "^.*(DONOTDELETEKEYS).*$"
   actions:
     - type: mark-for-op
       tag: ec2_unknown_user
       op: delete
-      days: 1
+      hours: 12
 
 - name: eks-mark-known-instances-for-deletion
   resource: aws.eks
   description: |
-    Mark known user instances for deletion in 2 days
+    Mark known user instances for deletion in 36 hours
   filters:
     - type: value
       key: name
       op: regex
-      value:  "^.*USERKEYS.*$"
+      value:  "^.*(USERKEYS).*$"
     - 'tag:doNotDelete': absent
     - 'tag:DoNotDelete': absent
     - 'tag:ec2_unknown_user': absent
@@ -144,12 +152,12 @@ policies:
       - type: value
         key: name
         op: regex
-        value:  "^.*DONOTDELETEKEYS.*$"
+        value:  "^.*(DONOTDELETEKEYS).*$"
   actions:
     - type: mark-for-op
       tag: ec2_known_user
       op: delete
-      days: 2
+      hours: 36
 
 - name: eks-unmark-if-friday-tagged
   resource: aws.eks
@@ -171,6 +179,8 @@ policies:
     Delete any marked instances which have been 
     marked for deletion for more than 1 day.
   filters:
+    - 'tag:doNotDelete': absent
+    - 'tag:DoNotDelete': absent
     - or:
       - type: marked-for-op
         tag: ec2_unknown_user
@@ -201,12 +211,12 @@ policies:
       - type: value
         key: LoadBalancerName
         op: regex
-        value:  "^.*DONOTDELETEKEYS.*$"
+        value:  "^.*(DONOTDELETEKEYS).*$"
   actions:
     - type: mark-for-op
       tag: ec2_unknown_user
       op: delete
-      days: 1
+      hours: 12
 
 - name: mark-known-nlbs-for-deletion
   resource: app-elb
@@ -215,7 +225,7 @@ policies:
     - type: value
       key: LoadBalancerName
       op: regex
-      value:  "^.*USERKEYS.*$"
+      value:  "^.*(USERKEYS).*$"
     # nlb is not doNotDelete
     - 'tag:doNotDelete': absent
     - 'tag:DoNotDelete': absent
@@ -226,12 +236,12 @@ policies:
       - type: value
         key: LoadBalancerName
         op: regex
-        value:  "^.*DONOTDELETEKEYS.*$"
+        value:  "^.*(DONOTDELETEKEYS).*$"
   actions:
     - type: mark-for-op
       tag: ec2_known_user
       op: delete
-      days: 2
+      hours: 36
 
 - name: nlb-unmark-if-friday-tagged
   resource: app-elb
@@ -253,6 +263,8 @@ policies:
     Delete any marked nlbs which have been 
     marked for deletion for more than 1 day.
   filters:
+    - 'tag:doNotDelete': absent
+    - 'tag:DoNotDelete': absent
     - or:
       - type: marked-for-op
         tag: ec2_unknown_user
@@ -283,12 +295,12 @@ policies:
       - type: value
         key: LoadBalancerName
         op: regex
-        value:  "^.*DONOTDELETEKEYS.*$"
+        value:  "^.*(DONOTDELETEKEYS).*$"
   actions:
     - type: mark-for-op
       tag: ec2_unknown_user
       op: delete
-      days: 1
+      hours: 12
 
 - name: mark-known-classc-nlbs-for-deletion
   resource: elb
@@ -297,7 +309,7 @@ policies:
     - type: value
       key: LoadBalancerName
       op: regex
-      value:  "^.*USERKEYS.*$"
+      value:  "^.*(USERKEYS).*$"
     # nlb is not doNotDelete
     - 'tag:doNotDelete': absent
     - 'tag:DoNotDelete': absent
@@ -308,12 +320,12 @@ policies:
       - type: value
         key: LoadBalancerName
         op: regex
-        value:  "^.*DONOTDELETEKEYS.*$"
+        value:  "^.*(DONOTDELETEKEYS).*$"
   actions:
     - type: mark-for-op
       tag: ec2_known_user
       op: delete
-      days: 2
+      hours: 36
 
 - name: classic-nlb-unmark-if-friday-tagged
   resource: elb
@@ -335,6 +347,8 @@ policies:
     Delete any marked nlbs which have been 
     marked for deletion for more than 1 day.
   filters:
+    - 'tag:doNotDelete': absent
+    - 'tag:DoNotDelete': absent
     - or:
       - type: marked-for-op
         tag: ec2_unknown_user
@@ -349,7 +363,7 @@ policies:
 - name: mark-unknown-unused-keypairs-for-deletion
   resource: aws.key-pair
   description: |
-    Mark unknown user key-pairs for deletion in 1 day
+    Mark unknown user key-pairs for deletion in 12 hours
   filters:
     # only show unused keys. note that aws won't let you delete used keys.
     - unused
@@ -369,7 +383,7 @@ policies:
       - type: value
         key: KeyName
         op: regex
-        value:  "^.*DONOTDELETEKEYS.*$"
+        value:  "^.*(DONOTDELETEKEYS).*$"
     - not: 
       - type: value
         key: KeyName
@@ -379,12 +393,12 @@ policies:
     - type: mark-for-op
       tag: ec2_unknown_user
       op: delete
-      days: 1
+      hours: 12
 
 - name: mark-known-unused-keypairs-for-deletion
   resource: aws.key-pair
   description: |
-    Mark unknown user key-pairs for deletion in 1 day
+    Mark known user key-pairs for deletion in 36 hours
   filters:
     - unused
     - type: value
@@ -400,7 +414,7 @@ policies:
       - type: value
         key: KeyName
         op: regex
-        value:  "^.*DONOTDELETEKEYS.*$"
+        value:  "^.*(DONOTDELETEKEYS).*$"
     - not: 
       - type: value
         key: KeyName
@@ -410,7 +424,7 @@ policies:
     - type: mark-for-op
       tag: ec2_known_user
       op: delete
-      days: 2
+      hours: 36
 
 - name: ec2-delete-keypairs
   resource: aws.key-pair
@@ -418,6 +432,8 @@ policies:
     Delete any marked keypairs which have been 
     marked for deletion for more than 1 day.
   filters:
+    - 'tag:doNotDelete': absent
+    - 'tag:DoNotDelete': absent
     - unused
     - or:
       - type: marked-for-op
@@ -449,6 +465,8 @@ policies:
     Delete any marked elasticips which have been 
     marked for deletion for more than 1 day.
   filters:
+      - 'tag:doNotDelete': absent
+      - 'tag:DoNotDelete': absent
       - type: marked-for-op
         tag: ec2_known_user
         op: release
@@ -488,6 +506,8 @@ policies:
     Delete target groups that have been confirmed unused
     by the Lambda checker.
   filters:
+    - 'tag:doNotDelete': absent
+    - 'tag:DoNotDelete': absent
     - type: marked-for-op
       tag: ec2_known_user
       op: delete
@@ -536,3 +556,301 @@ policies:
       op: delete
   actions:
     - delete
+
+- name: rds-mark-unknown-for-deletion
+  resource: aws.rds
+  filters:
+    - type: value
+      key: DBInstanceIdentifier
+      op: regex
+      value:  "^((?!USERKEYS).)*$"
+    - DBClusterIdentifier: absent
+    - DeletionProtection: false
+    - 'tag:doNotDelete': absent
+    - 'tag:DoNotDelete': absent
+    - 'tag:ec2_known_user': absent
+    - "tag:ec2_unknown_user": absent
+    - "tag:DeletesOnFriday": absent
+    - not:
+      - type: value
+        key: DBInstanceIdentifier
+        op: regex
+        value:  "^.*(DONOTDELETEKEYS).*$"
+  actions:
+    - type: mark-for-op
+      tag: ec2_unknown_user
+      op: delete
+      hours: 12
+
+- name: rds-mark-known-for-deletion
+  resource: aws.rds
+  filters:
+    - type: value
+      key: DBInstanceIdentifier
+      op: regex
+      value:  "^.*(USERKEYS).*$"
+    - DBClusterIdentifier: absent
+    - DeletionProtection: false
+    - 'tag:doNotDelete': absent
+    - 'tag:DoNotDelete': absent
+    - 'tag:ec2_unknown_user': absent
+    - "tag:ec2_known_user": absent
+    - "tag:DeletesOnFriday": absent
+    - not:
+      - type: value
+        key: DBInstanceIdentifier
+        op: regex
+        value:  "^.*(DONOTDELETEKEYS).*$"
+  actions:
+    - type: mark-for-op
+      tag: ec2_known_user
+      op: delete
+      hours: 36
+
+- name: rds-delete-marked
+  resource: aws.rds
+  filters:
+    - DBClusterIdentifier: absent
+    - DeletionProtection: false
+    - 'tag:doNotDelete': absent
+    - 'tag:DoNotDelete': absent
+    - or:
+      - type: marked-for-op
+        tag: ec2_unknown_user
+        op: delete
+      - type: marked-for-op
+        tag: ec2_known_user
+        op: delete
+  actions:
+    - type: delete
+      skip-snapshot: true
+
+- name: rds-cluster-mark-unknown-for-deletion
+  resource: aws.rds-cluster
+  filters:
+    - type: value
+      key: DBClusterIdentifier
+      op: regex
+      value:  "^((?!USERKEYS).)*$"
+    - DeletionProtection: false
+    - 'tag:doNotDelete': absent
+    - 'tag:DoNotDelete': absent
+    - 'tag:ec2_known_user': absent
+    - "tag:ec2_unknown_user": absent
+    - "tag:DeletesOnFriday": absent
+    - not:
+      - type: value
+        key: DBClusterIdentifier
+        op: regex
+        value:  "^.*(DONOTDELETEKEYS).*$"
+  actions:
+    - type: mark-for-op
+      tag: ec2_unknown_user
+      op: delete
+      hours: 12
+
+- name: rds-cluster-mark-known-for-deletion
+  resource: aws.rds-cluster
+  filters:
+    - type: value
+      key: DBClusterIdentifier
+      op: regex
+      value:  "^.*(USERKEYS).*$"
+    - DeletionProtection: false
+    - 'tag:doNotDelete': absent
+    - 'tag:DoNotDelete': absent
+    - 'tag:ec2_unknown_user': absent
+    - "tag:ec2_known_user": absent
+    - "tag:DeletesOnFriday": absent
+    - not:
+      - type: value
+        key: DBClusterIdentifier
+        op: regex
+        value:  "^.*(DONOTDELETEKEYS).*$"
+  actions:
+    - type: mark-for-op
+      tag: ec2_known_user
+      op: delete
+      hours: 36
+
+- name: rds-cluster-delete-marked
+  resource: aws.rds-cluster
+  filters:
+    - DeletionProtection: false
+    - 'tag:doNotDelete': absent
+    - 'tag:DoNotDelete': absent
+    - or:
+      - type: marked-for-op
+        tag: ec2_unknown_user
+        op: delete
+      - type: marked-for-op
+        tag: ec2_known_user
+        op: delete
+  actions:
+    - type: delete
+      skip-snapshot: true
+      delete-instances: true
+
+- name: natgateway-mark-idle-for-deletion
+  resource: aws.nat-gateway
+  filters:
+    - State: available
+    - type: value
+      key: CreateTime
+      value_type: age
+      op: gt
+      value: 7
+    - 'tag:doNotDelete': absent
+    - 'tag:DoNotDelete': absent
+    - 'tag:ec2_known_user': absent
+    - not:
+      - type: value
+        key: tag:Name
+        op: regex
+        value:  "^.*(DONOTDELETEKEYS).*$"
+    - type: metrics
+      name: BytesOutToDestination
+      statistics: Sum
+      days: 7
+      value: 0
+      op: eq
+      missing-value: 0
+  actions:
+    - type: mark-for-op
+      tag: ec2_known_user
+      op: delete
+      hours: 36
+
+- name: natgateway-unmark-if-active
+  resource: aws.nat-gateway
+  filters:
+    - State: available
+    - "tag:ec2_known_user": not-null
+    - type: metrics
+      name: BytesOutToDestination
+      statistics: Sum
+      days: 1
+      value: 0
+      op: gt
+      missing-value: 0
+  actions:
+    - type: remove-tag
+      tags: ['ec2_known_user']
+
+- name: natgateway-delete-idle
+  resource: aws.nat-gateway
+  filters:
+    - State: available
+    - type: value
+      key: CreateTime
+      value_type: age
+      op: gt
+      value: 7
+    - 'tag:doNotDelete': absent
+    - 'tag:DoNotDelete': absent
+    - type: marked-for-op
+      tag: ec2_known_user
+      op: delete
+    - type: metrics
+      name: BytesOutToDestination
+      statistics: Sum
+      days: 7
+      value: 0
+      op: eq
+      missing-value: 0
+  actions:
+    - type: delete
+
+- name: ebs-mark-unattached-for-deletion
+  resource: aws.ebs
+  filters:
+    - State: available
+    - 'tag:doNotDelete': absent
+    - 'tag:DoNotDelete': absent
+    - 'tag:ec2_known_user': absent
+    - not:
+      - type: value
+        key: tag:Name
+        op: regex
+        value:  "^.*(DONOTDELETEKEYS).*$"
+  actions:
+    - type: mark-for-op
+      tag: ec2_known_user
+      op: delete
+      hours: 36
+
+- name: ebs-unmark-if-attached
+  resource: aws.ebs
+  filters:
+    - State: in-use
+    - "tag:ec2_known_user": not-null
+  actions:
+    - type: remove-tag
+      tags: ['ec2_known_user']
+
+- name: ebs-delete-unattached
+  resource: aws.ebs
+  filters:
+    - State: available
+    - 'tag:doNotDelete': absent
+    - 'tag:DoNotDelete': absent
+    - type: marked-for-op
+      tag: ec2_known_user
+      op: delete
+  actions:
+    - type: delete
+
+- name: ebs-mark-old-snapshots-for-deletion
+  resource: aws.ebs-snapshot
+  filters:
+    - type: age
+      days: 14
+      op: ge
+    - type: skip-ami-snapshots
+      value: true
+    - 'tag:doNotDelete': absent
+    - 'tag:DoNotDelete': absent
+    - 'tag:ec2_known_user': absent
+    - 'tag:aws:dlm:lifecycle-policy-id': absent
+    - not:
+      - type: value
+        key: Description
+        op: regex
+        value:  "^.*(DONOTDELETEKEYS|AWS Backup).*$"
+    - not:
+      - type: value
+        key: tag:Name
+        op: regex
+        value:  "^.*(DONOTDELETEKEYS).*$"
+  actions:
+    - type: mark-for-op
+      tag: ec2_known_user
+      op: delete
+      hours: 72
+
+- name: ebs-delete-old-snapshots
+  resource: aws.ebs-snapshot
+  filters:
+    - type: age
+      days: 14
+      op: ge
+    - type: skip-ami-snapshots
+      value: true
+    - 'tag:doNotDelete': absent
+    - 'tag:DoNotDelete': absent
+    - 'tag:aws:dlm:lifecycle-policy-id': absent
+    - not:
+      - type: value
+        key: Description
+        op: regex
+        value:  "^.*(DONOTDELETEKEYS|AWS Backup).*$"
+    - not:
+      - type: value
+        key: tag:Name
+        op: regex
+        value:  "^.*(DONOTDELETEKEYS).*$"
+    - type: marked-for-op
+      tag: ec2_known_user
+      op: delete
+  actions:
+    - type: delete

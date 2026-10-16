@@ -7,14 +7,14 @@ policies:
       - type: value
         key: tag:Name
         op: regex
-        value:  "^.*USERKEYS.*$"
+        value:  "^.*(USERKEYS).*$"
       - not:
         - 'tag:doNotDelete': present
         - 'tag:DoNotDelete': present
         - type: value
           key: tag:Name
           op: regex
-          value:  "^.*DONOTDELETEKEYS.*$"
+          value:  "^.*(DONOTDELETEKEYS).*$"
   actions:
     - type: tag
       tags:
@@ -26,14 +26,14 @@ policies:
       - type: value
         key: LoadBalancerArn
         op: regex
-        value: "^.*USERKEYS.*$"
+        value: "^.*(USERKEYS).*$"
       - not:
         - 'tag:doNotDelete': present
         - 'tag:DoNotDelete': present
         - type: value
           key: tag:Name
           op: regex
-          value:  "^.*DONOTDELETEKEYS.*$"
+          value:  "^.*(DONOTDELETEKEYS).*$"
   actions:
     - type: tag
       tags:

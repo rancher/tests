@@ -16,7 +16,7 @@ policies:
       - type: value
         key: name
         op: regex
-        value:  "^.*DONOTDELETEKEYS.*$"
+        value:  "^.*(DONOTDELETEKEYS).*$"
   actions:
     - type: delete
 
@@ -41,7 +41,7 @@ policies:
       - type: value
         key: name
         op: regex
-        value:  "^.*DONOTDELETEKEYS.*$"
+        value:  "^.*(DONOTDELETEKEYS).*$"
   actions:
     - type: mark-for-op
       tag: unknown_user
@@ -68,7 +68,7 @@ policies:
       - type: value
         key: name
         op: regex
-        value:  "^.*DONOTDELETEKEYS.*$"
+        value:  "^.*(DONOTDELETEKEYS).*$"
   actions:
     - type: mark-for-op
       tag: known_user
@@ -113,7 +113,7 @@ policies:
       - type: value
         key: name
         op: regex
-        value:  "^.*DONOTDELETEKEYS.*$"
+        value:  "^.*(DONOTDELETEKEYS).*$"
   actions:
     - type: mark-for-op
       tag: unknown_user
@@ -140,7 +140,7 @@ policies:
       - type: value
         key: name
         op: regex
-        value:  "^.*DONOTDELETEKEYS.*$"
+        value:  "^.*(DONOTDELETEKEYS).*$"
   actions:
     - type: mark-for-op
       tag: known_user
@@ -185,7 +185,7 @@ policies:
       - type: value
         key: name
         op: regex
-        value:  "^.*DONOTDELETEKEYS.*$"
+        value:  "^.*(DONOTDELETEKEYS).*$"
   actions:
     - type: mark-for-op
       tag: unknown_user
@@ -212,7 +212,7 @@ policies:
       - type: value
         key: name
         op: regex
-        value:  "^.*DONOTDELETEKEYS.*$"
+        value:  "^.*(DONOTDELETEKEYS).*$"
   actions:
     - type: mark-for-op
       tag: known_user
@@ -258,7 +258,7 @@ policies:
       - type: value
         key: name
         op: regex
-        value:  "^.*DONOTDELETEKEYS.*$"
+        value:  "^.*(DONOTDELETEKEYS).*$"
   actions:
     - type: mark-for-op
       tag: unknown_user
@@ -285,7 +285,7 @@ policies:
       - type: value
         key: name
         op: regex
-        value:  "^.*DONOTDELETEKEYS.*$"
+        value:  "^.*(DONOTDELETEKEYS).*$"
   actions:
     - type: mark-for-op
       tag: known_user
@@ -327,7 +327,7 @@ policies:
       - type: value
         key: name
         op: regex
-        value:  "^.*DONOTDELETEKEYS.*$"
+        value:  "^.*(DONOTDELETEKEYS).*$"
   actions:
     - type: mark-for-op
       tag: known_user
