@@ -26,6 +26,11 @@
 def libraryBranch = env.QA_JENKINS_LIBRARY_BRANCH ?: 'main'
 library "qa-jenkins-library@${libraryBranch}"
 
+def ciDefaultTagsTfvars() {
+    def ciJob = (env.JOB_NAME ?: '').replaceAll('[^A-Za-z0-9 _.:/=+@-]', '-')
+    return "\naws_default_tags = {\n  ci_job   = \"${ciJob}\"\n  ci_build = \"${env.BUILD_NUMBER ?: ''}\"\n}\n"
+}
+
 pipeline {
     agent any
 
@@ -369,7 +374,7 @@ enable_ui_plugin_mirror: true'''
 
                             infrastructure.writeConfig(
                                 path:    "${tofuModulePath}/terraform.tfvars",
-                                content: terraformConfig
+                                content: terraformConfig + ciDefaultTagsTfvars()
                             )
                         }
 
@@ -683,6 +688,8 @@ enable_ui_plugin_mirror: true'''
 
                     // ── Build env file ───────────────────────────────────
                     def lines = []
+                    lines += "JOB_NAME=${env.JOB_NAME}"
+                    lines += "BUILD_NUMBER=${env.BUILD_NUMBER}"
                     if (env.RANCHER_HOSTNAME) {
                         lines += "RANCHER_URL=https://${env.RANCHER_HOSTNAME}"
                         lines += "RANCHER_HOSTNAME=${env.RANCHER_HOSTNAME}"
