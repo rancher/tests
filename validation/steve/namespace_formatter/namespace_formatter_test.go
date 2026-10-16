@@ -1,3 +1,5 @@
+//go:build !pit.daily && !pit.weekly && !pit.event && !pit.harvester.daily && !pit.elemental
+
 package namespaceformatter
 
 import (

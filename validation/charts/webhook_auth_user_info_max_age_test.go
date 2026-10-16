@@ -1,4 +1,4 @@
-//go:build !sanity && !extended && !stress && !2.8 && !2.9 && !2.10 && !2.11 && !2.12 && !2.13 && !2.14
+//go:build !pit.daily && !pit.weekly && !pit.event && !pit.harvester.daily && !pit.elemental && !sanity && !extended && !stress && !2.8 && !2.9 && !2.10 && !2.11 && !2.12 && !2.13 && !2.14
 
 package charts
 

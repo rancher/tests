@@ -1,4 +1,4 @@
-//go:build (validation || extended || infra.any || cluster.any) && !sanity && !stress
+//go:build (validation || extended || infra.any || cluster.any) && !sanity && !stress && !pit.daily && !pit.weekly && !pit.event && !pit.harvester.daily && !pit.elemental
 
 package k3s
 

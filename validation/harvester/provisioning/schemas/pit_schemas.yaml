@@ -1,0 +1,37 @@
+- projects: [RANCHERINT]
+  suite: Harvester Provisioning
+  cases:
+  - title: "Harvester Cloud Provider Provisioning"
+    description: "Provision an RKE2 cluster on Harvester with dedicated roles and verify cloud provider integration"
+    automation: 2
+    steps:
+    - action: "Load cluster configuration for the Harvester provider"
+      data: "Machine pools: 1 etcd node, 2 controlplane nodes, 2 worker nodes; Provider: harvester"
+      expectedresult: "Cluster configuration loaded with dedicated role machine pools"
+      position: 1
+    - action: "Create Harvester cloud provider credentials and machine configuration"
+      data: ""
+      expectedresult: "Cloud credentials and machine configuration are created successfully"
+      position: 2
+    - action: "Provision RKE2 cluster on Harvester"
+      data: ""
+      expectedresult: "Cluster provisioning request is accepted"
+      position: 3
+    - action: "Verify cluster is active and ready"
+      data: ""
+      expectedresult: "Cluster reaches active state with all nodes ready"
+      position: 4
+    - action: "Verify cluster deployments"
+      data: ""
+      expectedresult: "All cluster deployments are running and healthy"
+      position: 5
+    - action: "Verify cluster pods"
+      data: ""
+      expectedresult: "All cluster pods are running"
+      position: 6
+    - action: "Verify Harvester cloud provider integration"
+      data: ""
+      expectedresult: "Harvester cloud provider is functional and correctly integrated with the cluster"
+      position: 7
+    custom_field:
+      "15": "Harvester_Cloud_Provider"
