@@ -50,6 +50,11 @@ func UpgradeClusterAndSnapshotSettings(client *rancher.Client, clusterName, clus
 
 	upgradeKubernetesVersion = defaultVersion[0]
 
+	// Restoring a snapshot taken at the target version would not prove the version rolls back, so fail instead of running a meaningless test.
+	if initialKubernetesVersion == upgradeKubernetesVersion {
+		return fmt.Errorf("cluster %s is already on kubernetes version %s; it must start on an older version for the upgrade and restore test", clusterName, upgradeKubernetesVersion)
+	}
+
 	clusterObject.Spec.KubernetesVersion = upgradeKubernetesVersion
 
 	if etcdRestore.SnapshotRestore == all && etcdRestore.ControlPlaneConcurrencyValue != "" && etcdRestore.WorkerConcurrencyValue != "" {
@@ -103,5 +108,5 @@ func UpgradeClusterAndSnapshotSettings(client *rancher.Client, clusterName, clus
 		}
 	}
 
-	return nil
+	return provisioning.VerifyClusterReady(client, clusterSteveObject)
 }

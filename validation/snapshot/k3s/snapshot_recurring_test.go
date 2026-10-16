@@ -19,7 +19,6 @@ import (
 )
 
 func TestSnapshotRecurringRestores(t *testing.T) {
-	t.Parallel()
 
 	s := snapshot.Setup(t, defaults.K3S, false, false)
 
@@ -40,6 +39,7 @@ func TestSnapshotRecurringRestores(t *testing.T) {
 	for _, tt := range tests {
 		t.Cleanup(func() {
 			logrus.Infof("Running cleanup (%s)", tt.name)
+			s.WaitClusterReady()
 			s.Session.Cleanup()
 		})
 

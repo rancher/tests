@@ -5,44 +5,79 @@
     description: "Verify restoring an ETCD snapshot on an existing cluster without Kubernetes version upgrade."
     automation: 2
     steps:
-    - action: "Select existing provisioned cluster"
-      expectedresult: "Cluster is available and accessible"
+    - action: "Select existing provisioned cluster and wait for it to be ready"
+      expectedresult: "Cluster is active, available and accessible"
       position: 1
-    - action: "Trigger ETCD snapshot restore with no Kubernetes upgrade"
-      expectedresult: "Snapshot restore operation starts successfully"
+    - action: "Create an ETCD snapshot"
+      data: "Snapshot restore mode: none"
+      expectedresult: "Snapshot is created and available on the cluster"
       position: 2
-    - action: "Validate cluster state after restore"
-      expectedresult: "Cluster is healthy and workloads are restored"
+    - action: "Create a deployment on the downstream cluster after the snapshot"
+      expectedresult: "Deployment is created and active"
       position: 3
+    - action: "Restore the ETCD snapshot with no Kubernetes upgrade"
+      expectedresult: "Snapshot restore starts and finishes successfully"
+      position: 4
+    - action: "Validate cluster state after restore"
+      expectedresult: "Cluster is ready, deployments and pods are healthy"
+      position: 5
     custom_field:
       "15": "RKE2_Restore_ETCD"
   - title: "Restore ETCD Snapshot with Kubernetes Version"
     description: "Verify restoring an ETCD snapshot while restoring the Kubernetes version on an existing cluster"
     automation: 2
     steps:
-    - action: "Select existing provisioned cluster"
-      expectedresult: "Cluster is available and accessible"
+    - action: "Select existing provisioned cluster and wait for it to be ready"
+      expectedresult: "Cluster is active, available and accessible, on an older Kubernetes version than the upgrade target"
       position: 1
-    - action: "Trigger ETCD snapshot restore with Kubernetes version"
-      expectedresult: "Snapshot restore starts successfully"
+    - action: "Create an ETCD snapshot"
+      data: "Snapshot restore mode: kubernetesVersion"
+      expectedresult: "Snapshot is created and available on the cluster"
       position: 2
-    - action: "Validate cluster state after restore"
-      expectedresult: "Cluster is healthy and Kubernetes version matches snapshot"
+    - action: "Upgrade the cluster Kubernetes version"
+      data: "Target: default RKE2 Kubernetes version, or the configured upgrade version"
+      expectedresult: "Cluster is upgraded and ready"
       position: 3
+    - action: "Create a deployment on the downstream cluster after the snapshot"
+      expectedresult: "Deployment is created and active"
+      position: 4
+    - action: "Restore the ETCD snapshot including the Kubernetes version"
+      expectedresult: "Snapshot restore starts and finishes successfully"
+      position: 5
+    - action: "Verify the restored Kubernetes version"
+      expectedresult: "Cluster Kubernetes version matches the version at snapshot time"
+      position: 6
+    - action: "Validate cluster state after restore"
+      expectedresult: "Cluster is ready, deployments and pods are healthy"
+      position: 7
     custom_field:
       "15": "RKE2_Restore_ETCD_K8sVersion"
   - title: "Restore ETCD Snapshot Using Upgrade Strategy on Existing Cluster"
     description: "Verify restoring an ETCD snapshot using control plane and worker upgrade concurrency strategies"
     automation: 2
     steps:
-    - action: "Select existing provisioned cluster"
-      expectedresult: "Cluster is available and accessible"
+    - action: "Select existing provisioned cluster and wait for it to be ready"
+      expectedresult: "Cluster is active, available and accessible, on an older Kubernetes version than the upgrade target"
       position: 1
-    - action: "Trigger ETCD snapshot restore with upgrade strategy"
-      expectedresult: "Snapshot restore starts using defined concurrency values"
+    - action: "Create an ETCD snapshot"
+      data: "Snapshot restore mode: all"
+      expectedresult: "Snapshot is created and available on the cluster"
       position: 2
-    - action: "Validate cluster state after restore"
-      expectedresult: "Cluster is healthy and workloads are restored correctly"
+    - action: "Upgrade the cluster and change the upgrade strategy"
+      data: "Control plane concurrency: 15%, worker concurrency: 20%"
+      expectedresult: "Cluster is upgraded, ready and uses the new concurrency values"
       position: 3
+    - action: "Create a deployment on the downstream cluster after the snapshot"
+      expectedresult: "Deployment is created and active"
+      position: 4
+    - action: "Restore the ETCD snapshot including the upgrade strategy"
+      expectedresult: "Snapshot restore starts and finishes successfully"
+      position: 5
+    - action: "Verify the restored upgrade strategy"
+      expectedresult: "Control plane and worker concurrency values match those at snapshot time"
+      position: 6
+    - action: "Validate cluster state after restore"
+      expectedresult: "Cluster is ready, deployments and pods are healthy"
+      position: 7
     custom_field:
       "15": "RKE2_Restore_Upgrade_Strategy"
