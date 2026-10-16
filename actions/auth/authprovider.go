@@ -11,6 +11,7 @@ import (
 	v3 "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/pkg/session"
+	authconfigsapi "github.com/rancher/tests/actions/kubeapi/authconfigs"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	"github.com/rancher/tests/actions/rbac"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -58,6 +59,14 @@ var samlProviders = map[string]saml.Provider{
 
 var oidcProviders = map[string]oidcprovider.Provider{
 	KeycloakOIDC: oidcprovider.KeycloakOIDC,
+}
+
+var authConfigTypes = map[string]string{
+	OpenLdap:        v3.OpenLdapConfigType,
+	ActiveDirectory: v3.ActiveDirectoryConfigType,
+	KeycloakSAML:    v3.KeyCloakConfigType,
+	GenericSAML:     v3.GenericSAMLConfigType,
+	KeycloakOIDC:    v3.KeyCloakOIDCConfigType,
 }
 
 type User struct {
@@ -229,12 +238,21 @@ func VerifyUserLogins(authAdmin *rancher.Client, providerName string, users []Us
 
 // EnsureAuthProviderEnabled enables the specified auth provider and waits for it to be ready
 func EnsureAuthProviderEnabled(client *rancher.Client, providerName string) error {
-	authConfig, err := client.Management.AuthConfig.ByID(providerName)
-	if err != nil {
-		return fmt.Errorf("failed to get auth config: %w", err)
+	configType, supported := authConfigTypes[providerName]
+	if !supported {
+		return fmt.Errorf("unsupported auth provider: %s", providerName)
 	}
 
-	if authConfig.Enabled {
+	if err := authconfigsapi.EnsureAuthConfigExists(client, providerName, configType); err != nil {
+		return err
+	}
+
+	enabled, err := authconfigsapi.AuthConfigEnabled(client, providerName)
+	if err != nil {
+		return err
+	}
+
+	if enabled {
 		return nil
 	}
 
@@ -261,24 +279,14 @@ func EnsureAuthProviderEnabled(client *rancher.Client, providerName string) erro
 	return err
 }
 
-// AuthProviderEnabled reports whether the given auth provider is on
-func AuthProviderEnabled(client *rancher.Client, providerName string) (bool, error) {
-	authConfig, err := client.Management.AuthConfig.ByID(providerName)
-	if err != nil {
-		return false, fmt.Errorf("failed to get auth config: %w", err)
-	}
-
-	return authConfig.Enabled, nil
-}
-
 // EnsureAuthProviderDisabled turns the given auth provider off when it is on
 func EnsureAuthProviderDisabled(client *rancher.Client, providerName string) error {
-	authConfig, err := client.Management.AuthConfig.ByID(providerName)
+	enabled, err := authconfigsapi.AuthConfigEnabled(client, providerName)
 	if err != nil {
-		return fmt.Errorf("failed to get auth config: %w", err)
+		return err
 	}
 
-	if !authConfig.Enabled {
+	if !enabled {
 		return nil
 	}
 

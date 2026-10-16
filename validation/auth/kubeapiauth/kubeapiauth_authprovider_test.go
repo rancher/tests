@@ -12,6 +12,7 @@ import (
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/session"
 	authactions "github.com/rancher/tests/actions/auth"
+	authconfigsapi "github.com/rancher/tests/actions/kubeapi/authconfigs"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/sirupsen/logrus"
@@ -64,7 +65,7 @@ func (k *KubeAPIAuthProviderSuite) TearDownSuite() {
 }
 
 func (k *KubeAPIAuthProviderSuite) reachClusterAsGroupMember(providerName string, admin *management.User, group, groupPrincipalID string, member authactions.User) {
-	wasEnabled, err := authactions.AuthProviderEnabled(k.client, providerName)
+	wasEnabled, err := authconfigsapi.AuthConfigEnabled(k.client, providerName)
 	require.NoError(k.T(), err, "Failed to read whether %v was already on", providerName)
 
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(k.client, k.session, admin, providerName)

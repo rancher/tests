@@ -84,7 +84,7 @@ require (
 	github.com/rancher/norman v0.10.1
 	github.com/rancher/rancher v0.0.0-20260527150105-ae26ccbc3fed
 	github.com/rancher/rancher/pkg/apis v0.0.0
-	github.com/rancher/shepherd v0.0.0-20261008164254-9b3e7ea78db5
+	github.com/rancher/shepherd v0.0.0-20261016195246-f39cd3d22d50
 	github.com/rancher/tests/actions v0.0.0-20261008182219-05530174171d
 	github.com/rancher/tests/interoperability v0.0.0
 	github.com/rancher/tfp-automation v0.0.0-20261009203330-657117919d9d
