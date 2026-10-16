@@ -174,7 +174,10 @@ func (q *Service) UploadTests(project string, testCases []upstream.TestCaseCreat
 			logrus.Warningf("Skipping %s: Multiple instances of the same test case found in project %s", tc.Title, project)
 			continue
 		} else {
-			logrus.Info("Creating test case:\n\tProject: ", project, "\n\tTitle: ", tc.Title, "\n\tDescription: ", *tc.Description, "\n\tSuiteId: ")
+			logrus.Info("Creating test case:\n\tProject: ", project, "\n\tTitle: ", tc.Title, "\n\tDescription: ", tc.GetDescription())
+			if tc.GetDescription() == "" {
+				return fmt.Errorf("cannot create test case %q in project %s: description is required", tc.Title, project)
+			}
 			err = q.createTestCase(project, tc)
 			if err != nil {
 				return err
