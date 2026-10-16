@@ -391,30 +391,47 @@ func VerifyBindingsForPrtb(client *rancher.Client, clusterID string, prtb *v3.Pr
 
 // VerifyMainACRContainsAllRules verifies that the main ACR contains all rules from the main role template and its child role templates
 func VerifyMainACRContainsAllRules(client *rancher.Client, clusterID, mainRTName string, childRTNames []string) error {
-	mainRules, err := GetClusterRoleRules(client, clusterID, mainRTName)
-	if err != nil {
-		return fmt.Errorf("failed to get mainRole rules: %w", err)
-	}
-
-	var allChildRules []rbacv1.PolicyRule
-	for _, childRTName := range childRTNames {
-		childRules, err := GetClusterRoleRules(client, clusterID, childRTName)
-		if err != nil {
-			return fmt.Errorf("failed to get childRole rules %s: %w", childRTName, err)
-		}
-		allChildRules = append(allChildRules, childRules...)
-	}
-
-	expectedRules := append(mainRules, allChildRules...)
-
 	acrNameRegular := mainRTName + ResourceAggregator
-	actualRulesRegular, err := GetClusterRoleRules(client, clusterID, acrNameRegular)
-	if err != nil {
-		return fmt.Errorf("failed to get ACR %s: %w", acrNameRegular, err)
-	}
 
-	if !ruleSlicesMatch(actualRulesRegular, expectedRules) {
-		return fmt.Errorf("ACR %s rules do not match expected combined rules", acrNameRegular)
+	var lastErr error
+	pollErr := kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.TwoMinuteTimeout, true, func(ctx context.Context) (bool, error) {
+		mainRules, err := GetClusterRoleRules(client, clusterID, mainRTName)
+		if err != nil {
+			lastErr = fmt.Errorf("failed to get mainRole rules: %w", err)
+			return false, nil
+		}
+
+		var allChildRules []rbacv1.PolicyRule
+		for _, childRTName := range childRTNames {
+			childRules, err := GetClusterRoleRules(client, clusterID, childRTName)
+			if err != nil {
+				lastErr = fmt.Errorf("failed to get childRole rules %s: %w", childRTName, err)
+				return false, nil
+			}
+			allChildRules = append(allChildRules, childRules...)
+		}
+
+		expectedRules := append(mainRules, allChildRules...)
+
+		actualRulesRegular, err := GetClusterRoleRules(client, clusterID, acrNameRegular)
+		if err != nil {
+			lastErr = fmt.Errorf("failed to get ACR %s: %w", acrNameRegular, err)
+			return false, nil
+		}
+
+		if !ruleSlicesMatch(actualRulesRegular, expectedRules) {
+			lastErr = fmt.Errorf("ACR %s rules do not match expected combined rules", acrNameRegular)
+			return false, nil
+		}
+
+		return true, nil
+	})
+
+	if pollErr != nil {
+		if lastErr != nil {
+			return lastErr
+		}
+		return pollErr
 	}
 
 	return nil
@@ -475,30 +492,47 @@ func compareSlices(a, b []string) int {
 }
 
 func verifyMgmtACR(client *rancher.Client, clusterID, acrName, mainRTName string, childRTNames []string, managementContext string) error {
-	mainRules, err := GetClusterRoleRules(client, clusterID, mainRTName)
-	if err != nil {
-		return err
-	}
-
-	allChildRules := []rbacv1.PolicyRule{}
-	for _, childRTName := range childRTNames {
-		childRules, err := GetClusterRoleRules(client, clusterID, childRTName)
+	// The aggregation controller rebuilds the management ACR asynchronously, so poll until the rules converge.
+	var lastErr error
+	pollErr := kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.TwoMinuteTimeout, true, func(ctx context.Context) (bool, error) {
+		mainRules, err := GetClusterRoleRules(client, clusterID, mainRTName)
 		if err != nil {
-			return err
+			lastErr = err
+			return false, nil
 		}
-		allChildRules = append(allChildRules, childRules...)
-	}
 
-	expectedRules := append(mainRules, allChildRules...)
-	mgmtRules := filterMgmtRules(expectedRules, managementContext)
+		allChildRules := []rbacv1.PolicyRule{}
+		for _, childRTName := range childRTNames {
+			childRules, err := GetClusterRoleRules(client, clusterID, childRTName)
+			if err != nil {
+				lastErr = err
+				return false, nil
+			}
+			allChildRules = append(allChildRules, childRules...)
+		}
 
-	acrRules, err := GetClusterRoleRules(client, clusterID, acrName)
-	if err != nil {
-		return fmt.Errorf("failed to get ACR %s: %w", acrName, err)
-	}
+		expectedRules := append(mainRules, allChildRules...)
+		mgmtRules := filterMgmtRules(expectedRules, managementContext)
 
-	if !ruleSlicesMatch(acrRules, mgmtRules) {
-		return fmt.Errorf("ACR %s rules do not match expected combined rules.\nExpected: %+v\nActual: %+v", acrName, mgmtRules, acrRules)
+		acrRules, err := GetClusterRoleRules(client, clusterID, acrName)
+		if err != nil {
+			lastErr = fmt.Errorf("failed to get ACR %s: %w", acrName, err)
+			return false, nil
+		}
+
+		if !ruleSlicesMatch(acrRules, mgmtRules) {
+			lastErr = fmt.Errorf("ACR %s rules do not match expected combined rules.\nExpected: %+v\nActual: %+v", acrName, mgmtRules, acrRules)
+			return false, nil
+		}
+
+		return true, nil
+	})
+
+	if pollErr != nil {
+		if lastErr != nil {
+			return lastErr
+		}
+		return pollErr
 	}
 
 	return nil
