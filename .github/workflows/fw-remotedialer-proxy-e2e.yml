@@ -13,8 +13,8 @@ on:
         default: ""
       cleanup:
         description: Destroy AWS infra when the job finishes
-        type: string
-        default: "true"
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -319,7 +319,7 @@ jobs:
           rancher:
             host: "${HOST_URL}"
             adminToken: "${HOST_TOKEN}"
-            cleanup: "${CLEANUP}"
+            cleanup: ${CLEANUP}
             insecure: true
             clusterName: "${CLUSTER_NAME}"
 
