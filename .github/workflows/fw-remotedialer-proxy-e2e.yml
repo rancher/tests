@@ -13,8 +13,8 @@ on:
         default: ""
       cleanup:
         description: Destroy AWS infra when the job finishes
-        type: boolean
-        default: true
+        type: string
+        default: "true"
 
 permissions:
   contents: read
