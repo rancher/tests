@@ -947,21 +947,13 @@ rancher_use_bundled_system_charts: true
     }
 
     post {
-        failure {
-            script {
-                if (params.DESTROY_ON_FAILURE) {
-                    destroyInfrastructure('DESTROY_ON_FAILURE')
-                }
-            }
-        }
-
         always {
             script {
-                // Failure diagnostics run here, not in the failure block:
-                // Jenkins evaluates post conditions in a fixed order with
-                // always first, so anything in failure{} would already have
-                // lost the docker images (rmi below) and the live cluster
-                // (destroy below). Collect while both still exist.
+                // Failure diagnostics run first, while the live cluster and
+                // the docker images still exist: Jenkins evaluates post
+                // conditions in a fixed order (always before failure, cleanup
+                // last), so every failure-path action must run in this block,
+                // ahead of the teardown below.
                 if (currentBuild.currentResult != 'SUCCESS') {
                     collectUpgradeDiagnostics()
                 }
@@ -977,11 +969,24 @@ rancher_use_bundled_system_charts: true
                     }
                 }
 
-                if (params.DESTROY_AFTER_TESTS) {
-                    destroyInfrastructure('DESTROY_AFTER_TESTS')
+                // Single teardown decision point. The failure-path destroy is
+                // decided here rather than in a failure{} block because always
+                // runs first: destroyInfrastructure needs workspace_name.txt,
+                // the tfvars and the infra-tools image, which are only removed
+                // afterwards in cleanup{}. DESTROY_ON_FAILURE=false on a failed
+                // run keeps the environment around for debugging.
+                def destroyForFailure = currentBuild.currentResult != 'SUCCESS' && params.DESTROY_ON_FAILURE
+                if (params.DESTROY_AFTER_TESTS || destroyForFailure) {
+                    destroyInfrastructure(params.DESTROY_AFTER_TESTS ? 'DESTROY_AFTER_TESTS' : 'DESTROY_ON_FAILURE')
                 }
 
-                // Docker cleanup
+            }
+        }
+
+        cleanup {
+            script {
+                // Docker cleanup — cleanup{} runs after always, so the
+                // teardown above can still resolve the infra-tools image.
                 sh "docker rmi -f ${GO_TEST_IMAGE} ${INFRA_TOOLS_IMAGE} rancher-go-test:latest rancher-infra-tools:latest || true"
 
                 // Sensitive artifact cleanup — shred or remove credentials from workspace
