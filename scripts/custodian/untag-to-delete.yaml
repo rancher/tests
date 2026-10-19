@@ -11,7 +11,7 @@ policies:
         - type: value
           key: tag:Name
           op: regex
-          value:  "^.*DONOTDELETEKEYS.*$"
+          value:  "^.*(DONOTDELETEKEYS).*$"
   actions:
     - type: terminate
 - name: remove-tagged-friday-nlbs
@@ -24,6 +24,6 @@ policies:
         - type: value
           key: tag:Name
           op: regex
-          value:  "^.*DONOTDELETEKEYS.*$"
+          value:  "^.*(DONOTDELETEKEYS).*$"
   actions:
     - type: delete
