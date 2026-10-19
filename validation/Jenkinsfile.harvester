@@ -130,27 +130,32 @@ node("harvester-vpn-1") {
                 }
               }
               stage('Run Validation Tests') {
-                try {
-                  sh "docker run --name ${testContainer} -t --env-file ${envFile} " +
-                  "${imageName} sh -c \"/root/go/bin/gotestsum --format standard-verbose --packages=${testsDir} --junitfile ${testResultsOut} --jsonfile ${testResultsJSON} -- -tags=${TAGS} ${GOTEST_TESTCASE} -timeout=${timeout} -v;" +
-                  "${rootPath}pipeline/scripts/${reporterScript};" +
-                  "${rootPath}reporter\""
-                } catch(err) {
-                  echo 'Test run had failures. Collecting results...'
+                sh "docker run -d --name ${testContainer} -t --env-file ${envFile} " +
+                "${imageName} sh -c \"/root/go/bin/gotestsum --format standard-verbose --packages=${testsDir} --junitfile ${testResultsOut} --jsonfile ${testResultsJSON} -- -tags=${TAGS} ${GOTEST_TESTCASE} -timeout=${timeout} -v;" +
+                "${rootPath}pipeline/scripts/${reporterScript};" +
+                "${rootPath}reporter\""
+                def logsSince = ""
+                for (int attempt = 0; attempt < 5; attempt++) {
+                  try {
+                    sh "docker logs -f ${logsSince} ${testContainer}"
+                  } catch(err) {
+                    echo "Lost the output of ${testContainer} (${err}), reattaching"
+                  }
+                  def running = sh(script: "docker inspect -f '{{.State.Running}}' ${testContainer}", returnStdout: true).trim()
+                  if (running != "true") {
+                    break
+                  }
+                  logsSince = "--since 10m"
                 }
               }
               stage('Test Report') {
                 sh "docker cp ${testContainer}:${rootPath}${testResultsOut} ."
                 step([$class: 'JUnitResultArchiver', testResults: "**/${testResultsOut}"])
-                sh "docker stop ${testContainer}"
-                sh "docker rm -v ${testContainer}"
-                sh "docker rmi -f ${imageName}" 
               }
-            } catch(err) {           
-                sh "docker stop ${testContainer}"
-                sh "docker rm -v ${testContainer}"
-                sh "docker rmi -f ${imageName}"
-            } // catch error
+            } finally {
+                sh "docker rm -f -v ${testContainer} || true"
+                sh "docker rmi -f ${imageName} || true"
+            }
           } // dir 
         } // withEnv
       } // creds
