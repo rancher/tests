@@ -23,6 +23,10 @@ Do not "fix" the following; both are required by the upgrade workflow (rancher/t
   the cleanup.
 - The suite is admin-only: upgrade phases assert server-level state and the pipeline
   runs them with the admin token.
+- The build tag is `(validation || pit.weekly)`: generic scheduled PIT legs deploy
+  Rancher once and never upgrade it, so `SetupSuite` skips the suite when
+  `rancherUpgradeInput.targetVersion` is unset; only the dedicated rancher-upgrade
+  pipeline sets it.
 
 ## Config
 
@@ -38,7 +42,7 @@ rancherUpgradeInput:
 ```
 
 `rancher.clusterName` selects the shared downstream cluster. `rancherUpgradeInput.targetVersion`
-is required by the post-upgrade and chart-upgrade phases; the pipeline writes it from
+is required by every phase (the suite skips without it); the pipeline writes it from
 the qa-infra-automation resolver output, or set it by hand for local runs.
 
 ## Running

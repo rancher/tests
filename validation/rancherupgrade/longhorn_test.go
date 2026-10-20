@@ -1,4 +1,4 @@
-//go:build validation && !2.8 && !2.9 && !2.10 && !2.11 && !2.12 && !2.13
+//go:build (validation || pit.weekly) && !2.8 && !2.9 && !2.10 && !2.11 && !2.12 && !2.13
 
 package rancherupgrade
 
@@ -47,6 +47,12 @@ func loadUpgradeInput() *UpgradeInput {
 }
 
 func (s *LonghornUpgradeTestSuite) SetupSuite() {
+	// Generic PIT legs never upgrade the server between phases; without an
+	// upgrade target the phases have nothing to assert, so skip the suite.
+	if loadUpgradeInput().TargetVersion == "" {
+		s.T().Skipf("%s.targetVersion is not set: this suite runs only in the rancher-upgrade pipeline, which upgrades the server between phases", UpgradeInputConfigKey)
+	}
+
 	testSession := session.NewSession()
 	s.session = testSession
 
@@ -100,7 +106,6 @@ func (s *LonghornUpgradeTestSuite) TestLonghornPreUpgrade() {
 
 func (s *LonghornUpgradeTestSuite) TestLonghornPostUpgrade() {
 	cfg := loadUpgradeInput()
-	require.NotEmpty(s.T(), cfg.TargetVersion, "rancherUpgradeInput.targetVersion must be set for post-upgrade phases")
 	logrus.Infof("post-upgrade phase: waiting for rancher server version %s", cfg.TargetVersion)
 
 	err := actionsClusters.WaitRancherVersion(s.client, cfg.TargetVersion, defaults.TenMinuteTimeout)
@@ -119,7 +124,6 @@ func (s *LonghornUpgradeTestSuite) TestLonghornPostUpgrade() {
 
 func (s *LonghornUpgradeTestSuite) TestLonghornChartUpgrade() {
 	cfg := loadUpgradeInput()
-	require.NotEmpty(s.T(), cfg.TargetVersion, "rancherUpgradeInput.targetVersion must be set for post-upgrade phases")
 	logrus.Infof("chart-upgrade phase: waiting for rancher server version %s", cfg.TargetVersion)
 
 	err := actionsClusters.WaitRancherVersion(s.client, cfg.TargetVersion, defaults.TenMinuteTimeout)
