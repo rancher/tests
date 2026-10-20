@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/clusters/kubernetesversions"
@@ -19,6 +20,21 @@ const (
 	active = "active"
 )
 
+// isUpgradeTarget reports whether target is a newer kubernetes version than initial. When the semantic versions are equal
+// (for example only the distro revision differs) or cannot be parsed, any difference between the strings counts as an upgrade.
+func isUpgradeTarget(initial, target string) bool {
+	initialVersion, initialErr := semver.NewVersion(initial)
+	targetVersion, targetErr := semver.NewVersion(target)
+
+	if initialErr == nil && targetErr == nil {
+		if cmp := targetVersion.Compare(initialVersion); cmp != 0 {
+			return cmp > 0
+		}
+	}
+
+	return initial != target
+}
+
 // UpgradeClusterAndSnapshotSettings is a helper function that upgrades the Kubernetes version of a cluster and updates
 // the etcd snapshot settings based on the provided configuration.
 func UpgradeClusterAndSnapshotSettings(client *rancher.Client, clusterName, clusterID string, etcdRestore *Config) error {
@@ -27,32 +43,35 @@ func UpgradeClusterAndSnapshotSettings(client *rancher.Client, clusterName, clus
 		return err
 	}
 
-	var upgradeKubernetesVersion string
-	var defaultVersion []string
+	upgradeKubernetesVersion := etcdRestore.UpgradeKubernetesVersion
 
 	initialKubernetesVersion := clusterObject.Spec.KubernetesVersion
 
-	if etcdRestore.UpgradeKubernetesVersion == "" {
-		if strings.Contains(initialKubernetesVersion, defaults.RKE2) {
-			defaultVersion, err = kubernetesversions.Default(client, defaults.RKE2, nil)
-			if err != nil {
-				return err
+	if upgradeKubernetesVersion == "" {
+		provider := defaults.RKE2
+		if !strings.Contains(initialKubernetesVersion, defaults.RKE2) {
+			if !strings.Contains(initialKubernetesVersion, defaults.K3S) {
+				return fmt.Errorf("cluster %s kubernetes version %s is neither RKE2 nor K3s", clusterName, initialKubernetesVersion)
 			}
 
-			upgradeKubernetesVersion = defaultVersion[0]
-		} else if strings.Contains(initialKubernetesVersion, defaults.K3S) {
-			defaultVersion, err = kubernetesversions.Default(client, defaults.K3S, nil)
-			if err != nil {
-				return err
-			}
+			provider = defaults.K3S
 		}
+
+		defaultVersion, err := kubernetesversions.Default(client, provider, nil)
+		if err != nil {
+			return err
+		}
+
+		if len(defaultVersion) == 0 {
+			return fmt.Errorf("no default %s kubernetes version found to upgrade cluster %s to", provider, clusterName)
+		}
+
+		upgradeKubernetesVersion = defaultVersion[0]
 	}
 
-	upgradeKubernetesVersion = defaultVersion[0]
-
 	// Restoring a snapshot taken at the target version would not prove the version rolls back, so fail instead of running a meaningless test.
-	if initialKubernetesVersion == upgradeKubernetesVersion {
-		return fmt.Errorf("cluster %s is already on kubernetes version %s; it must start on an older version for the upgrade and restore test", clusterName, upgradeKubernetesVersion)
+	if !isUpgradeTarget(initialKubernetesVersion, upgradeKubernetesVersion) {
+		return fmt.Errorf("cluster %s is on kubernetes version %s, which is not older than the upgrade target %s; it must start on an older version for the upgrade and restore test", clusterName, initialKubernetesVersion, upgradeKubernetesVersion)
 	}
 
 	clusterObject.Spec.KubernetesVersion = upgradeKubernetesVersion

@@ -19,6 +19,7 @@ import (
 )
 
 func TestSnapshotRestoreUpgradeStrategy(t *testing.T) {
+	snapshot.ParallelIfOwnCluster(t)
 
 	s := snapshot.Setup(t, defaults.K3S, false, false)
 

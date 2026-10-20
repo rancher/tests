@@ -22,6 +22,7 @@ type SnapshotRetentionConfig struct {
 }
 
 func TestAutomaticSnapshotRetention(t *testing.T) {
+	snapshot.ParallelIfOwnCluster(t)
 
 	s := snapshot.Setup(t, defaults.RKE2, false, false)
 

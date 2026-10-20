@@ -21,6 +21,7 @@ import (
 )
 
 func TestS3SnapshotRestore(t *testing.T) {
+	snapshot.ParallelIfOwnCluster(t)
 
 	s := snapshot.Setup(t, defaults.K3S, true, false)
 
