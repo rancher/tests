@@ -71,6 +71,21 @@ type awsCredentialsConfig struct {
 	DefaultRegion string `json:"defaultRegion" yaml:"defaultRegion"`
 }
 
+// ParallelIfOwnCluster marks the test as parallel only when it provisions its own cluster. Tests that reuse an existing
+// cluster (rancher.clusterName is set) share it and must run serially. It has to be called before Setup.
+func ParallelIfOwnCluster(t *testing.T) {
+	t.Helper()
+
+	cattleConfig := config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
+
+	rancherConfig := new(rancher.Config)
+	operations.LoadObjectFromMap(defaults.RancherConfigKey, cattleConfig, rancherConfig)
+
+	if rancherConfig.ClusterName == "" {
+		t.Parallel()
+	}
+}
+
 func Setup(t *testing.T, clusterType string, isS3, isWindows bool) *snapshotTest {
 	s := &snapshotTest{}
 

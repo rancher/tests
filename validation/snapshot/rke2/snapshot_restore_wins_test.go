@@ -19,6 +19,7 @@ import (
 )
 
 func TestSnapshotRestoreWindows(t *testing.T) {
+	snapshot.ParallelIfOwnCluster(t)
 
 	s := snapshot.Setup(t, defaults.RKE2, false, true)
 

@@ -289,6 +289,12 @@ sshPath:
     sshPath: "/root/go/src/github.com/rancher/tests/validation/.ssh"
 flags:
     desiredflags: InstallRancher|Short
+upgradeInput:
+    clusters:
+    - name: ${HOSTNAME_PREFIX}-tf
+      enabledFeatures:
+        chart: false
+        ingress: true
 rancher:
     host: ${HOSTNAME_PREFIX}.qa.rancher.space
     adminPassword: ${ADMIN_PASSWORD}
