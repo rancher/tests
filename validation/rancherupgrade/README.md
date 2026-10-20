@@ -25,8 +25,9 @@ Do not "fix" the following; both are required by the upgrade workflow (rancher/t
   runs them with the admin token.
 - The build tag is `(validation || pit.weekly)`: generic scheduled PIT legs deploy
   Rancher once and never upgrade it, so `SetupSuite` skips the suite when
-  `rancherUpgradeInput.targetVersion` is unset; only the dedicated rancher-upgrade
-  pipeline sets it.
+  `rancherUpgradeInput.targetVersion` is unset. The dedicated pipeline marks its
+  config with `rancherUpgradePipeline.enabled: true`; with the marker present but
+  the target missing, the suite fails (pipeline bug) instead of skipping.
 
 ## Config
 

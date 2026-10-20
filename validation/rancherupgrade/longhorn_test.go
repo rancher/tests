@@ -47,9 +47,16 @@ func loadUpgradeInput() *UpgradeInput {
 }
 
 func (s *LonghornUpgradeTestSuite) SetupSuite() {
-	// Generic PIT legs never upgrade the server between phases; without an
-	// upgrade target the phases have nothing to assert, so skip the suite.
-	if loadUpgradeInput().TargetVersion == "" {
+	cfg := loadUpgradeInput()
+	pipeline := new(PipelineInput)
+	config.LoadConfig(PipelineConfigKey, pipeline)
+
+	if cfg.TargetVersion == "" {
+		// The dedicated pipeline always writes both keys, so an empty target
+		// there is a pipeline bug and must fail, not skip.
+		require.False(s.T(), pipeline.Enabled, "rancher-upgrade pipeline config is missing %s.targetVersion", UpgradeInputConfigKey)
+		// Generic PIT legs never upgrade the server between phases; without
+		// an upgrade target the phases have nothing to assert, so skip.
 		s.T().Skipf("%s.targetVersion is not set: this suite runs only in the rancher-upgrade pipeline, which upgrades the server between phases", UpgradeInputConfigKey)
 	}
 

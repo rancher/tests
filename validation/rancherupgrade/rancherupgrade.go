@@ -8,6 +8,10 @@ package rancherupgrade
 const (
 	// UpgradeInputConfigKey is the cattle-config key holding upgrade-phase inputs.
 	UpgradeInputConfigKey = "rancherUpgradeInput"
+
+	// PipelineConfigKey marks a config as authored by the rancher-upgrade
+	// pipeline; generic PIT legs never set it.
+	PipelineConfigKey = "rancherUpgradePipeline"
 )
 
 // UpgradeInput holds per-run upgrade parameters. TargetVersion is the Rancher
@@ -15,4 +19,11 @@ const (
 // (qa-infra-automation resolver output) or by hand for local runs.
 type UpgradeInput struct {
 	TargetVersion string `json:"targetVersion" yaml:"targetVersion"`
+}
+
+// PipelineInput is the marker section the rancher-upgrade pipeline writes into
+// its cattle-config; the suite fails rather than skips when it is present but
+// the upgrade target is missing (pipeline bug, not a generic PIT leg).
+type PipelineInput struct {
+	Enabled bool `json:"enabled" yaml:"enabled"`
 }

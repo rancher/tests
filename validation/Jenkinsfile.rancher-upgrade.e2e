@@ -330,7 +330,11 @@ rancher:
     # ("local") cluster; the upgrade suite installs Longhorn on it.
     clusterName: local
 rancherUpgradeInput:
-    targetVersion: "${RANCHER_VERSION_UPGRADE}"''',
+    targetVersion: "${RANCHER_VERSION_UPGRADE}"
+# Marker: set only by this pipeline. The suite fails rather than skips when
+# this marker is present but the target version is missing (pipeline bug).
+rancherUpgradePipeline:
+    enabled: true''',
         )
         booleanParam(
             name: 'REPORT_ARTIFACTS',
