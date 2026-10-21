@@ -56,11 +56,15 @@ func WaitRancherVersion(client *rancher.Client, targetVersion string, timeout ti
 		serverVersionRawValue, err := client.Management.Setting.ByID(serverVersionSetting)
 		if err != nil {
 			// The server may be mid-restart during the upgrade rollout; retry the read.
+			// Logged so a terminal cause (e.g. a revoked token or unreachable API)
+			// is visible in the log instead of surfacing only as the final timeout.
+			logrus.Debugf("server-version read failed, retrying: %v", err)
 			return false, nil
 		}
 
 		serverVersion, err := parseRancherVersion(serverVersionRawValue.Value)
 		if err != nil {
+			logrus.Debugf("server-version value %q not parseable yet, retrying: %v", serverVersionRawValue.Value, err)
 			return false, nil
 		}
 

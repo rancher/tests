@@ -36,15 +36,17 @@ rancher:
   host: <your_host>
   adminToken: <your_token>
   insecure: true
-  clusterName: "<downstream RKE2 cluster name>"   # pre-provisioned by qa-infra-automation
+  clusterName: "local"   # Rancher's own local cluster: the qa-infra-automation RKE2 HA deploy
 
 rancherUpgradeInput:
   targetVersion: "<Rancher version the server was upgraded to, e.g. 2.15.2>"
 ```
-
-`rancher.clusterName` selects the shared downstream cluster. `rancherUpgradeInput.targetVersion`
-is required by every phase (the suite skips without it); the pipeline writes it from
-the qa-infra-automation resolver output, or set it by hand for local runs.
+`rancher.clusterName` selects the target cluster. The pipeline uses `local` — Rancher's own
+3-node HA RKE2 cluster provisioned by qa-infra-automation — so Longhorn and its volume are
+exercised on the server cluster itself, matching what the pipeline deploys.
+`rancherUpgradeInput.targetVersion` is required by every phase (the suite skips without it);
+the pipeline writes it from the qa-infra-automation resolver output, or set it by hand for
+local runs.
 
 ## Running
 
@@ -70,9 +72,9 @@ gotestsum --format standard-verbose --packages=github.com/rancher/tests/validati
 
 ## Notes
 
-- The shared downstream RKE2 cluster is provisioned by qa-infra-automation and must be
-  sized for Longhorn plus the later NeuVector/Observability suites; this is an infra
-  concern and is not configurable here.
+- The target cluster is Rancher's own local cluster (the qa-infra-automation 3-node HA
+  RKE2 deploy), so the server nodes themselves must be sized for Longhorn plus the later
+  NeuVector/Observability suites; this is an infra concern and is not configurable here.
 - The Rancher server upgrade itself is `make rancher-upgrade` in
   [qa-infra-automation](https://github.com/rancher/qa-infra-automation); this package
   only runs the pre- and post-upgrade assertions around it.
@@ -80,8 +82,9 @@ gotestsum --format standard-verbose --packages=github.com/rancher/tests/validati
   `ansible/rancher/<env>-ha/generated.tfvars`; the pipeline must copy it into the test
   config's `rancher.adminToken` before the post-upgrade phases (the pre-upgrade token
   is revoked by the upgrade).
-- After a server upgrade the downstream cluster-scoped catalog follower can keep
-  serving the previous Rancher line's index (e.g. release-v2.14 after upgrading to
-  2.15) until the downstream `cattle-cluster-agent` re-syncs. If the chart-upgrade
-  phase fails with "failed to find chart longhorn from the chart repo", restart the
-  downstream cluster-agent and retry; observed re-sync time ~4 minutes.
+- After a server upgrade the cluster-scoped catalog follower can keep serving the
+  previous Rancher line's index (e.g. release-v2.14 after upgrading to 2.15) until the
+  `cattle-cluster-agent` re-syncs. The chart-upgrade phase detects this and fails with
+  an explicit stale-catalog message when the catalog's latest equals the installed
+  version, or with "failed to find chart longhorn from the chart repo" on a lookup
+  miss; restart the cluster agent and re-run the phase. Observed re-sync time ~4 minutes.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/rancher/shepherd/clients/rancher"
@@ -26,6 +27,12 @@ import (
 // ChecksumDataFile is the filename written under MountPath by CreateChecksumWorkload.
 const ChecksumDataFile = "checksum-data"
 
+// checksumContentPattern constrains the content accepted by CreateChecksumWorkload:
+// content is interpolated into a single-quoted sh -c command, so a value outside
+// alphanumeric/hyphen (notably a quote) would break the quoting. Enforced in code
+// so a future caller cannot silently inject shell.
+var checksumContentPattern = regexp.MustCompile(`^[A-Za-z0-9-]+$`)
+
 // CreateChecksumWorkload creates a 1GiB PVC named <name> on storageClassName in the
 // default namespace, mounts it into a single-replica nginx deployment named <name> at
 // MountPath, waits for rollout, then writes content to MountPath/ChecksumDataFile via
@@ -34,6 +41,11 @@ const ChecksumDataFile = "checksum-data"
 // it is interpolated into an sh -c command. No session cleanup is registered: callers
 // are upgrade tests whose resources must outlive the process.
 func CreateChecksumWorkload(client *rancher.Client, clusterID string, storageClassName string, name string, content string) error {
+	if !checksumContentPattern.MatchString(content) {
+		return fmt.Errorf("content %q must match %s: it is interpolated into a single-quoted sh -c command",
+			content, checksumContentPattern.String())
+	}
+
 	storageClass, err := GetStorageClass(client, clusterID, storageClassName)
 	if err != nil {
 		return err

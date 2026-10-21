@@ -143,7 +143,20 @@ func (s *LonghornUpgradeTestSuite) TestLonghornChartUpgrade() {
 	require.NoError(s.T(), err)
 	latest, err := catalogClient.GetLatestChartVersion(charts.LonghornChartName, catalog.RancherChartRepo)
 	require.NoError(s.T(), err)
-	logrus.Infof("chart-upgrade phase: upgrading longhorn to %s from the upgraded catalog", latest)
+
+	// Guard against a stale cluster-scoped catalog: until the cluster agent
+	// re-syncs after the server upgrade, the follower can still serve the
+	// previous Rancher line's index, whose latest equals the installed version.
+	// Upgrading to it would pass vacuously (a same-version upgrade asserted
+	// equal to itself), so fail with the runbook remedy instead; see README Notes.
+	installed, err := shepherdCharts.GetChartStatus(s.client, s.cluster.ID, charts.LonghornNamespace, charts.LonghornChartName)
+	require.NoError(s.T(), err)
+	require.NotEqual(s.T(),
+		installed.ChartDetails.Spec.Chart.Metadata.Version, latest,
+		"cluster-scoped catalog still serves the pre-upgrade index: installed longhorn %s equals latest %s; restart the cluster agent and re-run this phase",
+		installed.ChartDetails.Spec.Chart.Metadata.Version, latest)
+	logrus.Infof("chart-upgrade phase: upgrading longhorn %s to %s from the upgraded catalog",
+		installed.ChartDetails.Spec.Chart.Metadata.Version, latest)
 
 	installOptions := &charts.InstallOptions{
 		Cluster: s.cluster,

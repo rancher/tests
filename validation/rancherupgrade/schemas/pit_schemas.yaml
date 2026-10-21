@@ -5,7 +5,7 @@
     description: "Install Longhorn and seed a checksum workload on a Longhorn volume before the Rancher server upgrade"
     automation: 2
     steps:
-    - action: "Create a project on the downstream cluster"
+    - action: "Create a project on the Rancher local cluster"
       data: ""
       expectedresult: "The project is created successfully"
       position: 1
@@ -47,11 +47,11 @@
       position: 1
     - action: "Resolve the latest Longhorn chart version from the cluster-scoped catalog"
       data: "Chart: longhorn from the rancher-charts repo"
-      expectedresult: "The latest cluster-scoped chart version is resolved"
+      expectedresult: "The latest cluster-scoped chart version is resolved and differs from the installed pre-upgrade version"
       position: 2
     - action: "Upgrade the Longhorn chart with retry"
       data: "longhorn and longhorn-crd to the latest version"
-      expectedresult: "Both charts reach Deployed state and workloads become Ready"
+      expectedresult: "The longhorn chart reaches Deployed state and workloads become Ready"
       position: 3
     - action: "Verify the chart version and the checksum workload"
       data: "Chart version equals latest; PVC rancher-upgrade-longhorn and data file /auto-mnt/checksum-data"
