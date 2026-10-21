@@ -526,3 +526,13 @@ func GrantResourceQuotaAndLimitRangeManagement(client *rancher.Client, clusterID
 
 	return nil
 }
+
+// GetAggregatedRoleTemplatesDefault returns the default value of the aggregated-roletemplates feature flag.
+func GetAggregatedRoleTemplatesDefault(client *rancher.Client) (bool, error) {
+	feature, err := client.WranglerContext.Mgmt.Feature().Get(AggregatedRoleTemplatesFeatureFlag, metav1.GetOptions{})
+	if err != nil {
+		return false, err
+	}
+
+	return feature.Status.Default, nil
+}

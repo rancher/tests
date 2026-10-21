@@ -133,6 +133,7 @@ jobs:
             HB_PRIVATE_CERT_KEY, HB_PRIVATE_CERT_KEY
             HB_PRIVATE_CERT_KEY_NAME, HB_PRIVATE_CERT_KEY_NAME
             HB_AWS_REGION, HB_AWS_REGION
+            HB_AWS_ROUTE_53_ZONE, HB_AWS_ROUTE_53_ZONE
             HB_TERRAFORM_VERSION, HB_TERRAFORM_VERSION
             HB_RANCHER_ADMIN_PASSWORD, HB_RANCHER_ADMIN_PASSWORD
             HB_RANCHER_VERSION_2_16_HEAD, HB_RANCHER_VERSION_2_16_HEAD
@@ -240,7 +241,7 @@ jobs:
 
       - name: Update /etc/hosts to add Rancher FQDN
         run: |
-          sudo sed -i 's/^127\.0\.0\.1.*/127.0.0.1 localhost ${{ env.HOSTNAME_PREFIX }}-internal.<HB_AWS_ROUTE_53_ZONE>/' /etc/hosts
+          sudo sed -i 's/^127\.0\.0\.1.*/127.0.0.1 localhost ${{ env.HOSTNAME_PREFIX }}-internal.${{ fromJSON(env.HB_AWS_ROUTE_53_ZONE).value }}/' /etc/hosts
 
       - name: Create config.yaml
         run: |

@@ -19,7 +19,7 @@ policies:
       - type: value
         key: name
         op: regex
-        value:  "^.*DONOTDELETEKEYS.*$"
+        value:  "^.*(DONOTDELETEKEYS).*$"
     - not:
       - type: marked-for-op
         label: custodian_status
@@ -53,7 +53,7 @@ policies:
       - type: value
         key: name
         op: regex
-        value:  "^.*DONOTDELETEKEYS.*$"
+        value:  "^.*(DONOTDELETEKEYS).*$"
       - type: marked-for-op
         label: known_user
         op: delete
@@ -101,7 +101,7 @@ policies:
       - type: value
         key: name
         op: regex
-        value:  "^.*DONOTDELETEKEYS.*$"
+        value:  "^.*(DONOTDELETEKEYS).*$"
       - type: marked-for-op
         label: unknown_user
         op: delete
@@ -134,7 +134,7 @@ policies:
       - type: value
         key: name
         op: regex
-        value:  "^.*DONOTDELETEKEYS.*$"
+        value:  "^.*(DONOTDELETEKEYS).*$"
       - type: marked-for-op
         label: known_user
         op: delete

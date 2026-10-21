@@ -2,10 +2,14 @@
 
 QA custodian will clean up resources in AWS, GCR, and AZURE. Currently, we have automation configured for:
 * AWS
-  * instances
+  * instances (in any state except shutting down or terminated)
   * NLBs
   * EKS
   * ssh keys
+  * RDS instances and clusters
+  * NAT gateways with no traffic for 7 days
+  * unattached EBS volumes
+  * EBS snapshots older than 14 days that no AMI uses
 * AZURE
   * VMs
   * AKS
@@ -21,20 +25,20 @@ QA custodian will clean up resources in AWS, GCR, and AZURE. Currently, we have 
 
 ## How It Works
 
-This stack is fairly simple. Cleanup is exclusively using [Cloud Custodian](https://cloud-custodian.github.io/cloud-custodian/docs/quickstart/index.html) in a docker container. We run this on a recurring basis using our pre-existing Jenkins setup, with a cron to run the custodian 2x per day (once at the start of the workday, once at the end). 
+This stack is fairly simple. Cleanup is exclusively using [Cloud Custodian](https://cloud-custodian.github.io/cloud-custodian/docs/quickstart/index.html) in a docker container. We run this on a recurring basis using our pre-existing Jenkins setup, with a cron to run the AWS custodian every 4 hours, and Azure and GCP 2x per day. 
 
 We depend on Jenkins to have a reliable keystore with all keys available for this script to use. 
 
 Custodian management is currently divided into separate yaml files based on the cloud it is working from, aws, azure, and gcp. 
 
 ### Resource Management 
-New Hires - update our keystore in AWS `USER_KEYS` to include your user key. Use that key in ALL resources you create when using SUSE resources.  Keep it short (6 characters or less) unique to you, and recognizable by others (And, this is case sensitive!). For example, if your name was Jane Elaine Morrison, something like `jem` would suffice. Just make sure you can remember it, and others can know who's it is if they are on your team. . These resources will be deleted every 2 days
+New Hires - update our keystore in AWS `USER_KEYS` to include your user key. Use that key in ALL resources you create when using SUSE resources.  Keep it short (6 characters or less) unique to you, and recognizable by others (And, this is case sensitive!). For example, if your name was Jane Elaine Morrison, something like `jem` would suffice. Just make sure you can remember it, and others can know who's it is if they are on your team. . In AWS, these resources will be deleted about 36-44 hours after creation
 
 There is a separate keystore variable, `DONOTDELETE_KEYS`, which are values in either tags or names of the resource(s) that should never be deleted. 
 
 **Note** that each entry should be separated by a pipe `|` in the values of a given key. All values are case-sensitive
 
-Any resource that isn't matched to a value of one of the above keys will be removed within 24 hours of creation.
+Any resource that isn't matched to a value of one of the above keys will be removed about 12-20 hours after creation in AWS, and about 12-36 hours after creation in Azure and GCP. Unattached EBS volumes, idle NAT gateways, and old snapshots are removed regardless of user key unless tagged `DoNotDelete` or named with a `DONOTDELETE_KEYS` value.
 
 We tie these keys into the cloud custodian with a simple `sed` command in the dockerfile that replaces each of the above keys in the yaml files with the values of said keys. This decision was made to keep any sensitive data separate from the code. 
 
