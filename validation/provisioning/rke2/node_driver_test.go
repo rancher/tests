@@ -1,4 +1,4 @@
-//go:build validation || recurring || pit.weekly || sanity || mixed
+//go:build validation || recurring || sanity || mixed
 
 package rke2
 
