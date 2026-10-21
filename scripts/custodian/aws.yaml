@@ -82,7 +82,7 @@ policies:
   description: |
     Delete any marked instances which have been 
     marked for deletion for more than 1 day.
-    Skips instances with termination protection enabled.
+    Skips instances with termination or stop protection enabled.
   filters:
     - 'tag:doNotDelete': absent
     - 'tag:DoNotDelete': absent
@@ -95,6 +95,8 @@ policies:
         op: terminate
     - not:
       - type: termination-protected
+    - not:
+      - type: stop-protected
   actions:
     - type: terminate
 
@@ -178,9 +180,14 @@ policies:
   description: |
     Delete any marked instances which have been 
     marked for deletion for more than 1 day.
+    Skips clusters with deletion protection enabled.
   filters:
     - 'tag:doNotDelete': absent
     - 'tag:DoNotDelete': absent
+    - type: value
+      key: deletionProtection
+      value: true
+      op: ne
     - or:
       - type: marked-for-op
         tag: ec2_unknown_user
