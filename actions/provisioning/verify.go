@@ -802,6 +802,50 @@ func VerifyDataDirectories(t *testing.T, client *rancher.Client, cluster *steveV
 	}
 }
 
+// VerifyUpgradeStrategy waits for the cluster's upgrade strategy concurrency values to match the expected values.
+func VerifyUpgradeStrategy(client *rancher.Client, cluster *steveV1.SteveAPIObject, expectedControlPlane, expectedWorker string) error {
+	var actualControlPlane, actualWorker string
+
+	err := kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, defaults.FiveMinuteTimeout, true, func(ctx context.Context) (bool, error) {
+		provCluster, _, err := shepherdclusters.GetProvisioningClusterByName(client, cluster.Name, namespaces.FleetDefault)
+		if err != nil || provCluster.Spec.RKEConfig == nil {
+			return false, nil
+		}
+
+		actualControlPlane = provCluster.Spec.RKEConfig.UpgradeStrategy.ControlPlaneConcurrency
+		actualWorker = provCluster.Spec.RKEConfig.UpgradeStrategy.WorkerConcurrency
+
+		return actualControlPlane == expectedControlPlane && actualWorker == expectedWorker, nil
+	})
+	if err != nil {
+		return fmt.Errorf("cluster %s upgrade strategy is controlPlaneConcurrency=%s workerConcurrency=%s, expected controlPlaneConcurrency=%s workerConcurrency=%s: %w",
+			cluster.Name, actualControlPlane, actualWorker, expectedControlPlane, expectedWorker, err)
+	}
+
+	return nil
+}
+
+// VerifyKubernetesVersion waits for the cluster's Kubernetes version to match the expected version.
+func VerifyKubernetesVersion(client *rancher.Client, cluster *steveV1.SteveAPIObject, expectedVersion string) error {
+	var actualVersion string
+
+	err := kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, defaults.FiveMinuteTimeout, true, func(ctx context.Context) (bool, error) {
+		provCluster, _, err := shepherdclusters.GetProvisioningClusterByName(client, cluster.Name, namespaces.FleetDefault)
+		if err != nil {
+			return false, nil
+		}
+
+		actualVersion = provCluster.Spec.KubernetesVersion
+
+		return actualVersion == expectedVersion, nil
+	})
+	if err != nil {
+		return fmt.Errorf("cluster %s kubernetes version is %s, expected %s: %w", cluster.Name, actualVersion, expectedVersion, err)
+	}
+
+	return nil
+}
+
 // VerifyClusterReadyV3 validates that a non-rke1 cluster and its resources are in a good state, matching a given config, using Norman.
 func VerifyClusterReadyV3(client *rancher.Client, clusterID string) error {
 	var lastErr error
