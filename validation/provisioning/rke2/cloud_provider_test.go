@@ -1,4 +1,4 @@
-//go:build validation || recurring || pit.weekly || pit.elemental
+//go:build validation || recurring
 
 package rke2
 
