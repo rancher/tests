@@ -1,7 +1,12 @@
 # Rancher Upgrade
 
-The `rancherupgrade` package validates upgrading the Rancher server (2.14.x -> latest)
-with interoperability products installed. The first vertical is Longhorn: a pre-upgrade
+The `rancherupgrade` package validates upgrading the Rancher server from the previous
+release line to the latest (currently 2.14.x -> 2.15.x) with interoperability products
+installed. The line pair is the pipeline's default, not a suite constraint: the suite
+itself is version-agnostic and gates on `rancherUpgradeInput.targetVersion`, while the
+pipeline resolves the source via `RANCHER_VERSION_FROM` (empty = latest 2.14.x patch via
+`SOURCE_LINE=2.14`) and the target via `RANCHER_VERSION_TO_UPGRADE` (empty = latest
+released final). The first vertical is Longhorn: a pre-upgrade
 phase installs the Longhorn chart and seeds a checksum workload on a Longhorn volume,
 the Rancher server is then upgraded out-of-band (qa-infra-automation `make rancher-upgrade`),
 and post-upgrade phases verify the server version, the surviving Longhorn installation,
@@ -23,6 +28,12 @@ Do not "fix" the following; both are required by the upgrade workflow (rancher/t
   the cleanup.
 - The suite is admin-only: upgrade phases assert server-level state and the pipeline
   runs them with the admin token.
+- The server upgrade stays out-of-band (a pipeline stage running qa-infra-automation
+  `make rancher-upgrade`) rather than a step inside the test: the go test phases
+  assert outcomes only and hold no infra credentials, the upgrade needs the
+  controller-side qa-infra checkout and its terraform/ansible credentials, and
+  per-phase Jenkins stage status is the acceptance signal; pulling the upgrade into
+  the test process would collapse the three stages into one.
 - The build tag is `(validation || pit.weekly)`: generic scheduled PIT legs deploy
   Rancher once and never upgrade it, so `SetupSuite` skips the suite when
   `rancherUpgradeInput.targetVersion` is unset. The dedicated pipeline marks its

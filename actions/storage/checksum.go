@@ -9,13 +9,11 @@ import (
 
 	"github.com/rancher/shepherd/clients/rancher"
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
-	"github.com/rancher/shepherd/extensions/charts"
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/extensions/defaults/namespaces"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	"github.com/rancher/shepherd/extensions/kubeconfig"
-	wloads "github.com/rancher/shepherd/extensions/workloads"
 	"github.com/rancher/tests/actions/kubeapi/volumes/persistentvolumeclaims"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
@@ -94,37 +92,11 @@ func CreateChecksumWorkload(client *rancher.Client, clusterID string, storageCla
 	}
 	logrus.Debugf("PVC %s is Bound to volume %s", pvc.Name, pvc.Spec.VolumeName)
 
-	volMount := corev1.VolumeMount{
-		MountPath: MountPath,
-		Name:      name,
-	}
-
-	podVol := corev1.Volume{
-		Name: name,
-		VolumeSource: corev1.VolumeSource{
-			PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-				ClaimName: name,
-			},
-		},
-	}
-
-	steveclient, err := client.Steve.ProxyDownstream(clusterID)
-	if err != nil {
-		return err
-	}
-
-	containerTemplate := wloads.NewContainer(nginxName, nginxName, corev1.PullAlways, []corev1.VolumeMount{volMount}, []corev1.EnvFromSource{}, nil, nil, nil)
-	podTemplate := wloads.NewPodTemplate([]corev1.Container{containerTemplate}, []corev1.Volume{podVol}, []corev1.LocalObjectReference{}, map[string]string{DeploymentIdentifierLabel: name}, nil)
-	deployment := wloads.NewDeploymentTemplate(name, namespaces.Default, podTemplate, true, nil)
-
-	_, err = steveclient.SteveType(stevetypes.Deployment).Create(deployment)
-	if err != nil {
-		return err
-	}
-
-	err = charts.WatchAndWaitDeployments(client, clusterID, namespaces.Default, metav1.ListOptions{
-		FieldSelector: "metadata.name=" + name,
-	})
+	// Shared nginx+PVC deployment construction with CreatePVCWorkload; the
+	// deterministic name makes PVC, volume mount, deployment, and relocation
+	// label all equal name, so later phases re-find the workload from a
+	// separate process.
+	_, err = createNginxDeploymentWithPVC(client, clusterID, name, name, name)
 	if err != nil {
 		return err
 	}
