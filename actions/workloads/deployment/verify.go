@@ -75,6 +75,26 @@ func VerifyDeployment(client *rancher.Client, clusterID, namespace, name string)
 	return err
 }
 
+// VerifyExistingClustersDeployments verifies that all required deployments are available on all existing clusters.
+func VerifyExistingClustersDeployments(client *rancher.Client) error {
+	clusterList, err := client.Steve.SteveType(stevetypes.Provisioning).ListAll(nil)
+	if err != nil {
+		return err
+	}
+
+	var errs []error
+	for i := range clusterList.Data {
+		cluster := &clusterList.Data[i]
+
+		logrus.Infof("Verifying deployments on cluster (%s)", cluster.Name)
+		if err := VerifyClusterDeployments(client, cluster); err != nil {
+			errs = append(errs, fmt.Errorf("cluster (%s) deployments are not ready: %w", cluster.Name, err))
+		}
+	}
+
+	return errors.Join(errs...)
+}
+
 func VerifyDeploymentUpgrade(client *rancher.Client, clusterName string, namespaceName string, appv1Deployment *appv1.Deployment, expectedRevision string, image string, expectedReplicas int) error {
 	logrus.Debugf("Waiting for deployment %s to become active", appv1Deployment.Name)
 	err := charts.WatchAndWaitDeployments(client, clusterName, namespaceName, metav1.ListOptions{

@@ -3,6 +3,7 @@ package pods
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -172,6 +173,26 @@ func VerifyClusterPods(client *rancher.Client, cluster *v1.SteveAPIObject) error
 	}
 
 	return err
+}
+
+// VerifyExistingClustersPods verifies that all pods are in a good state on all existing clusters.
+func VerifyExistingClustersPods(client *rancher.Client) error {
+	clusterList, err := client.Steve.SteveType(stevetypes.Provisioning).ListAll(nil)
+	if err != nil {
+		return err
+	}
+
+	var errs []error
+	for i := range clusterList.Data {
+		cluster := &clusterList.Data[i]
+
+		logrus.Infof("Verifying pods on cluster (%s)", cluster.Name)
+		if err := VerifyClusterPods(client, cluster); err != nil {
+			errs = append(errs, fmt.Errorf("cluster (%s) pods are not ready: %w", cluster.Name, err))
+		}
+	}
+
+	return errors.Join(errs...)
 }
 
 // GetPodImages grabs all container images from a pod.
