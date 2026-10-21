@@ -64,7 +64,7 @@ func TestSnapshotRestoreUpgradeStrategy(t *testing.T) {
 			_, err = etcdsnapshot.RestoreAndValidateSnapshotV2Prov(s.StandardUserClient, snapshotName, tt.etcdSnapshot, clusterObject, tt.cluster.ID)
 			require.NoError(t, err)
 
-			err = etcdsnapshot.VerifyRestoredUpgradeStrategy(s.StandardUserClient, tt.cluster.Name, clusterObject.Spec.RKEConfig.UpgradeStrategy.ControlPlaneConcurrency, clusterObject.Spec.RKEConfig.UpgradeStrategy.WorkerConcurrency)
+			err = provisioning.VerifyUpgradeStrategy(s.StandardUserClient, tt.cluster, clusterObject.Spec.RKEConfig.UpgradeStrategy.ControlPlaneConcurrency, clusterObject.Spec.RKEConfig.UpgradeStrategy.WorkerConcurrency)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", tt.cluster.Name)
