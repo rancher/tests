@@ -93,11 +93,18 @@ func Setup(t *testing.T, clusterType string, defaultNodeRoles bool) *deleteTest 
 		logrus.Infof("Provisioning %s cluster", clusterType)
 		d.Cluster, err = resources.ProvisionRKE2K3SCluster(t, standardUserClient, clusterType, provider, *clusterConfig, machineConfigSpec, nil, true, false)
 		require.NoError(t, err)
+
+		_, err := rbacapi.GetClusterRoleTemplateBindingsForUser(d.Client, standardUser.ID)
+		require.NoError(t, err)
+
+		d.StandardUserClient, err = d.StandardUserClient.ReLogin()
+		require.NoError(t, err)
 	} else {
 		logrus.Infof("Using existing cluster %s", rancherConfig.ClusterName)
 		d.Cluster, err = d.Client.Steve.SteveType(stevetypes.Provisioning).ByID("fleet-default/" + d.rancherConfig.ClusterName)
 		require.NoError(t, err)
 
+		logrus.Info("Granting the standard user cluster-owner on the existing cluster")
 		mgmtClusterID, err := extclusters.GetClusterIDByName(d.Client, rancherConfig.ClusterName)
 		require.NoError(t, err)
 
