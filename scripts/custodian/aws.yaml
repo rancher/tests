@@ -180,9 +180,14 @@ policies:
   description: |
     Delete any marked instances which have been 
     marked for deletion for more than 1 day.
+    Skips clusters with deletion protection enabled.
   filters:
     - 'tag:doNotDelete': absent
     - 'tag:DoNotDelete': absent
+    - type: value
+      key: deletionProtection
+      value: true
+      op: ne
     - or:
       - type: marked-for-op
         tag: ec2_unknown_user
