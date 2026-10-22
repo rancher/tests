@@ -310,10 +310,19 @@ func RestoreLonghornVolumeFromBackup(client *rancher.Client, clusterID string, b
 			return false, err
 		}
 
+		for _, condition := range volume.Status.Conditions {
+			if condition.Type == longhorn.VolumeConditionTypeRestore && condition.Reason == longhorn.VolumeConditionReasonRestoreFailure {
+				return false, fmt.Errorf("restore of volume %s from backup %s failed: %s", volume.Name, backup.Name, condition.Message)
+			}
+		}
+
 		return !volume.Status.RestoreRequired && volume.Status.State == longhorn.VolumeStateDetached, nil
 	})
+	if err != nil {
+		return fmt.Errorf("volume %s restored from backup %s did not become ready (state: %s, restoreRequired: %t): %w", volume.Name, backup.Name, volume.Status.State, volume.Status.RestoreRequired, err)
+	}
 
-	return err
+	return nil
 }
 
 // DeleteLonghornVolume deletes the specified volume.longhorn.io resource.
