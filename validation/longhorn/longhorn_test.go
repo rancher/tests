@@ -459,7 +459,7 @@ func (l *LonghornTestSuite) TestMonitoringIntegration() {
 			ProjectID: string(monitoringProject.ID),
 		}
 
-		l.T().Log("Installing monitoring chart")
+		l.T().Logf("Installing monitoring chart version %s", latestMonitoringVersion)
 		err = charts.InstallRancherMonitoringChart(l.standardUserClient, chartInstallOptions, &charts.RancherMonitoringOpts{
 			IngressNginx:      true,
 			ControllerManager: true,
