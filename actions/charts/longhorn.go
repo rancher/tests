@@ -41,7 +41,7 @@ type LonghornGlobalSettingPut struct {
 // InstallLonghornChart installs the Longhorn chart on the cluster according to data on the payload.
 // Extra values can be passed in through the values argument.
 // This also waits for installation to complete and checks if the deployments are Ready.
-func InstallLonghornChart(client *rancher.Client, payload PayloadOpts, values map[string]interface{}) error {
+func InstallLonghornChart(client *rancher.Client, payload PayloadOpts, values map[string]any) error {
 	// Callers pass a payload without Name; populate it so chart-action lifecycle and
 	// failure logs carry the chart name.
 	payload.Name = LonghornChartName
@@ -108,10 +108,10 @@ func UninstallLonghornChart(client *rancher.Client, namespace string, clusterID 
 	}
 
 	uninstallPayload := &PayloadOpts{
-		InstallOptions: InstallOptions{Cluster: &clusters.ClusterMeta{ID: clusterID}},
-		Name:           LonghornChartName,
-		Namespace:      namespace,
-		Host:           rancherHostname,
+		Cluster:   &clusters.ClusterMeta{ID: clusterID},
+		Name:      LonghornChartName,
+		Namespace: namespace,
+		Host:      rancherHostname,
 	}
 
 	bodyBytes, err := json.Marshal(NewChartUninstallAction())

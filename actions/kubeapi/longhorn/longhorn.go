@@ -53,10 +53,8 @@ func GetNumberOfLonghornVolumes(client *rancher.Client, clusterID string) (int, 
 func CreateS3LonghornBackupTarget(client *rancher.Client, clusterID string, awsCreds cloudcredentials.AmazonEC2CredentialConfig, region, bucketName string) (*longhorn.BackupTarget, error) {
 	secretName := namegenerator.AppendRandomString("aws-creds")
 	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      secretName,
-			Namespace: charts.LonghornNamespace,
-		},
+		Name:      secretName,
+		Namespace: charts.LonghornNamespace,
 		StringData: map[string]string{
 			"AWS_ACCESS_KEY_ID":     awsCreds.AccessKey,
 			"AWS_SECRET_ACCESS_KEY": awsCreds.SecretKey,
@@ -164,14 +162,10 @@ func CreateLonghornVolumeBackup(client *rancher.Client, clusterID string, namesp
 	}
 
 	snapshot := longhorn.Snapshot{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       longhornTypes.LonghornKindSnapshot,
-			APIVersion: longhorn.SchemeGroupVersion.Group + "/" + longhorn.SchemeGroupVersion.Version,
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      namegenerator.AppendRandomString("backup-test"),
-			Namespace: namespace,
-		},
+		Kind:       longhornTypes.LonghornKindSnapshot,
+		APIVersion: longhorn.SchemeGroupVersion.Group + "/" + longhorn.SchemeGroupVersion.Version,
+		Name:       namegenerator.AppendRandomString("backup-test"),
+		Namespace:  namespace,
 		Spec: longhorn.SnapshotSpec{
 			Volume:         volumeName,
 			CreateSnapshot: true,
@@ -196,16 +190,12 @@ func CreateLonghornVolumeBackup(client *rancher.Client, clusterID string, namesp
 	}
 
 	backup := &longhorn.Backup{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       longhornTypes.LonghornKindBackup,
-			APIVersion: longhorn.SchemeGroupVersion.Group + "/" + longhorn.SchemeGroupVersion.Version,
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      namegenerator.AppendRandomString("backup-test"),
-			Namespace: namespace,
-			Labels: map[string]string{
-				"backup-volume": volumeName,
-			},
+		Kind:       longhornTypes.LonghornKindBackup,
+		APIVersion: longhorn.SchemeGroupVersion.Group + "/" + longhorn.SchemeGroupVersion.Version,
+		Name:       namegenerator.AppendRandomString("backup-test"),
+		Namespace:  namespace,
+		Labels: map[string]string{
+			"backup-volume": volumeName,
 		},
 		Spec: longhorn.BackupSpec{
 			SnapshotName: snapshot.Name,
@@ -273,7 +263,7 @@ func RestoreLonghornVolumeFromBackup(client *rancher.Client, clusterID string, b
 	}
 
 	backupVolumeSelector := labels.SelectorFromSet(longhornTypes.GetBackupVolumeWithBackupTargetLabels(backup.Status.BackupTargetName, backup.Status.VolumeName))
-	err = wait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.FiveMinuteTimeout, true, func(context.Context) (bool, error) {
+	err = wait.PollUntilContextTimeout(context.Background(), defaults.TenSecondTimeout, defaults.FifteenMinuteTimeout, true, func(context.Context) (bool, error) {
 		var backupVolumes longhorn.BackupVolumeList
 		err := backupVolumeController.Client().List(context.Background(), backup.Namespace, &backupVolumes, metav1.ListOptions{LabelSelector: backupVolumeSelector.String()})
 		if err != nil {
@@ -288,14 +278,10 @@ func RestoreLonghornVolumeFromBackup(client *rancher.Client, clusterID string, b
 
 	// This volume is based on the docs: https://longhorn.io/docs/1.11.1/snapshots-and-backups/backup-and-restore/restore-from-a-backup/
 	volume := &longhorn.Volume{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       longhornTypes.LonghornKindVolume,
-			APIVersion: longhorn.SchemeGroupVersion.Group + "/" + longhorn.SchemeGroupVersion.Version,
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      namegenerator.AppendRandomString("restored-" + backup.Status.VolumeName),
-			Namespace: backup.Namespace,
-		},
+		Kind:       longhornTypes.LonghornKindVolume,
+		APIVersion: longhorn.SchemeGroupVersion.Group + "/" + longhorn.SchemeGroupVersion.Version,
+		Name:       namegenerator.AppendRandomString("restored-" + backup.Status.VolumeName),
+		Namespace:  backup.Namespace,
 		Spec: longhorn.VolumeSpec{
 			Size:       int64(volumeSize),
 			FromBackup: backup.Status.URL,

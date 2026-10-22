@@ -62,12 +62,13 @@ var (
 
 type LonghornTestSuite struct {
 	suite.Suite
-	client             *rancher.Client
-	standardUserClient *rancher.Client
-	session            *session.Session
-	longhornTestConfig longhorn.TestConfig
-	cluster            *clusters.ClusterMeta
-	project            *management.Project
+	client               *rancher.Client
+	standardUserClient   *rancher.Client
+	session              *session.Session
+	longhornTestConfig   longhorn.TestConfig
+	cluster              *clusters.ClusterMeta
+	project              *management.Project
+	longhornPreInstalled bool
 }
 
 func (l *LonghornTestSuite) TearDownSuite() {
@@ -272,10 +273,8 @@ func (l *LonghornTestSuite) TestVolumeEncryption() {
 
 	secretName := namegenerator.AppendRandomString(LonghornEncryptionSecretBaseName)
 	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      secretName,
-			Namespace: charts.LonghornNamespace,
-		},
+		Name:      secretName,
+		Namespace: charts.LonghornNamespace,
 		StringData: map[string]string{
 			"CRYPTO_KEY_VALUE":    string(key),
 			"CRYPTO_KEY_PROVIDER": "secret",
