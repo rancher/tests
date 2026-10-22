@@ -23,9 +23,12 @@ var (
 	LonghornStaticStorageClass = "longhorn-static"
 	LonghornNamespace          = "longhorn-system"
 	LonghornChartName          = "longhorn"
-	enableDeletionSetting      = map[string]any{
+	longhornChartSettings      = map[string]any{
 		"defaultSettings": map[string]any{
 			"deletingConfirmationFlag": true,
+		},
+		"networkPolicies": map[string]any{
+			"restrictInternalTraffic": false,
 		},
 	}
 )
@@ -53,17 +56,22 @@ func InstallLonghornChart(client *rancher.Client, payload PayloadOpts, values ma
 
 	// If no specific value for setting deletingConfirmationFlag was provided, default to have it enabled so cleanup works as expected.
 	if values == nil {
-		values = enableDeletionSetting
+		values = longhornChartSettings
 	} else {
 		defaultSettings, ok := values["defaultSettings"].(map[string]any)
 		if !ok {
 			return errors.New(`Provided values map has invalid value for "defaultSettings"`)
 		}
 
-		_, ok = defaultSettings["deletingConfirmationFlag"]
+		defaultSettings["deletingConfirmationFlag"] = true
+
+		networkPolicies, ok := values["networkPolicies"].(map[string]any)
 		if !ok {
-			defaultSettings["deletingConfirmationFlag"] = true
+			networkPolicies = map[string]any{}
+			values["networkPolicies"] = networkPolicies
 		}
+
+		networkPolicies["restrictInternalTraffic"] = false
 	}
 
 	chartInstalls := []types.ChartInstall{
