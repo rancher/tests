@@ -328,13 +328,15 @@ func fleetPublicIP(externalIP, internalIP string) (string, error) {
 		return "", fmt.Errorf("resolving the public IP for internal address %s via aws ec2: %w", internalIP, err)
 	}
 
-	var resolved [][]string
+	var resolved []string
 	if err := json.Unmarshal(out, &resolved); err != nil {
 		return "", fmt.Errorf("parsing the aws ec2 describe-instances output: %w", err)
 	}
-	if len(resolved) == 0 || len(resolved[0]) == 0 || resolved[0][0] == "" {
-		return "", fmt.Errorf("no public IP found for internal address %s in %s", internalIP, region)
+	for _, ip := range resolved {
+		if ip != "" {
+			return ip, nil
+		}
 	}
 
-	return resolved[0][0], nil
+	return "", fmt.Errorf("no public IP found for internal address %s in %s", internalIP, region)
 }
