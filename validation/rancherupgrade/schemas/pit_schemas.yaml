@@ -59,6 +59,10 @@
       position: 4
     custom_field:
       "15": "TestLonghornChartUpgrade"
+
+- projects: [RANCHERINT]
+  suite: Rancher Upgrade/NeuVector
+  cases:
   - title: "NeuVector pre-upgrade setup"
     description: "Install NeuVector and prove admission control enforcement before the Rancher server upgrade"
     automation: 2
