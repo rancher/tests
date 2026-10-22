@@ -209,7 +209,7 @@ func CreateLonghornVolumeBackup(client *rancher.Client, clusterID string, namesp
 	}
 
 	client.Session.RegisterCleanupFunc(func() error {
-		return backupController.Client().Delete(context.Background(), namespace, snapshot.Name, metav1.DeleteOptions{})
+		return backupController.Client().Delete(context.Background(), namespace, backup.Name, metav1.DeleteOptions{})
 	})
 
 	err = wait.PollUntilContextTimeout(context.Background(), defaults.FiveHundredMillisecondTimeout, defaults.FiveMinuteTimeout, false, func(context.Context) (bool, error) {
