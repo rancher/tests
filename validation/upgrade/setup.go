@@ -96,9 +96,28 @@ func Setup(t *testing.T, clusterType string, isWindows bool) *upgradeTest {
 			_, _, _, cluster := tfpCustom.CreateCustomCluster(t, u.Client, rancherConfig, terraformConfig, terratestConfig, "rke2_windows_2022", "validation/provisioning/rke2", true)
 
 			u.Cluster = cluster
+
+			err = provisioning.VerifyClusterReady(u.Client, cluster)
+			require.NoError(t, err)
+
+			logrus.Info("Granting the standard user cluster-owner on the windows cluster")
+			mgmtClusterID, err := extclusters.GetClusterIDByName(u.Client, cluster.Name)
+			require.NoError(t, err)
+
+			_, err = rbacapi.CreateClusterRoleTemplateBinding(u.Client, mgmtClusterID, standardUser.ID, rbac.ClusterOwner.String())
+			require.NoError(t, err)
+
+			u.StandardUserClient, err = u.StandardUserClient.ReLogin()
+			require.NoError(t, err)
 		} else {
 			logrus.Infof("Provisioning %s cluster", clusterType)
 			u.Cluster, err = resources.ProvisionRKE2K3SCluster(t, standardUserClient, clusterType, provider, *clusterConfig, machineConfigSpec, nil, false, false)
+			require.NoError(t, err)
+
+			_, err := rbacapi.GetClusterRoleTemplateBindingsForUser(u.Client, standardUser.ID)
+			require.NoError(t, err)
+
+			u.StandardUserClient, err = u.StandardUserClient.ReLogin()
 			require.NoError(t, err)
 		}
 	} else {
