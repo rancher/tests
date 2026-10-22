@@ -741,6 +741,36 @@ rancher_use_bundled_system_charts: true
                         writeFile file: cattleConfigPath, text: resolvedConfig.trim() + '\n'
                     }
 
+                    // The fleet module's pre-upgrade phase serves its GitRepo
+                    // over SSH from a downstream node. Downstream executors
+                    // mount no .ssh, so the node key is threaded through the
+                    // test config for fleet alone; the PEM sits in the
+                    // orchestrator workspace where writeSshKey put it for
+                    // ansible.
+                    if (params.TEST_MODULE == 'fleet') {
+                        property.useWithProperties(['AWS_SSH_PEM_KEY_NAME']) {
+                            def pemPath = "${workspace}/.ssh/${AWS_SSH_PEM_KEY_NAME}"
+                            if (!fileExists(pemPath)) {
+                                error "fleet module needs the node key at ${pemPath} (AWS_SSH_PEM_KEY_NAME), but it does not exist"
+                            }
+                            def sshUser = sh(
+                                script: "awk -F': *' '/^aws_ssh_user/{print \$2}' ${env.INFRA_DIR}/tofu/aws/modules/cluster_nodes/terraform.tfvars | head -1 | tr -d '\"'",
+                                returnStdout: true
+                            ).trim()
+                            if (!sshUser) {
+                                sshUser = 'ubuntu'
+                            }
+                            sh """
+                                set +x
+                                export nodekey=\$(cat ${pemPath})
+                                export sshuser='${sshUser}'
+                                ./yq e '.sshNode.sshKey = strenv(nodekey)' -i ${cattleConfigPath}
+                                ./yq e '.sshNode.sshUser = strenv(sshuser)' -i ${cattleConfigPath}
+                            """
+                            echo "fleet module: node ssh key and user threaded into the test config"
+                        }
+                    }
+
                     // Generate admin token via Ansible playbook
                     // TODO: replace with 'make token' once that target is added upstream
                     def containerConfigPath = "/workspace/${cattleConfigPath}"
