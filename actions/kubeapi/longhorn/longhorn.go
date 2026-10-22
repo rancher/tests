@@ -276,6 +276,10 @@ func RestoreLonghornVolumeFromBackup(client *rancher.Client, clusterID string, b
 		return fmt.Errorf("backup volume for volume %s on backup target %s was not created: %w", backup.Status.VolumeName, backup.Status.BackupTargetName, err)
 	}
 
+	// Backups of encrypted volumes must be restored into encrypted volumes. Longhorn reports the backup size without
+	// the LUKS header and adds it back to the backend size of encrypted volumes, so the size can be used as is.
+	encrypted := backup.Status.Labels[longhornTypes.LonghornLabelVolumeEncrypted] == longhornTypes.LonghornLabelValueEnabled
+
 	// This volume is based on the docs: https://longhorn.io/docs/1.11.1/snapshots-and-backups/backup-and-restore/restore-from-a-backup/
 	volume := &longhorn.Volume{
 		Kind:       longhornTypes.LonghornKindVolume,
@@ -283,6 +287,7 @@ func RestoreLonghornVolumeFromBackup(client *rancher.Client, clusterID string, b
 		Name:       namegenerator.AppendRandomString("restored-" + backup.Status.VolumeName),
 		Namespace:  backup.Namespace,
 		Spec: longhorn.VolumeSpec{
+			Encrypted:  encrypted,
 			Size:       int64(volumeSize),
 			FromBackup: backup.Status.URL,
 			Frontend:   "blockdev",
