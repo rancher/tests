@@ -58,6 +58,8 @@ var (
 	LonghornEncryptionStorageClassBaseName = "longhorn-crypto-global"
 	volumeBytesPrometheusQueryTemplate     = "longhorn_volume_capacity_bytes{volume=\"%s\"}"
 	numberVolumesPrometheusQuery           = "count(longhorn_volume_capacity_bytes) OR on() vector(0)" // Return an empty list instead of nil with OR on() vector(0).
+	longhornNetworkPolicySteveType         = "networking.k8s.io.networkpolicy"
+	longhornManagerNetworkPolicyName       = "longhorn-manager"
 )
 
 type LonghornTestSuite struct {
@@ -106,6 +108,7 @@ func (l *LonghornTestSuite) SetupSuite() {
 	chart, err := shepherdCharts.GetChartStatus(l.standardUserClient, l.cluster.ID, charts.LonghornNamespace, charts.LonghornChartName)
 	require.NoError(l.T(), err)
 
+	l.longhornPreInstalled = chart.IsAlreadyInstalled
 	if !chart.IsAlreadyInstalled {
 		// Get latest versions of longhorn
 		latestLonghornVersion, err := l.standardUserClient.Catalog.GetLatestChartVersion(charts.LonghornChartName, catalog.RancherChartRepo)
@@ -114,11 +117,9 @@ func (l *LonghornTestSuite) SetupSuite() {
 		payloadOpts := charts.PayloadOpts{
 			Namespace: charts.LonghornNamespace,
 			Host:      l.client.RancherConfig.Host,
-			InstallOptions: charts.InstallOptions{
-				Cluster:   l.cluster,
-				Version:   latestLonghornVersion,
-				ProjectID: l.project.ID,
-			},
+			Cluster:   l.cluster,
+			Version:   latestLonghornVersion,
+			ProjectID: l.project.ID,
 		}
 
 		l.T().Logf("Installing Lonhgorn chart in cluster [%v] with latest version [%v] in project [%v] and namespace [%v]", l.cluster.Name, payloadOpts.Version, l.project.Name, payloadOpts.Namespace)
@@ -470,6 +471,10 @@ func (l *LonghornTestSuite) TestMonitoringIntegration() {
 		require.NoError(l.T(), err)
 	}
 
+	if l.longhornPreInstalled {
+		l.warnIfLonghornManagerNetworkPolicyExists()
+	}
+
 	serviceMonitorSpec := monitoringv1.ServiceMonitorSpec{
 		Selector: metav1.LabelSelector{
 			MatchLabels: map[string]string{"app": "longhorn-manager"},
@@ -514,6 +519,32 @@ func (l *LonghornTestSuite) TestMonitoringIntegration() {
 	value, err = monitoring.PrometheusQueryInGrafana(loggedClient, l.client.RancherConfig.Host, l.cluster.ID, numberVolumesPrometheusQuery)
 	require.NoError(l.T(), err)
 	require.Equal(l.T(), previousNumberOfVolumes+1, value)
+}
+
+// warnIfLonghornManagerNetworkPolicyExists logs a warning when a pre-installed Longhorn has the
+// longhorn-manager NetworkPolicy (created when networkPolicies.restrictInternalTraffic is true),
+// since it blocks Prometheus from scraping the Longhorn metrics endpoint.
+func (l *LonghornTestSuite) warnIfLonghornManagerNetworkPolicyExists() {
+	steveClient, err := l.client.Steve.ProxyDownstream(l.cluster.ID)
+	if err != nil {
+		l.T().Logf("WARNING: could not check for Longhorn NetworkPolicies: %v", err)
+		return
+	}
+
+	policies, err := steveClient.SteveType(longhornNetworkPolicySteveType).NamespacedSteveClient(charts.LonghornNamespace).List(nil)
+	if err != nil {
+		l.T().Logf("WARNING: could not check for Longhorn NetworkPolicies: %v", err)
+		return
+	}
+
+	for _, policy := range policies.Data {
+		if policy.Name == longhornManagerNetworkPolicyName {
+			l.T().Logf("WARNING: the pre-installed Longhorn has the NetworkPolicy %s/%s, which blocks Prometheus from scraping Longhorn metrics. "+
+				"This test will likely fail. Reinstall Longhorn with networkPolicies.restrictInternalTraffic=false or allow ingress from %s to port 9500.",
+				charts.LonghornNamespace, longhornManagerNetworkPolicyName, charts.RancherMonitoringNamespace)
+			return
+		}
+	}
 }
 
 // In order for 'go test' to run this suite, we need to create
