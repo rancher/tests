@@ -3,6 +3,7 @@
 package rancherupgrade
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"os/exec"
 	"sort"
 	"strings"
+	"time"
 
 	fleetv1alpha1 "github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
 	provv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
@@ -25,6 +27,7 @@ import (
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
 const (
@@ -209,6 +212,30 @@ func loadSSHNodeInput() *SSHNodeInput {
 	config.LoadConfig(sshNodeConfigKey, sshNodeInput)
 
 	return sshNodeInput
+}
+
+// verifyFleetGitRepoSynced wraps interoperability VerifyGitRepo in a longer
+// window: its own exponential backoff tops out near a minute, which is too
+// short for the fleet controller's first-ever git clone job on a cold cluster
+// (gitjob scheduling, image pulls) and for the controller restart that the
+// server upgrade causes before the post-upgrade phase. Persistent verification
+// errors (for example a failing git clone) keep retrying until the window
+// closes, and the last error is what surfaces.
+func verifyFleetGitRepoSynced(client *rancher.Client, gitRepoID, k8sClusterID, steveClusterID string) error {
+	var lastErr error
+	err := kwait.PollUntilContextTimeout(context.Background(), 15*time.Second, 10*time.Minute, true, func(ctx context.Context) (bool, error) {
+		lastErr = fleet.VerifyGitRepo(client, gitRepoID, k8sClusterID, steveClusterID)
+		if lastErr != nil {
+			logrus.Warnf("fleet GitRepo %s not verified yet, retrying: %v", gitRepoID, lastErr)
+			return false, nil
+		}
+		return true, nil
+	})
+	if err != nil {
+		return fmt.Errorf("fleet GitRepo %s did not verify: %w", gitRepoID, lastErr)
+	}
+
+	return nil
 }
 
 // fleetSSHNode returns the worker node the fleet suite turns into its
