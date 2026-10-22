@@ -27,8 +27,14 @@ const (
 	knownHosts    = "known_hosts"
 
 	// Namespace is the fleet workspace namespace on the management cluster
-	// where GitRepos and their SSH client secrets are created.
+	// where GitRepos and their SSH client secrets are created for clusters
+	// registered in that workspace.
 	Namespace = "fleet-default"
+
+	// LocalNamespace is the workspace of the local (management) cluster: the
+	// fleet-default controller only processes clusters registered in
+	// fleet-default, so GitRepos targeting the local cluster must live here.
+	LocalNamespace = "fleet-local"
 
 	// DefaultBranch is the branch of the node-local git remote tracked by the
 	// GitRepos created via CreateLocalFleetGitRepo.
@@ -64,18 +70,19 @@ func GitPushCommit(sshNode *nodes.Node, repoName string) error {
 }
 
 // CreateLocalFleetGitRepo creates a Fleet GitRepo named gitRepoName in the
-// fleet-default namespace tracking the node-local clone at ~/repoName over
+// repoNamespace workspace tracking the node-local clone at ~/repoName over
 // SSH. The GitRepo targets the cluster named clusterName and deploys the
 // DefaultGitRepoPath layout into namespaceName, authenticating with the SSH
-// secret secretName. The caller is responsible for waiting on the initial sync
-// (for example with interoperability/fleet.VerifyGitRepo).
-func CreateLocalFleetGitRepo(client *rancher.Client, sshNode *nodes.Node, gitRepoName string, repoName string, namespaceName string, clusterName string, secretName string) (*steveV1.SteveAPIObject, error) {
+// secret secretName, which must live in repoNamespace as well. The caller is
+// responsible for waiting on the initial sync (for example with
+// interoperability/fleet.VerifyGitRepo).
+func CreateLocalFleetGitRepo(client *rancher.Client, sshNode *nodes.Node, gitRepoName string, repoName string, namespaceName string, clusterName string, secretName string, repoNamespace string) (*steveV1.SteveAPIObject, error) {
 	gitSSHRepo := fmt.Sprintf("%s@%s:/home/%s/%s", sshNode.SSHUser, sshNode.PublicIPAddress, sshNode.SSHUser, repoName)
 
 	fleetGitRepo := &v1alpha1.GitRepo{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      gitRepoName,
-			Namespace: Namespace,
+			Namespace: repoNamespace,
 		},
 		Spec: v1alpha1.GitRepoSpec{
 			Repo:            gitSSHRepo,
@@ -182,10 +189,10 @@ func VerifyRepoPause(client *rancher.Client, repoObjectID string, isPaused bool)
 }
 
 // CreateFleetSSHSecret creates an SSH auth secret named secretName in the
-// fleet-default namespace holding the private key, its public key and the
+// namespace namespace holding the private key, its public key and the
 // known_hosts entry for the node serving the git remote. It returns the name
 // of the created secret.
-func CreateFleetSSHSecret(client *rancher.Client, privateKey []byte, knownHostKey string, secretName string) (string, error) {
+func CreateFleetSSHSecret(client *rancher.Client, privateKey []byte, knownHostKey string, secretName string, namespace string) (string, error) {
 	key, err := ssh.ParsePrivateKey(privateKey)
 	if err != nil {
 		return "", err
@@ -200,14 +207,13 @@ func CreateFleetSSHSecret(client *rancher.Client, privateKey []byte, knownHostKe
 	secretTemplate := corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      secretName,
-			Namespace: Namespace,
+			Namespace: namespace,
 		},
 		Data: keyData,
 		Type: corev1.SecretTypeSSHAuth,
 	}
 
 	secretResp, err := client.WranglerContext.Core.Secret().Create(&secretTemplate)
-
 	if err != nil {
 		return "", err
 	}

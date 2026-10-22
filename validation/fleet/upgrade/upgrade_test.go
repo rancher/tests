@@ -80,7 +80,7 @@ func (u *UpgradeTestSuite) SetupSuite() {
 	knownHostKey, err := u.sshNode.ExecuteCommand(fmt.Sprintf("ssh-keyscan -H %s", u.sshNode.PublicIPAddress))
 	require.NoError(u.T(), err)
 
-	u.fleetSecretName, err = actionsFleet.CreateFleetSSHSecret(u.client, u.sshNode.SSHKey, knownHostKey, namegenerator.AppendRandomString("fleet-ssh"))
+	u.fleetSecretName, err = actionsFleet.CreateFleetSSHSecret(u.client, u.sshNode.SSHKey, knownHostKey, namegenerator.AppendRandomString("fleet-ssh"), fleet.Namespace)
 	require.NoError(u.T(), err)
 }
 
@@ -97,7 +97,7 @@ func (u *UpgradeTestSuite) TestNewCommitFleetRepo() {
 	require.NoError(u.T(), err)
 
 	log.Info("Creating Fleet repo")
-	repoObject, err := actionsFleet.CreateLocalFleetGitRepo(u.client, u.sshNode, fleet.FleetMetaName+namegenerator.RandStringLower(5), repoName, namespace.Name, u.clusterName, u.fleetSecretName)
+	repoObject, err := actionsFleet.CreateLocalFleetGitRepo(u.client, u.sshNode, fleet.FleetMetaName+namegenerator.RandStringLower(5), repoName, namespace.Name, u.clusterName, u.fleetSecretName, fleet.Namespace)
 	require.NoError(u.T(), err)
 
 	log.Info("Verifying the Git repository")
@@ -135,7 +135,7 @@ func (u *UpgradeTestSuite) TestGitRepoForceUpdate() {
 	require.NoError(u.T(), err)
 
 	log.Info("Creating Fleet repo")
-	repoObject, err := actionsFleet.CreateLocalFleetGitRepo(u.client, u.sshNode, fleet.FleetMetaName+namegenerator.RandStringLower(5), repoName, namespace.Name, u.clusterName, u.fleetSecretName)
+	repoObject, err := actionsFleet.CreateLocalFleetGitRepo(u.client, u.sshNode, fleet.FleetMetaName+namegenerator.RandStringLower(5), repoName, namespace.Name, u.clusterName, u.fleetSecretName, fleet.Namespace)
 	require.NoError(u.T(), err)
 
 	log.Info("Verifying the Git repository")
@@ -198,7 +198,7 @@ func (u *UpgradeTestSuite) TestPauseFleetRepo() {
 	require.NoError(u.T(), err)
 
 	log.Info("Creating Fleet repo")
-	repoObject, err := actionsFleet.CreateLocalFleetGitRepo(u.client, u.sshNode, fleet.FleetMetaName+namegenerator.RandStringLower(5), repoName, namespace.Name, u.clusterName, u.fleetSecretName)
+	repoObject, err := actionsFleet.CreateLocalFleetGitRepo(u.client, u.sshNode, fleet.FleetMetaName+namegenerator.RandStringLower(5), repoName, namespace.Name, u.clusterName, u.fleetSecretName, fleet.Namespace)
 	require.NoError(u.T(), err)
 
 	log.Info("Verifying the Git repository")

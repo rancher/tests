@@ -22,6 +22,7 @@ import (
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/nodes"
 	"github.com/rancher/tests/actions/clusters"
+	actionsFleet "github.com/rancher/tests/actions/fleet"
 	"github.com/rancher/tests/actions/namespaces"
 	"github.com/rancher/tests/interoperability/fleet"
 	"github.com/sirupsen/logrus"
@@ -212,6 +213,18 @@ func loadSSHNodeInput() *SSHNodeInput {
 	config.LoadConfig(sshNodeConfigKey, sshNodeInput)
 
 	return sshNodeInput
+}
+
+// fleetGitRepoWorkspace returns the fleet workspace the GitRepo and its SSH
+// secret must live in for the target cluster: the fleet-default controller
+// only processes clusters registered in fleet-default, so the local cluster
+// (registered in fleet-local) is targeted from fleet-local instead.
+func fleetGitRepoWorkspace(targetClusterName string) string {
+	if targetClusterName == fleet.LocalName {
+		return actionsFleet.LocalNamespace
+	}
+
+	return actionsFleet.Namespace
 }
 
 // verifyFleetGitRepoSynced wraps interoperability VerifyGitRepo in a longer
