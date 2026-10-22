@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/rancher/shepherd/clients/rancher/catalog"
-	"github.com/rancher/shepherd/clients/rancher/v1"
+	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/clusters"
 	scheme "github.com/rancher/shepherd/pkg/generated/clientset/versioned/scheme"
 	"github.com/sirupsen/logrus"
@@ -53,7 +53,7 @@ func chartActionTestOpts() *PayloadOpts {
 	return &PayloadOpts{
 		InstallOptions: InstallOptions{Cluster: &clusters.ClusterMeta{ID: "c-test-local"}},
 		Name:           "rancher-monitoring",
-		Namespace:      "cattle-monitoring-system",
+		Namespace:      RancherMonitoringNamespace,
 	}
 }
 
@@ -386,7 +386,7 @@ func TestChartActionRequestBuildersDisableClientGoRetries(t *testing.T) {
 
 func TestLogChartActionFailureNilClientIsNoop(t *testing.T) {
 	// Must not panic or log diagnostics when there is no client to read with.
-	LogChartActionFailure(context.Background(), nil, "rancher-charts", "c-local", "cattle-monitoring-system", []string{"rancher-monitoring"})
+	LogChartActionFailure(context.Background(), nil, "rancher-charts", "c-local", RancherMonitoringNamespace, []string{"rancher-monitoring"})
 }
 
 func TestChartOperationStatusForLogRedactsSensitiveFields(t *testing.T) {
@@ -396,7 +396,7 @@ func TestChartOperationStatusForLogRedactsSensitiveFields(t *testing.T) {
 			"chart":       "rancher-monitoring",
 			"version":     "102.0.0",
 			"releaseName": "rancher-monitoring",
-			"namespace":   "cattle-monitoring-system",
+			"namespace":   RancherMonitoringNamespace,
 			"podName":     "helm-operation-abc123",
 			"podCreated":  true,
 			"token":       "kubeconfig-u-abcdef-secrettoken",
