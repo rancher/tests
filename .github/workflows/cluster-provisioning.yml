@@ -22,6 +22,10 @@ on:
         required: false
         default: false
         type: boolean
+      qase_test_run_id:
+        description: "Optional Qase test run ID override"
+        required: false
+        type: string
       environment_cleanup:
         description: "Enable environment cleanup after test run"
         required: false
@@ -253,6 +257,7 @@ jobs:
             host: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
             adminPassword: "<HB_RANCHER_ADMIN_PASSWORD>"
             insecure: true
+            cleanup: ${{ env.CLEANUP_ENABLED }}
 
           awsCredentials:
             accessKey: "$AWS_ACCESS_KEY"
@@ -262,9 +267,13 @@ jobs:
           terraform:
             localCluster: "${{ env.LOCAL_CLUSTER_TYPE }}"
             privateKeyPath: "${{ steps.setup-ssh-keys.outputs.ssh-private-key-path }}"
+            windowsPrivateKeyPath: "${{ steps.setup-ssh-keys.outputs.windows-ssh-private-key-path }}"
             privateFullChainPath: "${{ steps.setup-certs.outputs.private-full-chain-tfp-path }}"
             privateCertKeyPath: "${{ steps.setup-certs.outputs.private-cert-key-tfp-path }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
+
+            awsConfig:
+              windowsKeyName: "${{ steps.setup-ssh-keys.outputs.windows-ssh-private-key-name }}"
 
             standalone:
               chartVersion: "${{ env.RANCHER_CHART_VERSION }}"
@@ -361,7 +370,7 @@ jobs:
 
       - name: Run Provisioning tests
         env:
-          QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
+          QASE_TEST_RUN_ID: ${{ inputs.qase_test_run_id || steps.get-qase-id.outputs.id }}
           QASE_AUTOMATION_TOKEN: ${{ fromJSON(env.HB_QASE_AUTOMATION_TOKEN).value }}
           QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_SCHEMA_PREFIX: hostbusters
