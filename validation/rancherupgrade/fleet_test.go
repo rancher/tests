@@ -95,7 +95,7 @@ func (s *FleetUpgradeTestSuite) TestFleetPreUpgrade() {
 	require.NoError(s.T(), err)
 
 	gitRepoID := fmt.Sprintf("%s/%s", s.gitRepoNamespace, fleetGitRepoName)
-	err = verifyFleetGitRepoSynced(s.client, gitRepoID, s.cluster.ID, fmt.Sprintf("%s/%s", fleet.Namespace, s.fleetTarget))
+	err = verifyFleetGitRepoSynced(s.client, gitRepoID, s.cluster.ID, fmt.Sprintf("%s/%s", s.gitRepoNamespace, s.fleetTarget))
 	require.NoError(s.T(), err)
 
 	commit, err := gitRepoCommit(s.client, gitRepoID)
@@ -134,7 +134,7 @@ func (s *FleetUpgradeTestSuite) TestFleetPostUpgrade() {
 	require.NotEmpty(s.T(), preCommit, "state ConfigMap is missing %s", fleetStateKeyCommit)
 
 	gitRepoID := fmt.Sprintf("%s/%s", s.gitRepoNamespace, fleetGitRepoName)
-	err = verifyFleetGitRepoSynced(s.client, gitRepoID, s.cluster.ID, fmt.Sprintf("%s/%s", fleet.Namespace, s.fleetTarget))
+	err = verifyFleetGitRepoSynced(s.client, gitRepoID, s.cluster.ID, fmt.Sprintf("%s/%s", s.gitRepoNamespace, s.fleetTarget))
 	require.NoError(s.T(), err)
 	logrus.Infof("post-upgrade phase: GitRepo %s still in sync; driving a new commit through the reconcile loop", gitRepoID)
 
@@ -150,7 +150,7 @@ func (s *FleetUpgradeTestSuite) TestFleetPostUpgrade() {
 	err = actionsFleet.VerifyRepoUpdate(s.client, gitRepoID)
 	require.NoError(s.T(), err)
 
-	err = verifyFleetGitRepoSynced(s.client, gitRepoID, s.cluster.ID, fmt.Sprintf("%s/%s", fleet.Namespace, s.fleetTarget))
+	err = verifyFleetGitRepoSynced(s.client, gitRepoID, s.cluster.ID, fmt.Sprintf("%s/%s", s.gitRepoNamespace, s.fleetTarget))
 	require.NoError(s.T(), err)
 	logrus.Infof("post-upgrade phase: commit moved past the pre-upgrade SHA %s and resources redeployed downstream", preCommit)
 
