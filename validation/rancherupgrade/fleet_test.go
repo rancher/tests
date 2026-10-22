@@ -13,7 +13,6 @@ import (
 	"github.com/rancher/shepherd/pkg/session"
 	actionsClusters "github.com/rancher/tests/actions/clusters"
 	actionsFleet "github.com/rancher/tests/actions/fleet"
-	"github.com/rancher/tests/actions/ssh"
 	"github.com/rancher/tests/interoperability/fleet"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
@@ -71,7 +70,7 @@ func (s *FleetUpgradeTestSuite) TearDownSuite() {
 
 func (s *FleetUpgradeTestSuite) TestFleetPreUpgrade() {
 	logrus.Infof("pre-upgrade phase: creating SSH node on cluster %s", s.cluster.ID)
-	sshNode, err := ssh.CreateSSHNode(s.client, s.cluster.Name, s.cluster.ID)
+	sshNode, err := fleetSSHNode(s.client, s.cluster.ID)
 	require.NoError(s.T(), err)
 
 	knownHostKey, err := sshNode.ExecuteCommand(fmt.Sprintf("ssh-keyscan -H %s", sshNode.PublicIPAddress))
