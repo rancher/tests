@@ -5,13 +5,14 @@
  * Six-stage flow, community leg:
  *   1. Deploys a 2.14-latest environment via qa-infra-automation
  *      (make backend-s3, workspace-new, infra-up, cluster, rancher)
- *   2. Pre-upgrade phase: installs Longhorn + seeds a checksum workload
- *      (validation/rancherupgrade, TestLonghornUpgradeTestSuite/TestLonghornPreUpgrade)
+ *   2. Pre-upgrade phase: installs the TEST_MODULE chart + seeds its upgrade
+ *      state (validation/rancherupgrade, <Module>UpgradeTestSuite/*PreUpgrade)
  *   3. Upgrades the Rancher server in place via `make rancher-upgrade`
  *      and re-injects the rotated admin token into the test config
- *   4. Post-upgrade phase: asserts server version, Longhorn survival, workload data
- *   5. Chart-upgrade phase: upgrades Longhorn to the version offered by the
- *      upgraded Rancher's catalog and re-verifies the workload data
+ *   4. Post-upgrade phase: asserts server version and module state survival
+ *   5. Chart-upgrade phase: upgrades the module chart to the version offered
+ *      by the upgraded Rancher's catalog and re-verifies (skipped for fleet:
+ *      Fleet ships inside Rancher with no standalone chart)
  *   6. Always destroys the environment (infra-down AUTO_APPROVE=yes)
  *
  * Versions resolve at runtime when RANCHER_VERSION_FROM / RANCHER_VERSION_TO_UPGRADE
@@ -53,9 +54,34 @@ def GO_TEST_IMAGE = "rancher-go-test:pitupgrade-${env.BUILD_NUMBER}"
 // Suite/method selectors passed as GOTEST_TESTCASE to the downstream executor.
 // Each phase is its own go test invocation (-run regex), so cross-phase state
 // lives in-cluster under deterministic names, never in process memory.
-def PRE_UPGRADE_TESTCASE = '-run "TestLonghornUpgradeTestSuite/TestLonghornPreUpgrade"'
-def POST_UPGRADE_TESTCASE = '-run "TestLonghornUpgradeTestSuite/TestLonghornPostUpgrade"'
-def CHART_UPGRADE_TESTCASE = '-run "TestLonghornUpgradeTestSuite/TestLonghornChartUpgrade"'
+// TEST_MODULE selects the entry (checkout stage fails fast on an unknown name).
+// fleet ships inside Rancher with no standalone chart, so its map has no chart
+// phase and the chart-upgrade stage is skipped for it.
+def UPGRADE_TEST_MODULES = [
+    longhorn: [
+        pre:   '-run "TestLonghornUpgradeTestSuite/TestLonghornPreUpgrade"',
+        post:  '-run "TestLonghornUpgradeTestSuite/TestLonghornPostUpgrade"',
+        chart: '-run "TestLonghornUpgradeTestSuite/TestLonghornChartUpgrade"'
+    ],
+    neuvector: [
+        pre:   '-run "TestNeuVectorUpgradeTestSuite/TestNeuVectorPreUpgrade"',
+        post:  '-run "TestNeuVectorUpgradeTestSuite/TestNeuVectorPostUpgrade"',
+        chart: '-run "TestNeuVectorUpgradeTestSuite/TestNeuVectorChartUpgrade"'
+    ],
+    fleet: [
+        pre:  '-run "TestFleetUpgradeTestSuite/TestFleetPreUpgrade"',
+        post: '-run "TestFleetUpgradeTestSuite/TestFleetPostUpgrade"'
+    ],
+    observability: [
+        pre:   '-run "TestObservabilityUpgradeTestSuite/TestObservabilityPreUpgrade"',
+        post:  '-run "TestObservabilityUpgradeTestSuite/TestObservabilityPostUpgrade"',
+        chart: '-run "TestObservabilityUpgradeTestSuite/TestObservabilityChartUpgrade"'
+    ]
+]
+
+// Binding variable (no def) so every stage's script/when block sees it; set in
+// the Checkout stage, read by the three phase stages below.
+TEST_PHASES = null
 
 /**
  * Shared teardown helper: re-renders tfvars from params, tears down tofu workspace
@@ -308,6 +334,11 @@ server_flags: |
         )
 
         // ── Test parameters ────────────────────────────────────
+        string(
+            name: 'TEST_MODULE',
+            defaultValue: params.TEST_MODULE ?: 'longhorn',
+            description: 'rancherupgrade module under test (longhorn | neuvector | fleet | observability). Selects the per-phase -run regexes; fleet has no chart-upgrade phase.'
+        )
         text(
             name: 'CATTLE_TEST_CONFIG',
             description: 'Test configuration YAML (cattle-config). rancher.adminToken is injected at runtime (initial + rotated after the server upgrade); rancherUpgradeInput.targetVersion is substituted from the resolved upgrade target.',
@@ -392,6 +423,15 @@ rancherUpgradePipeline:
                     )
                     env.TESTS_DIR = dirs.testsDir
                     env.INFRA_DIR = dirs.infraDir
+
+                    // Resolve the selected module's phase selectors before any
+                    // infra spend: an unknown TEST_MODULE fails here, and the
+                    // log records exactly which regex each stage will run.
+                    TEST_PHASES = UPGRADE_TEST_MODULES[params.TEST_MODULE]
+                    if (!TEST_PHASES) {
+                        error "Unknown TEST_MODULE '${params.TEST_MODULE}' — valid modules: ${UPGRADE_TEST_MODULES.keySet().sort().join(', ')}"
+                    }
+                    echo "TEST_MODULE '${params.TEST_MODULE}' phase selectors: pre=${TEST_PHASES.pre} post=${TEST_PHASES.post} chart=${TEST_PHASES.chart ?: '(none: module has no chart-upgrade phase)'}"
 
                     def hostnamePrefix = params.HOSTNAME_PREFIX ?: 'unknown'
                     currentBuild.displayName = "#${env.BUILD_NUMBER} - ${hostnamePrefix}"
@@ -502,7 +542,7 @@ rancherUpgradePipeline:
                           TO   (upgrade): ${env.RANCHER_TO_VERSION} (${env.RANCHER_TO_IMAGE_TAG})
                           Chart flavor:   ${params.RANCHER_CHART_REPO_FLAVOR}
                         """.stripIndent()
-                    currentBuild.description = "Upgrade ${env.RANCHER_FROM_VERSION} -> ${env.RANCHER_TO_VERSION} (${params.RANCHER_CHART_REPO_FLAVOR}) | ${params.HOSTNAME_PREFIX}"
+                    currentBuild.description = "Upgrade ${env.RANCHER_FROM_VERSION} -> ${env.RANCHER_TO_VERSION} (${params.RANCHER_CHART_REPO_FLAVOR}) | ${params.HOSTNAME_PREFIX} | ${params.TEST_MODULE}"
                 }
             }
         }
@@ -758,9 +798,9 @@ rancher_use_bundled_system_charts: true
             }
         }
 
-        // ── Phase 1: pre-upgrade Longhorn install + workload seed ──
-        // Starts the shared Qase run once; all three phases report into it.
-        stage('Pre-Upgrade Longhorn Tests') {
+        // ── Phase 1: pre-upgrade module install + state seed ──
+        // Starts the shared Qase run once; every phase reports into it.
+        stage('Pre-Upgrade Tests') {
             steps {
                 script {
                     property.useWithProperties(['QASE_AUTOMATION_TOKEN']) {
@@ -802,7 +842,7 @@ rancher_use_bundled_system_charts: true
                         // teardown is the cleanup.
                         def configYaml = readFile(file: cattleConfigPath)
 
-                        echo "Dispatching pre-upgrade phase: GOTEST_TESTCASE ${PRE_UPGRADE_TESTCASE}"
+                        echo "Dispatching pre-upgrade phase: GOTEST_TESTCASE ${TEST_PHASES.pre}"
                         build job: params.INDIVIDUAL_JOB, parameters: [
                             string(name: 'TIMEOUT', value: params.TEST_TIMEOUT),
                             text(name: 'CONFIG', value: configYaml),
@@ -812,7 +852,7 @@ rancher_use_bundled_system_charts: true
                             string(name: 'QASE_SCHEMA_PREFIX', value: params.QASE_SCHEMA_PREFIX),
                             string(name: 'QASE_REPORTER_SCRIPT', value: params.QASE_REPORTER_SCRIPT),
                             string(name: 'TEST_PACKAGE', value: params.TEST_PACKAGE),
-                            string(name: 'GOTEST_TESTCASE', value: PRE_UPGRADE_TESTCASE),
+                            string(name: 'GOTEST_TESTCASE', value: TEST_PHASES.pre),
                             string(name: 'TAGS', value: 'validation'),
                             booleanParam(name: 'CAPTURE_IMAGES', value: false)
                         ]
@@ -881,7 +921,7 @@ rancher_use_bundled_system_charts: true
         }
 
         // ── Phase 3: post-upgrade assertions ──
-        stage('Post-Upgrade Longhorn Tests') {
+        stage('Post-Upgrade Tests') {
             steps {
                 script {
                     property.useWithProperties(['QASE_AUTOMATION_TOKEN']) {
@@ -904,7 +944,7 @@ rancher_use_bundled_system_charts: true
                             echo "Dispatched config carries the rotated admin token (length \${#expected})"
                         """
 
-                        echo "Dispatching post-upgrade phase: GOTEST_TESTCASE ${POST_UPGRADE_TESTCASE} (Qase run ${testRunID})"
+                        echo "Dispatching post-upgrade phase: GOTEST_TESTCASE ${TEST_PHASES.post} (Qase run ${testRunID})"
                         build job: params.INDIVIDUAL_JOB, parameters: [
                             string(name: 'TIMEOUT', value: params.TEST_TIMEOUT),
                             text(name: 'CONFIG', value: configYaml),
@@ -914,19 +954,34 @@ rancher_use_bundled_system_charts: true
                             string(name: 'QASE_SCHEMA_PREFIX', value: params.QASE_SCHEMA_PREFIX),
                             string(name: 'QASE_REPORTER_SCRIPT', value: params.QASE_REPORTER_SCRIPT),
                             string(name: 'TEST_PACKAGE', value: params.TEST_PACKAGE),
-                            string(name: 'GOTEST_TESTCASE', value: POST_UPGRADE_TESTCASE),
+                            string(name: 'GOTEST_TESTCASE', value: TEST_PHASES.post),
                             string(name: 'TAGS', value: 'validation'),
                             booleanParam(name: 'CAPTURE_IMAGES', value: false)
                         ]
+
+                        // Modules without a chart-upgrade phase (fleet) end
+                        // their pipeline here: close the shared Qase run now.
+                        // The post{always} fallback below still covers every
+                        // failure path for every module.
+                        if (!TEST_PHASES.chart) {
+                            sh "./testrun --startRun=false"
+                            env.QASE_RUN_COMPLETED = 'true'
+                            echo "Shared Qase test run ${testRunID} completed (module has no chart-upgrade phase)"
+                        }
                     }
                 }
             }
         }
 
-        // ── Phase 4: Longhorn chart upgrade through the upgraded catalog ──
+        // ── Phase 4: module chart upgrade through the upgraded catalog ──
         // Completes the shared Qase run after this final phase; do not rely on
         // the downstream job's own QASE_TEST_RUN_COMPLETE for the shared run.
-        stage('Longhorn Chart Upgrade Tests') {
+        // Skipped entirely for modules without a chart phase (fleet): their
+        // post-upgrade stage closes the shared Qase run instead.
+        stage('Chart-Upgrade Tests') {
+            when {
+                expression { TEST_PHASES?.chart }
+            }
             steps {
                 script {
                     property.useWithProperties(['QASE_AUTOMATION_TOKEN']) {
@@ -936,7 +991,7 @@ rancher_use_bundled_system_charts: true
                         ).trim()
                         def configYaml = readFile(file: "${env.TESTS_DIR}/cattle-config.yaml")
 
-                        echo "Dispatching chart-upgrade phase: GOTEST_TESTCASE ${CHART_UPGRADE_TESTCASE} (Qase run ${testRunID})"
+                        echo "Dispatching chart-upgrade phase: GOTEST_TESTCASE ${TEST_PHASES.chart} (Qase run ${testRunID})"
                         build job: params.INDIVIDUAL_JOB, parameters: [
                             string(name: 'TIMEOUT', value: params.TEST_TIMEOUT),
                             text(name: 'CONFIG', value: configYaml),
@@ -946,7 +1001,7 @@ rancher_use_bundled_system_charts: true
                             string(name: 'QASE_SCHEMA_PREFIX', value: params.QASE_SCHEMA_PREFIX),
                             string(name: 'QASE_REPORTER_SCRIPT', value: params.QASE_REPORTER_SCRIPT),
                             string(name: 'TEST_PACKAGE', value: params.TEST_PACKAGE),
-                            string(name: 'GOTEST_TESTCASE', value: CHART_UPGRADE_TESTCASE),
+                            string(name: 'GOTEST_TESTCASE', value: TEST_PHASES.chart),
                             string(name: 'TAGS', value: 'validation'),
                             booleanParam(name: 'CAPTURE_IMAGES', value: false)
                         ]
