@@ -3,9 +3,11 @@
 package rancherupgrade
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
+	"os/exec"
 	"sort"
 	"strings"
 
@@ -249,20 +251,23 @@ func fleetSSHNode(client *rancher.Client, clusterID string) (*nodes.Node, error)
 		return nil, err
 	}
 
-	var nodeIP string
-	for _, addressType := range []corev1.NodeAddressType{corev1.NodeExternalIP, corev1.NodeInternalIP} {
-		for _, address := range node.Status.Addresses {
-			if address.Type == addressType {
-				nodeIP = address.Address
-				break
+	var externalIP, internalIP string
+	for _, address := range node.Status.Addresses {
+		switch address.Type {
+		case corev1.NodeExternalIP:
+			if externalIP == "" {
+				externalIP = address.Address
+			}
+		case corev1.NodeInternalIP:
+			if internalIP == "" {
+				internalIP = address.Address
 			}
 		}
-		if nodeIP != "" {
-			break
-		}
 	}
-	if nodeIP == "" {
-		return nil, fmt.Errorf("no external or internal IP found on node %s", node.Name)
+
+	nodeIP, err := fleetPublicIP(externalIP, internalIP)
+	if err != nil {
+		return nil, err
 	}
 
 	sshUser := sshNodeInput.SSHUser
@@ -278,4 +283,58 @@ func fleetSSHNode(client *rancher.Client, clusterID string) (*nodes.Node, error)
 		SSHUser:         sshUser,
 		SSHKey:          []byte(sshNodeInput.SSHKey),
 	}, nil
+}
+
+// awsNodeTemplateConfigKey mirrors the pipeline's awsNodeTemplate config
+// section, which carries the deployment region.
+const awsNodeTemplateConfigKey = "awsNodeTemplate"
+
+// defaultFleetAWSRegion matches the pipeline's default deployment region.
+const defaultFleetAWSRegion = "us-east-2"
+
+// awsNodeTemplateInput carries the awsNodeTemplate config fields the fleet
+// module needs.
+type awsNodeTemplateInput struct {
+	Region string `json:"region" yaml:"region"`
+}
+
+// fleetPublicIP returns the address the suite can SSH to: the node's external
+// address when kubelet reports one, otherwise the public IP resolved from the
+// instance's internal VPC address. The ansible-provisioned instances get
+// public IPs from terraform, but kubelet does not report them as node
+// addresses; the aws CLI (present in the go-test image, authenticated through
+// the executor's AWS credentials) performs the mapping.
+func fleetPublicIP(externalIP, internalIP string) (string, error) {
+	if externalIP != "" {
+		return externalIP, nil
+	}
+	if internalIP == "" {
+		return "", errors.New("node reports neither an external nor an internal address")
+	}
+
+	regionInput := new(awsNodeTemplateInput)
+	config.LoadConfig(awsNodeTemplateConfigKey, regionInput)
+	region := regionInput.Region
+	if region == "" {
+		region = defaultFleetAWSRegion
+	}
+
+	out, err := exec.Command("aws", "ec2", "describe-instances",
+		"--region", region,
+		"--filters", "Name=private-ip-address,Values="+internalIP,
+		"--query", "Reservations[].Instances[].PublicIpAddress",
+		"--output", "json").Output()
+	if err != nil {
+		return "", fmt.Errorf("resolving the public IP for internal address %s via aws ec2: %w", internalIP, err)
+	}
+
+	var resolved [][]string
+	if err := json.Unmarshal(out, &resolved); err != nil {
+		return "", fmt.Errorf("parsing the aws ec2 describe-instances output: %w", err)
+	}
+	if len(resolved) == 0 || len(resolved[0]) == 0 || resolved[0][0] == "" {
+		return "", fmt.Errorf("no public IP found for internal address %s in %s", internalIP, region)
+	}
+
+	return resolved[0][0], nil
 }
