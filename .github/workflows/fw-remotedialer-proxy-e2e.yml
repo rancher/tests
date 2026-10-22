@@ -319,7 +319,7 @@ jobs:
           rancher:
             host: "${HOST_URL}"
             adminToken: "${HOST_TOKEN}"
-            cleanup: "${CLEANUP}"
+            cleanup: ${CLEANUP}
             insecure: true
             clusterName: "${CLUSTER_NAME}"
 

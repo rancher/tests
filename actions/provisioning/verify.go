@@ -2,6 +2,7 @@ package provisioning
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -113,6 +114,137 @@ func VerifyClusterReady(client *rancher.Client, cluster *steveV1.SteveAPIObject)
 	}
 
 	return nil
+}
+
+// VerifyClusterReadyV3 validates that a v3 cluster and its resources are in a good state.
+func VerifyClusterReadyV3(client *rancher.Client, clusterID string) error {
+	var lastErr error
+	var clusterObj *managementv3.Cluster
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaults.ThirtyMinuteTimeout)
+	defer cancel()
+
+	err := kwait.PollUntilContextTimeout(ctx, 10*time.Second, defaults.ThirtyMinuteTimeout, false, func(context.Context) (bool, error) {
+		var err error
+
+		client, err = client.ReLogin()
+		if err != nil {
+			return false, nil
+		}
+
+		clusterObj, err = client.Management.Cluster.ByID(clusterID)
+		if err != nil {
+			return false, nil
+		}
+
+		if clusterObj.State != "active" {
+			lastErr = fmt.Errorf("cluster state is not active: %s", clusterObj.State)
+			return false, nil
+		}
+
+		if clusterObj.Transitioning == "yes" {
+			lastErr = fmt.Errorf("cluster still transitioning: %s", clusterObj.TransitioningMessage)
+			return false, nil
+		}
+
+		if clusterObj.Transitioning == "error" {
+			lastErr = fmt.Errorf("cluster entered error state: %s", clusterObj.TransitioningMessage)
+			return false, nil
+		}
+
+		for _, cond := range clusterObj.Conditions {
+			if cond.Type == "Ready" && cond.Status != "True" {
+				lastErr = fmt.Errorf("cluster Ready condition is not True: %s - %s", cond.Reason, cond.Message)
+				return false, nil
+			}
+
+			if cond.Type == "Connected" && cond.Status != "True" {
+				lastErr = fmt.Errorf("cluster not connected: %s - %s", cond.Reason, cond.Message)
+				return false, nil
+			}
+		}
+
+		return true, nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	err = allNodesReadyV3(client, clusterID, defaults.FiveMinuteTimeout)
+	if err != nil {
+		logrus.Errorf("Cluster (%s) nodes failed readiness: %v", clusterID, err)
+		dumpClusterStateV3(ctx, client, clusterID, lastErr)
+		return err
+	}
+
+	return nil
+}
+
+// VerifyExistingClustersReady verifies that all existing v1 provisioning clusters with an rkeConfig are ready and active.
+func VerifyExistingClustersReady(client *rancher.Client) error {
+	clusterList, err := client.Steve.SteveType(stevetypes.Provisioning).ListAll(nil)
+	if err != nil {
+		return err
+	}
+
+	var errs []error
+	for i := range clusterList.Data {
+		cluster := &clusterList.Data[i]
+
+		clusterSpec := &provv1.ClusterSpec{}
+		if err := steveV1.ConvertToK8sType(cluster.Spec, clusterSpec); err != nil {
+			errs = append(errs, fmt.Errorf("cluster (%s) spec conversion failed: %w", cluster.Name, err))
+			continue
+		}
+
+		if clusterSpec.RKEConfig == nil {
+			continue
+		}
+
+		logrus.Infof("Verifying cluster (%s) is ready", cluster.Name)
+		if err := VerifyClusterReady(client, cluster); err != nil {
+			errs = append(errs, fmt.Errorf("cluster (%s) is not ready: %w", cluster.Name, err))
+		}
+	}
+
+	return errors.Join(errs...)
+}
+
+// VerifyExistingClustersReadyV3 verifies that all existing imported clusters (no rkeConfig) are ready and active.
+func VerifyExistingClustersReadyV3(client *rancher.Client) error {
+	clusterList, err := client.Steve.SteveType(stevetypes.Provisioning).ListAll(nil)
+	if err != nil {
+		return err
+	}
+
+	var errs []error
+	for i := range clusterList.Data {
+		cluster := &clusterList.Data[i]
+
+		clusterSpec := &provv1.ClusterSpec{}
+		if err := steveV1.ConvertToK8sType(cluster.Spec, clusterSpec); err != nil {
+			errs = append(errs, fmt.Errorf("cluster (%s) spec conversion failed: %w", cluster.Name, err))
+			continue
+		}
+
+		if clusterSpec.RKEConfig != nil {
+			continue
+		}
+
+		clusterStatus := &provv1.ClusterStatus{}
+		if err := steveV1.ConvertToK8sType(cluster.Status, clusterStatus); err != nil {
+			errs = append(errs, fmt.Errorf("cluster (%s) status conversion failed: %w", cluster.Name, err))
+			continue
+		}
+
+		logrus.Infof("Verifying cluster (%s) is ready", cluster.Name)
+		if err := VerifyClusterReadyV3(client, clusterStatus.ClusterName); err != nil {
+			errs = append(errs, fmt.Errorf("cluster (%s) is not ready: %w", cluster.Name, err))
+		}
+	}
+
+	return errors.Join(errs...)
 }
 
 // dumpProvisioningClusterState is a helper function, called by VerifyClusterReady, that log dumps the state of a provisioning cluster
@@ -841,73 +973,6 @@ func VerifyKubernetesVersion(client *rancher.Client, cluster *steveV1.SteveAPIOb
 	})
 	if err != nil {
 		return fmt.Errorf("cluster %s kubernetes version is %s, expected %s: %w", cluster.Name, actualVersion, expectedVersion, err)
-	}
-
-	return nil
-}
-
-// VerifyClusterReadyV3 validates that a non-rke1 cluster and its resources are in a good state, matching a given config, using Norman.
-func VerifyClusterReadyV3(client *rancher.Client, clusterID string) error {
-	var lastErr error
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaults.ThirtyMinuteTimeout)
-	defer cancel()
-
-	var clusterObj *managementv3.Cluster
-
-	err := kwait.PollUntilContextTimeout(ctx, 10*time.Second, 30*time.Minute, false,
-		func(ctx context.Context) (bool, error) {
-			var err error
-
-			client, err = client.ReLogin()
-			if err != nil {
-				return false, nil
-			}
-
-			clusterObj, err = client.Management.Cluster.ByID(clusterID)
-			if err != nil {
-				return false, nil
-			}
-
-			if clusterObj.State != "active" {
-				lastErr = fmt.Errorf("cluster state is not active: %s", clusterObj.State)
-				return false, nil
-			}
-
-			if clusterObj.Transitioning == "yes" {
-				lastErr = fmt.Errorf("cluster still transitioning: %s", clusterObj.TransitioningMessage)
-				return false, nil
-			}
-
-			if clusterObj.Transitioning == "error" {
-				lastErr = fmt.Errorf("cluster entered error state: %s", clusterObj.TransitioningMessage)
-				return false, nil
-			}
-
-			for _, cond := range clusterObj.Conditions {
-				if cond.Type == "Ready" && cond.Status != "True" {
-					lastErr = fmt.Errorf("cluster Ready condition is not True: %s - %s", cond.Reason, cond.Message)
-					return false, nil
-				}
-
-				if cond.Type == "Connected" && cond.Status != "True" {
-					lastErr = fmt.Errorf("cluster not connected: %s - %s", cond.Reason, cond.Message)
-					return false, nil
-				}
-			}
-
-			return true, nil
-		})
-
-	if err != nil {
-		return err
-	}
-
-	err = allNodesReadyV3(client, clusterID, defaults.FiveMinuteTimeout)
-	if err != nil {
-		logrus.Errorf("Cluster (%s) nodes failed readiness: %v", clusterID, err)
-		dumpClusterStateV3(ctx, client, clusterID, lastErr)
-		return err
 	}
 
 	return nil

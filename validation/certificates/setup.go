@@ -78,6 +78,12 @@ func Setup(t *testing.T, clusterType string) *certRotationTest {
 		logrus.Infof("Provisioning %s cluster", clusterType)
 		c.Cluster, err = resources.ProvisionRKE2K3SCluster(t, standardUserClient, clusterType, provider, *clusterConfig, machineConfigSpec, nil, true, false)
 		require.NoError(t, err)
+
+		_, err := rbacapi.GetClusterRoleTemplateBindingsForUser(c.Client, standardUser.ID)
+		require.NoError(t, err)
+
+		c.StandardUserClient, err = c.StandardUserClient.ReLogin()
+		require.NoError(t, err)
 	} else {
 		logrus.Infof("Using existing cluster %s", rancherConfig.ClusterName)
 		c.Cluster, err = c.Client.Steve.SteveType(stevetypes.Provisioning).ByID("fleet-default/" + c.rancherConfig.ClusterName)

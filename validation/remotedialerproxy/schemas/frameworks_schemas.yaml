@@ -23,37 +23,44 @@
     custom_field:
       "14": Validation
       "18": Frameworks
-  - title: remotedialer_proxy_version
+  - description: Verify the remotedialer proxy version setting is set and log it
+    title: remotedialer_proxy_version
     priority: 4
     type: 8
     is_flaky: 0
     automation: 2
-  - title: apiservice_available
+  - description: Verify the v1.ext.cattle.io APIService is available on the local cluster
+    title: apiservice_available
     priority: 4
     type: 8
     is_flaky: 0
     automation: 2
-  - title: pods_running
+  - description: Verify the remotedialer proxy pods in cattle-system are running
+    title: pods_running
     priority: 4
     type: 8
     is_flaky: 0
     automation: 2
-  - title: downstream_kube_access
+  - description: Verify downstream cluster access is routed through the remotedialer proxy
+    title: downstream_kube_access
     priority: 4
     type: 8
     is_flaky: 0
     automation: 2
-  - title: exec_validation
+  - description: Verify exec into a downstream pod works through the remotedialer proxy
+    title: exec_validation
     priority: 4
     type: 8
     is_flaky: 0
     automation: 2
-  - title: watch_validation
+  - description: Verify watching downstream pods works through the remotedialer proxy
+    title: watch_validation
     priority: 4
     type: 8
     is_flaky: 0
     automation: 2
-  - title: portforward_validation
+  - description: Verify port-forward to a downstream pod works through the remotedialer proxy
+    title: portforward_validation
     priority: 4
     type: 8
     is_flaky: 0

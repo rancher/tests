@@ -32,7 +32,7 @@ func TestDeletingCluster(t *testing.T) {
 			extClusters.DeleteK3SRKE2Cluster(d.StandardUserClient, tt.cluster.ID)
 
 			logrus.Infof("Verifying cluster (%s) deletion", tt.cluster.ID)
-			provisioning.VerifyDeleteRKE2K3SCluster(t, d.StandardUserClient, tt.cluster.ID)
+			provisioning.VerifyDeleteRKE2K3SCluster(t, d.Client, tt.cluster.ID)
 		})
 
 		params := provisioning.GetProvisioningSchemaParams(d.Client, d.CattleConfig)

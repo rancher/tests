@@ -168,6 +168,13 @@ jobs:
             HB_SLACK_WEBHOOK_URL, HB_SLACK_WEBHOOK_URL
             HB_AWS_ROUTE_53_ZONE, HB_AWS_ROUTE_53_ZONE
             HB_TFP_SSH_PRIVATE_KEY_PATH, HB_TFP_SSH_PRIVATE_KEY_PATH
+            HB_AWS_WINDOWS_USER, HB_AWS_WINDOWS_USER
+            HB_WINDOWS_2019_AMI, HB_WINDOWS_2019_AMI
+            HB_WINDOWS_2022_AMI, HB_WINDOWS_2022_AMI
+            HB_AWS_WINDOWS_2019_PASSWORD, HB_AWS_WINDOWS_2019_PASSWORD
+            HB_AWS_WINDOWS_2022_PASSWORD, HB_AWS_WINDOWS_2022_PASSWORD
+            HB_AWS_WINDOWS_INSTANCE_TYPE, HB_AWS_WINDOWS_INSTANCE_TYPE
+            HB_WINDOWS_SSH_PRIVATE_KEY_NAME, HB_WINDOWS_SSH_PRIVATE_KEY_NAME
 
       - name: Fetch and Set DockerHub Credentials
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 #v3
@@ -269,7 +276,13 @@ jobs:
             privateKeyPath: "${{ steps.setup-ssh-keys.outputs.ssh-private-key-path }}"
             privateFullChainPath: "${{ steps.setup-certs.outputs.private-full-chain-tfp-path }}"
             privateCertKeyPath: "${{ steps.setup-certs.outputs.private-cert-key-tfp-path }}"
+            windowsPrivateKeyPath: "${{ steps.setup-ssh-keys.outputs.windows-ssh-private-key-path }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
+            awsConfig:
+              windowsAWSUser: "<HB_AWS_WINDOWS_USER>"
+              windows2022AMI: "<HB_WINDOWS_2022_AMI>"
+              windowsInstanceType: "<HB_AWS_WINDOWS_INSTANCE_TYPE>"
+              windowsKeyName: "<HB_WINDOWS_SSH_PRIVATE_KEY_NAME>"
 
             standalone:
               chartVersion: "${{ fromJSON(env[format('HB_RELEASED_RANCHER_CHART_VERSION_2_{0}', matrix.version)]).value }}"

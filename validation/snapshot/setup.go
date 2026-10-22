@@ -185,6 +185,9 @@ func Setup(t *testing.T, clusterType string, isS3, isWindows bool) *snapshotTest
 
 			s.Cluster = cluster
 
+			err = provisioning.VerifyClusterReady(s.Client, cluster)
+			require.NoError(t, err)
+
 			logrus.Info("Granting the standard user cluster-owner on the windows cluster")
 			mgmtClusterID, err := extclusters.GetClusterIDByName(s.Client, cluster.Name)
 			require.NoError(t, err)
@@ -197,6 +200,12 @@ func Setup(t *testing.T, clusterType string, isS3, isWindows bool) *snapshotTest
 		} else {
 			logrus.Infof("Provisioning %s cluster", clusterType)
 			s.Cluster, err = resources.ProvisionRKE2K3SCluster(t, standardUserClient, clusterType, provider, *clusterConfig, machineConfigSpec, nil, false, false)
+			require.NoError(t, err)
+
+			_, err := rbacapi.GetClusterRoleTemplateBindingsForUser(s.Client, standardUser.ID)
+			require.NoError(t, err)
+
+			s.StandardUserClient, err = s.StandardUserClient.ReLogin()
 			require.NoError(t, err)
 		}
 	} else {

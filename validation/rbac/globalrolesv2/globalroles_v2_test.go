@@ -69,9 +69,9 @@ func (gr *GlobalRolesV2TestSuite) validateRBACResources(createdUser *management.
 	actualCrtbCount := len(crtbs.Items)
 	require.Equal(gr.T(), expectedCrtbCount, actualCrtbCount, "Unexpected number of ClusterRoleTemplateBindings: Expected %d, Actual %d", expectedCrtbCount, actualCrtbCount)
 
-	feature, err := gr.client.WranglerContext.Mgmt.Feature().Get(rbacapi.AggregatedRoleTemplatesFeatureFlag, metav1.GetOptions{})
-	isAggregatedEnabled := err == nil && feature.Spec.Value != nil && *feature.Spec.Value
-	if isAggregatedEnabled {
+	isAggregatedClusterRoleEnabled, err := rbacapi.GetAggregatedRoleTemplatesDefault(gr.client)
+	require.NoError(gr.T(), err)
+	if isAggregatedClusterRoleEnabled {
 		return grbName, clusterCount
 	}
 

@@ -1,6 +1,6 @@
 ---
 name: "GH Model Prompt"
-description: "Run a GitHub Model prompt using a .prompt.yml and dynamic input"
+description: "Run a Copilot CLI prompt with dynamic input, using the CLI default model unless .model is set"
 inputs:
   prompt_file:
     description: "Path to the .prompt.yml file"

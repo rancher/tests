@@ -14,6 +14,7 @@ import (
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/config/defaults"
+	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 	infraConfig "github.com/rancher/tests/validation/recurring/infrastructure/config"
@@ -108,6 +109,30 @@ func main() {
 	err = pods.VerifyClusterPods(client, cluster)
 	if err != nil {
 		logrus.Fatalf("Failed to verify cluster pods after upgrade: %v", err)
+	}
+
+	logrus.Info("Verifying existing clusters are ready")
+	err = provisioning.VerifyExistingClustersReady(client)
+	if err != nil {
+		logrus.Fatalf("Failed to verify existing clusters are ready after upgrade: %v", err)
+	}
+
+	logrus.Info("Verifying existing v3 clusters are ready")
+	err = provisioning.VerifyExistingClustersReadyV3(client)
+	if err != nil {
+		logrus.Fatalf("Failed to verify existing v3 clusters are ready after upgrade: %v", err)
+	}
+
+	logrus.Info("Verifying existing cluster deployments")
+	err = deployment.VerifyExistingClustersDeployments(client)
+	if err != nil {
+		logrus.Fatalf("Failed to verify existing cluster deployments after upgrade: %v", err)
+	}
+
+	logrus.Info("Verifying existing cluster pods")
+	err = pods.VerifyExistingClustersPods(client)
+	if err != nil {
+		logrus.Fatalf("Failed to verify existing cluster pods after upgrade: %v", err)
 	}
 
 	_, _, _, standalone := tfpConfig.LoadTFPConfigs(cattleConfig)
