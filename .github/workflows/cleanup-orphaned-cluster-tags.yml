@@ -1,0 +1,71 @@
+name: Cleanup Orphaned Cluster Tags
+
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    environment: capa
+    steps:
+      - name: Configure AWS credentials through OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6
+        with:
+          role-to-assume: ${{ secrets.IAM_ROLE }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          role-duration-seconds: 14400
+
+      - name: Delete orphaned kubernetes.io/cluster/* tags from subnet
+        shell: bash
+        run: |
+          set -euo pipefail
+          SUBNET_ID="${{ secrets.AWS_SUBNET_ID }}"
+          REGION="${{ secrets.AWS_REGION }}"
+
+          echo "Scanning subnet for any cluster tags..."
+
+          subnet_tags=$(aws ec2 describe-tags \
+            --region "$REGION" \
+            --filters "Name=resource-id,Values=$SUBNET_ID" "Name=key,Values=kubernetes.io/cluster/*" \
+            --query "Tags[].Key" \
+            --output text 2>/dev/null || echo "")
+
+          if [[ -z "${subnet_tags:-}" || "$subnet_tags" == "None" ]]; then
+            echo "No cluster tags found on subnet."
+            exit 0
+          fi
+
+          for tag_key in $subnet_tags; do
+            cluster_name="${tag_key#kubernetes.io/cluster/}"
+            echo "Evaluating cluster tag: $cluster_name"
+
+            active_instances=$(aws ec2 describe-instances \
+              --region "$REGION" \
+              --filters "Name=tag:kubernetes.io/cluster/$cluster_name,Values=shared,owned" \
+                        "Name=instance-state-name,Values=pending,running,stopped,stopping" \
+              --query "length(Reservations[*].Instances[*])" \
+              --output text 2>/dev/null || echo "0")
+
+            if [[ -z "$active_instances" || "$active_instances" == "None" ]]; then
+              active_instances=0
+            fi
+
+            if (( active_instances == 0 )); then
+              echo "-> ORPHANED: No instances found for '$cluster_name'. Purging tag..."
+              aws ec2 delete-tags \
+                --region "$REGION" \
+                --resources "$SUBNET_ID" \
+                --tags "Key=$tag_key" >/dev/null 2>&1
+              echo "-> Successfully removed tag for '$cluster_name'."
+            else
+              echo "-> ACTIVE: Cluster '$cluster_name' has $active_instances live instance(s). Keeping tag."
+            fi
+          done
+
+          echo "Orphaned tag cleanup complete!"
