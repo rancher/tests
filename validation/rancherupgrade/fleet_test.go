@@ -136,7 +136,7 @@ func (s *FleetUpgradeTestSuite) TestFleetPostUpgrade() {
 	require.NoError(s.T(), err)
 	logrus.Infof("post-upgrade phase: GitRepo %s still in sync; driving a new commit through the reconcile loop", gitRepoID)
 
-	sshNode, err := ssh.CreateSSHNode(s.client, s.cluster.Name, s.cluster.ID)
+	sshNode, err := fleetSSHNode(s.client, s.cluster.ID)
 	require.NoError(s.T(), err)
 
 	err = actionsFleet.GitPushCommit(sshNode, fleetGitRepoDir)
