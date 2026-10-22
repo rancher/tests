@@ -483,7 +483,7 @@ func (l *LonghornTestSuite) TestMonitoringIntegration() {
 	}
 
 	serviceMonitorName := namegenerator.AppendRandomString("longhorn-monitor")
-	_, err = monitoring.CreateServiceMonitor(l.standardUserClient, l.cluster.ID, serviceMonitorName, charts.LonghornNamespace, serviceMonitorSpec)
+	_, err = monitoring.CreateServiceMonitor(l.standardUserClient, l.cluster.ID, serviceMonitorName, charts.RancherMonitoringNamespace, serviceMonitorSpec)
 	require.NoError(l.T(), err)
 	l.T().Logf("ServiceMonitor %s for Longhorn created", serviceMonitorName)
 
