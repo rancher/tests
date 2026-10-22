@@ -136,7 +136,7 @@ func applyAdmissionControlRule(steveClient *v1.Client, denyNamespace string) err
 
 	existing, err := crClient.ByID(AdmissionControlCRName)
 	if err != nil {
-		if !k8sErrors.IsNotFound(err) {
+		if !isNotFound(err) {
 			return err
 		}
 
@@ -198,7 +198,7 @@ func waitForAdmissionWebhook(steveClient *v1.Client) error {
 	return kwait.PollUntilContextTimeout(context.Background(), admissionPollInterval, admissionPollTimeout, true, func(ctx context.Context) (bool, error) {
 		_, err := webhookClient.ByID(NeuVectorValidatingWebhookName)
 		if err != nil {
-			if k8sErrors.IsNotFound(err) {
+			if isNotFound(err) {
 				return false, nil
 			}
 			return false, err
@@ -217,7 +217,7 @@ func ensureNamespace(steveClient *v1.Client, name string) error {
 	if err == nil {
 		return nil
 	}
-	if !k8sErrors.IsNotFound(err) {
+	if !isNotFound(err) {
 		return err
 	}
 
@@ -262,7 +262,7 @@ func attemptAdmissionProbeCreate(steveClient *v1.Client, namespace string) error
 func deleteAdmissionProbePod(steveClient *v1.Client, namespace string) error {
 	probe, err := steveClient.SteveType(stevetypes.Pod).ByID(namespace + "/" + admissionProbePodName)
 	if err != nil {
-		if k8sErrors.IsNotFound(err) {
+		if isNotFound(err) {
 			return nil
 		}
 		return err
@@ -275,4 +275,18 @@ func deleteAdmissionProbePod(steveClient *v1.Client, namespace string) error {
 // rejection, the error shape the API server returns for a denied create.
 func isAdmissionWebhookDenial(err error) bool {
 	return err != nil && strings.Contains(strings.ToLower(err.Error()), admissionWebhookDenialMarker)
+}
+
+// isNotFound reports whether err is a resource-not-found error from either
+// client type: the Kubernetes client returns a typed StatusError that
+// k8sErrors.IsNotFound matches, while the Steve client returns plain-text
+// errors carrying the HTTP status line (for example "Bad response statusCode
+// [404]. Status [404 Not Found]. Body: [code=NotFound, message=...]"), which
+// IsNotFound does not match and which must be detected textually.
+func isNotFound(err error) bool {
+	if err == nil || k8sErrors.IsNotFound(err) {
+		return err != nil
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "404") && strings.Contains(msg, "not found")
 }
