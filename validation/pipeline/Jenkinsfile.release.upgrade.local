@@ -297,6 +297,15 @@ node {
                   }
 
                 } catch(err) {
+                   if (cleanup.toBoolean()) {
+                     sh "docker stop ${buildTestContainer} || true"
+                     try {
+                       sh "docker run --rm --volumes-from ${buildTestContainer} -t --env-file ${envFile} " +
+                       "${imageName} sh -c \"${workPath}pipeline/scripts/rancher_cleanup.sh\""
+                     } catch(cleanupErr) {
+                       echo "Cleanup after build failure had failures: ${cleanupErr}"
+                     }
+                   }
                    sh "docker stop ${buildTestContainer}"
                    sh "docker rm -v ${buildTestContainer}"
                    sh "docker volume rm -f ${validationVolume}"

@@ -161,6 +161,15 @@ node("harvester-vpn-1") {
                 sh "docker run -v ${validationVolume}:/root --name ${buildTestContainer} -t --env-file ${envFile} " +
                 "${imageName} sh -c \"${workPath}pipeline/scripts/setup_environment.sh && sh ${workPath}pipeline/scripts/build_elemental_harvester_qa_infra.sh\""
               } catch(err) {
+                  if ("${env.CLEANUP_RANCHER}" == "True" || "${env.CLEANUP_RANCHER}" == "true") {
+                    sh "docker stop ${buildTestContainer} || true"
+                    try {
+                      sh "docker run --rm --volumes-from ${buildTestContainer} -t --env-file ${envFile} " +
+                      "${imageName} sh -c \"${workPath}pipeline/scripts/rancher_cleanup.sh && sh ${workPath}pipeline/scripts/destroy_elemental_harvester_qa_infra.sh\""
+                    } catch(cleanupErr) {
+                      echo "Cleanup after build failure had failures: ${cleanupErr}"
+                    }
+                  }
                   container.remove([[name: buildTestContainer, image: imageName]])
                   sh "docker volume rm -f ${validationVolume}"
                   error "Build Environment had failures."
