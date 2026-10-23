@@ -339,6 +339,11 @@ server_flags: |
             defaultValue: params.TEST_MODULE ?: 'longhorn',
             description: 'rancherupgrade module under test (longhorn | neuvector | fleet | observability). Selects the per-phase -run regexes; fleet has no chart-upgrade phase.'
         )
+        string(
+            name: 'STACKSTATE_URL',
+            defaultValue: params.STACKSTATE_URL ?: 'http://stackstate-router.suse-observability.svc.cluster.local:8080',
+            description: 'observability module only: the URL the StackState agent reports to. The in-cluster router service default works when the agent is co-located with the server (the pipeline pins the server to local); override with a resolvable StackState address otherwise.'
+        )
         text(
             name: 'CATTLE_TEST_CONFIG',
             description: 'Test configuration YAML (cattle-config). rancher.adminToken is injected at runtime (initial + rotated after the server upgrade); rancherUpgradeInput.targetVersion is substituted from the resolved upgrade target.',
@@ -768,6 +773,31 @@ rancher_use_bundled_system_charts: true
                                 ./yq e '.sshNode.sshUser = strenv(sshuser)' -i ${cattleConfigPath}
                             """
                             echo "fleet module: node ssh key and user threaded into the test config"
+                        }
+                    }
+
+                    if (params.TEST_MODULE == 'observability') {
+                        // SUSE Observability needs its license plus the
+                        // connection settings the server and the agent share.
+                        // The license is a folder credential (fail fast here,
+                        // before any infra spend); the URL defaults to the
+                        // in-cluster router service, which the co-located
+                        // agent can always reach; the cluster API key is
+                        // self-consistent because this suite installs the
+                        // server with the same value.
+                        property.useWithProperties(['STACKSTATE_LICENSE']) {
+                            if (!env.STACKSTATE_LICENSE) {
+                                error "observability module needs the STACKSTATE_LICENSE folder credential (SUSE Observability license key); add it to the rancher_qa folder and rerun"
+                            }
+                            sh """
+                                set +x
+                                export sslicense=\$STACKSTATE_LICENSE
+                                ./yq e '.stackstateConfigs.url = "${params.STACKSTATE_URL}"' -i ${cattleConfigPath}
+                                ./yq e '.stackstateConfigs.license = strenv(sslicense)' -i ${cattleConfigPath}
+                                ./yq e '.stackstateConfigs.clusterApiKey = "rancher-upgrade-observability-cluster-key"' -i ${cattleConfigPath}
+                                ./yq e '.stackstateConfigs.adminPassword = "rancher-upgrade-observability-admin"' -i ${cattleConfigPath}
+                            """
+                            echo "observability module: stackstate connection settings threaded into the test config"
                         }
                     }
 
