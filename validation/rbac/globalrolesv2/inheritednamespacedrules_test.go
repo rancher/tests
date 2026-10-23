@@ -1605,7 +1605,7 @@ func (inr *InheritedNamespacedRulesTestSuite) TestUserCannotCreateGlobalRoleWith
 			sharedNamespace: {
 				{
 					APIGroups: []string{rbacapi.CatalogCattleAPIGroup},
-					Resources: []string{rbacapi.CatalogAppsResource},
+					Resources: []string{rbacapi.AppsResource},
 					Verbs:     []string{"edit"},
 				},
 			},
@@ -1645,7 +1645,7 @@ func (inr *InheritedNamespacedRulesTestSuite) TestUserCannotCreateGlobalRoleWith
 			sharedNamespace: {
 				{
 					APIGroups: []string{"*"},
-					Resources: []string{rbacapi.CatalogAppsResource},
+					Resources: []string{rbacapi.AppsResource},
 					Verbs:     []string{"edit"},
 				},
 			},

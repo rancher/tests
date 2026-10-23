@@ -114,14 +114,19 @@ func CreateClusterRoleTemplateBinding(client *rancher.Client, clusterID string, 
 	return crtb, nil
 }
 
+// GetProjectRoleTemplateBindingNamespace returns the namespace in which a PRTB for the given project must be created.
+func GetProjectRoleTemplateBindingNamespace(project *v3.Project) string {
+	if project.Status.BackingNamespace != "" {
+		return fmt.Sprintf("%s-%s", project.Spec.ClusterName, project.Name)
+	}
+	return project.Name
+}
+
 // CreateProjectRoleTemplateBinding creates a project role template binding for the user with the provided role template using wrangler context
 func CreateProjectRoleTemplateBinding(client *rancher.Client, userName string, project *v3.Project, roleTemplateID string) (*v3.ProjectRoleTemplateBinding, error) {
 	projectName := fmt.Sprintf("%s:%s", project.Namespace, project.Name)
 
-	prtbNamespace := project.Name
-	if project.Status.BackingNamespace != "" {
-		prtbNamespace = fmt.Sprintf("%s-%s", project.Spec.ClusterName, project.Name)
-	}
+	prtbNamespace := GetProjectRoleTemplateBindingNamespace(project)
 
 	prtbObj := &v3.ProjectRoleTemplateBinding{
 		ObjectMeta: metav1.ObjectMeta{
