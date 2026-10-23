@@ -12,17 +12,20 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/defaults"
 	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
+	extrbacapi "github.com/rancher/shepherd/extensions/kubeapi/rbac"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/wrangler"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	podsapi "github.com/rancher/tests/actions/kubeapi/workloads/pods"
 	appsv1 "k8s.io/api/apps/v1"
+	authzv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
+	authzclient "k8s.io/client-go/kubernetes/typed/authorization/v1"
 )
 
 const allNamespaces = ""
@@ -138,22 +141,24 @@ func CheckUserAccess(userClient *rancher.Client, clusterID string, verb, resourc
 	}
 
 	switch resourceType {
-	case "projects":
+	case ProjectsResource:
 		return CheckProjectAccess(userContext, verb, clusterID, resourceName)
-	case "namespaces":
+	case NamespaceResource:
 		return CheckNamespaceAccess(userContext, verb, resourceName)
-	case "deployments":
+	case DeploymentsResource:
 		return CheckDeploymentAccess(userContext, verb, namespaceName, resourceName)
-	case "pods":
+	case PodsResource:
 		return CheckPodAccess(userContext, verb, namespaceName, resourceName)
-	case "secrets":
+	case SecretsResource:
 		return CheckSecretAccess(userContext, verb, namespaceName, resourceName)
-	case "projectroletemplatebindings":
+	case PrtbResource:
 		return CheckPrtbAccess(userContext, verb, namespaceName, resourceName)
-	case "configmaps":
+	case ConfigMapResource:
 		return CheckConfigMapAccess(userContext, verb, namespaceName, resourceName)
-	case "statefulsets":
+	case StatefulSetResource:
 		return CheckStatefulSetAccess(userContext, verb, namespaceName, resourceName)
+	case NodesResource:
+		return CheckNodeAccess(userContext, verb, resourceName)
 	default:
 		return false, fmt.Errorf("checks for resource type '%s' not added", resourceType)
 	}
@@ -162,20 +167,20 @@ func CheckUserAccess(userClient *rancher.Client, clusterID string, verb, resourc
 // CheckProjectAccess checks if a user has the specified access to a project in a cluster. It returns true if the user has access, false otherwise.
 func CheckProjectAccess(userContext *wrangler.Context, verb, clusterID, projectName string) (bool, error) {
 	switch verb {
-	case "get":
+	case GetVerb:
 		_, err := userContext.Mgmt.Project().Get(clusterID, projectName, metav1.GetOptions{})
 		return err == nil, err
-	case "list":
+	case ListVerb:
 		_, err := userContext.Mgmt.Project().List(clusterID, metav1.ListOptions{})
 		return err == nil, err
-	case "create":
+	case CreateVerb:
 		projectTemplate := projectapi.NewProjectTemplate(clusterID)
 		_, err := userContext.Mgmt.Project().Create(projectTemplate)
 		return err == nil, err
-	case "delete":
+	case DeleteVerb:
 		err := userContext.Mgmt.Project().Delete(clusterID, projectName, &metav1.DeleteOptions{})
 		return err == nil, err
-	case "update":
+	case UpdateVerb:
 		project, err := userContext.Mgmt.Project().Get(clusterID, projectName, metav1.GetOptions{})
 		if err != nil {
 			return false, err
@@ -186,7 +191,7 @@ func CheckProjectAccess(userContext *wrangler.Context, verb, clusterID, projectN
 		project.Labels["hello"] = "world"
 		_, err = userContext.Mgmt.Project().Update(project)
 		return err == nil, err
-	case "patch":
+	case PatchVerb:
 		patchData := []byte(`{"metadata":{"annotations":{"patched":"true"}}}`)
 		_, err := userContext.Mgmt.Project().Patch(clusterID, projectName, types.MergePatchType, patchData)
 		return err == nil, err
@@ -198,13 +203,13 @@ func CheckProjectAccess(userContext *wrangler.Context, verb, clusterID, projectN
 // CheckNamespaceAccess checks if a user has the specified access to a namespace in a cluster. It returns true if the user has access, false otherwise.
 func CheckNamespaceAccess(userContext *wrangler.Context, verb, namespaceName string) (bool, error) {
 	switch verb {
-	case "get":
+	case GetVerb:
 		_, err := userContext.Core.Namespace().Get(namespaceName, metav1.GetOptions{})
 		return err == nil, err
-	case "list":
+	case ListVerb:
 		_, err := userContext.Core.Namespace().List(metav1.ListOptions{})
 		return err == nil, err
-	case "delete":
+	case DeleteVerb:
 		err := userContext.Core.Namespace().Delete(namespaceName, &metav1.DeleteOptions{})
 		return err == nil, err
 	default:
@@ -215,13 +220,13 @@ func CheckNamespaceAccess(userContext *wrangler.Context, verb, namespaceName str
 // CheckPodAccess checks if a user has the specified access to a pod in a namespace. It returns true if the user has access, false otherwise.
 func CheckPodAccess(userContext *wrangler.Context, verb, namespaceName, podName string) (bool, error) {
 	switch verb {
-	case "get":
+	case GetVerb:
 		_, err := userContext.Core.Pod().Get(namespaceName, podName, metav1.GetOptions{})
 		return err == nil, err
-	case "list":
+	case ListVerb:
 		_, err := userContext.Core.Pod().List(namespaceName, metav1.ListOptions{})
 		return err == nil, err
-	case "create":
+	case CreateVerb:
 		podTemplate := podsapi.CreateContainerAndPodTemplate("")
 		pod := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
@@ -232,7 +237,7 @@ func CheckPodAccess(userContext *wrangler.Context, verb, namespaceName, podName 
 		}
 		_, err := userContext.Core.Pod().Create(pod)
 		return err == nil, err
-	case "delete":
+	case DeleteVerb:
 		err := userContext.Core.Pod().Delete(namespaceName, podName, &metav1.DeleteOptions{})
 		return err == nil, err
 	default:
@@ -243,13 +248,13 @@ func CheckPodAccess(userContext *wrangler.Context, verb, namespaceName, podName 
 // CheckDeploymentAccess checks if a user has the specified access to a deployment in a namespace. It returns true if the user has access, false otherwise.
 func CheckDeploymentAccess(userContext *wrangler.Context, verb, namespaceName, deploymentName string) (bool, error) {
 	switch verb {
-	case "get":
+	case GetVerb:
 		_, err := userContext.Apps.Deployment().Get(namespaceName, deploymentName, metav1.GetOptions{})
 		return err == nil, err
-	case "list":
+	case ListVerb:
 		_, err := userContext.Apps.Deployment().List(namespaceName, metav1.ListOptions{})
 		return err == nil, err
-	case "create":
+	case CreateVerb:
 		deploymentName := namegen.AppendRandomString("testdeployment-")
 		podTemplate := podsapi.CreateContainerAndPodTemplate("")
 		selectorLabels := map[string]string{
@@ -277,7 +282,7 @@ func CheckDeploymentAccess(userContext *wrangler.Context, verb, namespaceName, d
 		}
 		_, err := userContext.Apps.Deployment().Create(deployment)
 		return err == nil, err
-	case "delete":
+	case DeleteVerb:
 		err := userContext.Apps.Deployment().Delete(namespaceName, deploymentName, &metav1.DeleteOptions{})
 		return err == nil, err
 	default:
@@ -288,13 +293,13 @@ func CheckDeploymentAccess(userContext *wrangler.Context, verb, namespaceName, d
 // CheckSecretAccess checks if a user has the specified access to a secret in a namespace. It returns true if the user has access, false otherwise.
 func CheckSecretAccess(userContext *wrangler.Context, verb, namespaceName, secretName string) (bool, error) {
 	switch verb {
-	case "get":
+	case GetVerb:
 		_, err := userContext.Core.Secret().Get(namespaceName, secretName, metav1.GetOptions{})
 		return err == nil, err
-	case "list":
+	case ListVerb:
 		_, err := userContext.Core.Secret().List(namespaceName, metav1.ListOptions{})
 		return err == nil, err
-	case "delete":
+	case DeleteVerb:
 		err := userContext.Core.Secret().Delete(namespaceName, secretName, &metav1.DeleteOptions{})
 		return err == nil, err
 	default:
@@ -305,16 +310,16 @@ func CheckSecretAccess(userContext *wrangler.Context, verb, namespaceName, secre
 // CheckPrtbAccess checks if a user has the specified access to a project role template binding in a namespace. It returns true if the user has access, false otherwise.
 func CheckPrtbAccess(userContext *wrangler.Context, verb, prtbNamespace, prtbName string) (bool, error) {
 	switch verb {
-	case "get":
+	case GetVerb:
 		_, err := userContext.Mgmt.ProjectRoleTemplateBinding().Get(prtbNamespace, prtbName, metav1.GetOptions{})
 		return err == nil, err
-	case "list":
+	case ListVerb:
 		_, err := userContext.Mgmt.ProjectRoleTemplateBinding().List(prtbNamespace, metav1.ListOptions{})
 		return err == nil, err
-	case "delete":
+	case DeleteVerb:
 		err := userContext.Mgmt.ProjectRoleTemplateBinding().Delete(prtbNamespace, prtbName, &metav1.DeleteOptions{})
 		return err == nil, err
-	case "update":
+	case UpdateVerb:
 		prtb, err := userContext.Mgmt.ProjectRoleTemplateBinding().Get(prtbNamespace, prtbName, metav1.GetOptions{})
 		if err != nil {
 			return false, err
@@ -325,7 +330,7 @@ func CheckPrtbAccess(userContext *wrangler.Context, verb, prtbNamespace, prtbNam
 		prtb.Labels["hello"] = "world"
 		_, err = userContext.Mgmt.ProjectRoleTemplateBinding().Update(prtb)
 		return err == nil, err
-	case "patch":
+	case PatchVerb:
 		patchData := []byte(`{"metadata":{"annotations":{"patched":"true"}}}`)
 		_, err := userContext.Mgmt.ProjectRoleTemplateBinding().Patch(prtbNamespace, prtbName, types.MergePatchType, patchData)
 		return err == nil, err
@@ -337,13 +342,13 @@ func CheckPrtbAccess(userContext *wrangler.Context, verb, prtbNamespace, prtbNam
 // CheckConfigMapAccess checks if a user has the specified access to a ConfigMap in a namespace. It returns true if the user has access, false otherwise.
 func CheckConfigMapAccess(userContext *wrangler.Context, verb, namespaceName, configMapName string) (bool, error) {
 	switch verb {
-	case "get":
+	case GetVerb:
 		_, err := userContext.Core.ConfigMap().Get(namespaceName, configMapName, metav1.GetOptions{})
 		return err == nil, err
-	case "list":
+	case ListVerb:
 		_, err := userContext.Core.ConfigMap().List(namespaceName, metav1.ListOptions{})
 		return err == nil, err
-	case "delete":
+	case DeleteVerb:
 		err := userContext.Core.ConfigMap().Delete(namespaceName, configMapName, &metav1.DeleteOptions{})
 		return err == nil, err
 	default:
@@ -354,17 +359,34 @@ func CheckConfigMapAccess(userContext *wrangler.Context, verb, namespaceName, co
 // CheckStatefulSetAccess checks if a user has the specified access to a StatefulSet in a namespace. It returns true if the user has access, false otherwise.
 func CheckStatefulSetAccess(userContext *wrangler.Context, verb, namespaceName, statefulSetName string) (bool, error) {
 	switch verb {
-	case "get":
+	case GetVerb:
 		_, err := userContext.Apps.StatefulSet().Get(namespaceName, statefulSetName, metav1.GetOptions{})
 		return err == nil, err
-	case "list":
+	case ListVerb:
 		_, err := userContext.Apps.StatefulSet().List(namespaceName, metav1.ListOptions{})
 		return err == nil, err
-	case "delete":
+	case DeleteVerb:
 		err := userContext.Apps.StatefulSet().Delete(namespaceName, statefulSetName, &metav1.DeleteOptions{})
 		return err == nil, err
 	default:
 		return false, fmt.Errorf("verb '%s' not available in checks for resource 'statefulsets'", verb)
+	}
+}
+
+// CheckNodeAccess checks if a user has the specified access to a Node. It returns true if the user has access, false otherwise.
+func CheckNodeAccess(userContext *wrangler.Context, verb, resourceName string) (bool, error) {
+	switch verb {
+	case GetVerb:
+		_, err := userContext.Core.Node().Get(resourceName, metav1.GetOptions{})
+		return err == nil, err
+	case ListVerb:
+		_, err := userContext.Core.Node().List(metav1.ListOptions{})
+		return err == nil, err
+	case DeleteVerb:
+		err := userContext.Core.Node().Delete(resourceName, &metav1.DeleteOptions{})
+		return err == nil, err
+	default:
+		return false, fmt.Errorf("verb '%s' not available in checks for resource 'nodes'", verb)
 	}
 }
 
@@ -373,8 +395,8 @@ func VerifyBindingsForCrtb(client *rancher.Client, clusterID string, crtb *v3.Cl
 	return verifyBindings(client, clusterID, crtb.UserName, crtb.RoleTemplateName, crtb.Name, []string{crtb.Namespace}, expectedRoleBindingCount, expectedClusterRoleBindingCount)
 }
 
-// VerifyBindingsForPrtb verifies RoleBindings and ClusterRoleBindings for a given PRTB
-func VerifyBindingsForPrtb(client *rancher.Client, clusterID string, prtb *v3.ProjectRoleTemplateBinding, namespaces []*corev1.Namespace, expectedRoleBindingCount, expectedClusterRoleBindingCount int) error {
+// VerifyBindingsForPrtb verifies binding counts and role references, optionally using explicit expected ClusterRole names.
+func VerifyBindingsForPrtb(client *rancher.Client, clusterID string, prtb *v3.ProjectRoleTemplateBinding, namespaces []*corev1.Namespace, expectedRoleBindingCount, expectedClusterRoleBindingCount int, expectedClusterRoleNames ...string) error {
 	namespaceNames := []string{}
 	defaultNamespace := strings.SplitN(prtb.ProjectName, ":", 2)[0]
 
@@ -386,7 +408,7 @@ func VerifyBindingsForPrtb(client *rancher.Client, clusterID string, prtb *v3.Pr
 		}
 	}
 
-	return verifyBindings(client, clusterID, prtb.UserName, prtb.RoleTemplateName, prtb.Name, namespaceNames, expectedRoleBindingCount, expectedClusterRoleBindingCount)
+	return verifyBindings(client, clusterID, prtb.UserName, prtb.RoleTemplateName, prtb.Name, namespaceNames, expectedRoleBindingCount, expectedClusterRoleBindingCount, expectedClusterRoleNames...)
 }
 
 // VerifyMainACRContainsAllRules verifies that the main ACR contains all rules from the main role template and its child role templates
@@ -492,7 +514,6 @@ func compareSlices(a, b []string) int {
 }
 
 func verifyMgmtACR(client *rancher.Client, clusterID, acrName, mainRTName string, childRTNames []string, managementContext string) error {
-	// The aggregation controller rebuilds the management ACR asynchronously, so poll until the rules converge.
 	var lastErr error
 	pollErr := kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.TwoMinuteTimeout, true, func(ctx context.Context) (bool, error) {
 		mainRules, err := GetClusterRoleRules(client, clusterID, mainRTName)
@@ -568,22 +589,17 @@ func isMgmtRule(rule rbacv1.PolicyRule, resourceContext string) bool {
 	return false
 }
 
-func verifyBindings(client *rancher.Client, clusterID, userName, roleTemplateName, roleTemplateBindingName string, namespaces []string, expectedRBCount, expectedCRBCount int) error {
-	ctx, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
-	if err != nil {
-		return err
-	}
-
+func verifyBindings(client *rancher.Client, clusterID, userName, roleTemplateName, roleTemplateBindingName string, namespaces []string, expectedRBCount, expectedCRBCount int, expectedClusterRoleNames ...string) error {
 	var lastErr error
-	err = kwait.PollUntilContextTimeout(context.Background(), defaults.TenSecondTimeout, defaults.TwoMinuteTimeout, false, func(context.Context) (bool, error) {
+	err := kwait.PollUntilContextTimeout(context.Background(), defaults.TenSecondTimeout, defaults.TwoMinuteTimeout, false, func(context.Context) (bool, error) {
 		for _, ns := range namespaces {
-			rbs, err := ctx.RBAC.RoleBinding().List(ns, metav1.ListOptions{})
+			rbs, err := extrbacapi.ListRoleBindings(client, clusterID, ns, metav1.ListOptions{})
 			if err != nil {
 				lastErr = fmt.Errorf("failed to list RoleBindings in namespace %s: %w", ns, err)
 				return false, nil
 			}
 
-			filtered := filterRoleBindings(rbs, userName, roleTemplateName)
+			filtered := filterRoleBindings(&rbacv1.RoleBindingList{Items: rbs.Items}, userName, roleTemplateName)
 			if len(filtered) != expectedRBCount {
 				lastErr = fmt.Errorf("expected %d RoleBindings for user %s in namespace %s, got %d",
 					expectedRBCount, userName, ns, len(filtered))
@@ -607,13 +623,13 @@ func verifyBindings(client *rancher.Client, clusterID, userName, roleTemplateNam
 			}
 		}
 
-		crbs, err := ctx.RBAC.ClusterRoleBinding().List(metav1.ListOptions{})
+		crbs, err := extrbacapi.ListClusterRoleBindings(client, clusterID, metav1.ListOptions{})
 		if err != nil {
 			lastErr = fmt.Errorf("failed to list ClusterRoleBindings: %w", err)
 			return false, nil
 		}
 
-		filteredCRBs := filterClusterRoleBindings(crbs, userName, roleTemplateName)
+		filteredCRBs := filterClusterRoleBindings(&rbacv1.ClusterRoleBindingList{Items: crbs.Items}, userName, roleTemplateName)
 		if len(filteredCRBs) != expectedCRBCount {
 			lastErr = fmt.Errorf("expected %d ClusterRoleBindings, got %d",
 				expectedCRBCount, len(filteredCRBs))
@@ -622,6 +638,9 @@ func verifyBindings(client *rancher.Client, clusterID, userName, roleTemplateNam
 
 		if expectedCRBCount > 0 {
 			expected := expectedRoleNames(clusterID, roleTemplateBindingName, roleTemplateName, expectedCRBCount)
+			if len(expectedClusterRoleNames) > 0 {
+				expected = expectedClusterRoleNames
+			}
 			expectedSet := make(map[string]struct{}, len(expected))
 			for _, name := range expected {
 				expectedSet[name] = struct{}{}
@@ -755,4 +774,244 @@ func remainingBindingsForProvider(client *rancher.Client, prefix string) ([]stri
 	}
 
 	return remaining, nil
+}
+
+// VerifyUserCanI validates authorization without performing the requested resource operation.
+func VerifyUserCanI(userClient *rancher.Client, clusterID, verb, apiGroup, resourceType, namespaceName, resourceName string, expected bool) error {
+	userContext, err := extclusterapi.GetClusterWranglerContext(userClient, clusterID)
+	if err != nil {
+		return err
+	}
+
+	authorization, err := authzclient.NewForConfig(userContext.RESTConfig)
+	if err != nil {
+		return err
+	}
+
+	var allowed bool
+	err = kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.TwoMinuteTimeout, true, func(ctx context.Context) (bool, error) {
+		review, err := authorization.SelfSubjectAccessReviews().Create(
+			ctx,
+			&authzv1.SelfSubjectAccessReview{
+				Spec: authzv1.SelfSubjectAccessReviewSpec{
+					ResourceAttributes: &authzv1.ResourceAttributes{
+						Verb:      verb,
+						Group:     apiGroup,
+						Resource:  resourceType,
+						Namespace: namespaceName,
+						Name:      resourceName,
+					},
+				},
+			},
+			metav1.CreateOptions{},
+		)
+		if err != nil {
+			return false, err
+		}
+
+		if review.Status.EvaluationError != "" {
+			return false, fmt.Errorf("access review evaluation failed: %s", review.Status.EvaluationError)
+		}
+
+		allowed = review.Status.Allowed
+		return allowed == expected, nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("permission %s %s/%s namespace=%q name=%q: allowed=%t, expected=%t: %w", verb, apiGroup, resourceType, namespaceName, resourceName, allowed, expected, err)
+	}
+
+	return nil
+}
+
+// VerifyPolicyRules compares declared rules regardless of ordering or duplicate rules; exact also rejects extra rules.
+func VerifyPolicyRules(actual, expected []rbacv1.PolicyRule, exact bool) error {
+	actual = slices.Clone(actual)
+	expected = slices.Clone(expected)
+	for _, rules := range [][]rbacv1.PolicyRule{actual, expected} {
+		for index := range rules {
+			rules[index] = *rules[index].DeepCopy()
+			for _, values := range [][]string{rules[index].Verbs, rules[index].APIGroups, rules[index].Resources, rules[index].ResourceNames, rules[index].NonResourceURLs} {
+				slices.Sort(values)
+			}
+		}
+	}
+	for _, expectedRule := range expected {
+		if !slices.ContainsFunc(actual, func(actualRule rbacv1.PolicyRule) bool {
+			return ruleSlicesMatch([]rbacv1.PolicyRule{actualRule}, []rbacv1.PolicyRule{expectedRule})
+		}) {
+			return fmt.Errorf("expected policy rule not found: %+v", expectedRule)
+		}
+	}
+	if exact {
+		for _, actualRule := range actual {
+			if !slices.ContainsFunc(expected, func(expectedRule rbacv1.PolicyRule) bool {
+				return ruleSlicesMatch([]rbacv1.PolicyRule{actualRule}, []rbacv1.PolicyRule{expectedRule})
+			}) {
+				return fmt.Errorf("unexpected policy rule: %+v", actualRule)
+			}
+		}
+	}
+	return nil
+}
+
+// VerifyExactClusterRoleRules waits for a ClusterRole by exact name to contain all expected rules and no extra rules.
+func VerifyExactClusterRoleRules(client *rancher.Client, clusterID, name string, expected []rbacv1.PolicyRule) (*rbacv1.ClusterRole, error) {
+	clusterContext, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cluster context for %s: %w", clusterID, err)
+	}
+
+	var clusterrole *rbacv1.ClusterRole
+	var lastErr error
+	err = kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.TwoMinuteTimeout, true, func(ctx context.Context) (bool, error) {
+		var getErr error
+		clusterrole, getErr = clusterContext.RBAC.ClusterRole().Get(name, metav1.GetOptions{})
+		if getErr != nil {
+			lastErr = getErr
+			if apierrors.IsNotFound(getErr) {
+				return false, nil
+			}
+			return false, getErr
+		}
+
+		lastErr = VerifyPolicyRules(clusterrole.Rules, expected, true)
+		return lastErr == nil, nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("ClusterRole %s in cluster %s did not match expected rules: %w (last observation: %v)", name, clusterID, err, lastErr)
+	}
+
+	return clusterrole, nil
+}
+
+// VerifyRoleTemplateClusterRoleRules waits for generated ClusterRoles to contain all expected rules, allowing extra rules.
+func VerifyRoleTemplateClusterRoleRules(client *rancher.Client, clusterID, templateName string, expectedRules []rbacv1.PolicyRule) error {
+	err := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.TwoMinuteTimeout, true, func(ctx context.Context) (bool, error) {
+		roles, err := GetClusterRolesForRoleTemplates(client, clusterID, templateName)
+		if err != nil {
+			return false, err
+		}
+
+		var actualRules []rbacv1.PolicyRule
+		for _, role := range roles.Items {
+			actualRules = append(actualRules, role.Rules...)
+		}
+		return len(roles.Items) > 0 && VerifyPolicyRules(actualRules, expectedRules, false) == nil, nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("ClusterRole rules for RoleTemplate %s in cluster %s: %w", templateName, clusterID, err)
+	}
+
+	return nil
+}
+
+// VerifyClusterScopedRoleTemplateRBAC waits for a user's template bindings to grant exactly the expected cluster-scoped rules.
+func VerifyClusterScopedRoleTemplateRBAC(client *rancher.Client, clusterID, templateName, userName string, expected []rbacv1.PolicyRule) ([]string, []string, error) {
+	var roleNames, bindingNames []string
+	err := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, true, func(ctx context.Context) (bool, error) {
+		roles, err := GetClusterRolesForRoleTemplates(client, clusterID, templateName)
+		if err != nil {
+			return false, err
+		}
+
+		bindings, err := extrbacapi.ListClusterRoleBindings(client, clusterID, metav1.ListOptions{})
+		if err != nil {
+			return false, err
+		}
+		roleNames, bindingNames = nil, nil
+		var effectiveRules []rbacv1.PolicyRule
+		for _, binding := range bindings.Items {
+			if !slices.ContainsFunc(binding.Subjects, func(subject rbacv1.Subject) bool {
+				return subject.Kind == rbacv1.UserKind && subject.Name == userName
+			}) {
+				continue
+			}
+			foundRole := false
+			for _, role := range roles.Items {
+				if binding.RoleRef.Kind == "ClusterRole" && binding.RoleRef.Name == role.Name {
+					foundRole = true
+					bindingNames = append(bindingNames, binding.Name)
+					if !slices.Contains(roleNames, role.Name) {
+						roleNames = append(roleNames, role.Name)
+						effectiveRules = append(effectiveRules, role.Rules...)
+					}
+				}
+			}
+			if binding.RoleRef.Kind == "ClusterRole" && strings.HasPrefix(binding.RoleRef.Name, templateName) && !foundRole {
+				return false, nil
+			}
+		}
+
+		if len(expected) == 0 {
+			return len(bindingNames) == 0, nil
+		}
+
+		return len(bindingNames) > 0 && VerifyPolicyRules(effectiveRules, expected, true) == nil, nil
+	})
+
+	if err != nil {
+		return nil, nil, fmt.Errorf("cluster-scoped RBAC for %s and user %s: %w", templateName, userName, err)
+	}
+
+	return roleNames, bindingNames, nil
+}
+
+// VerifyRoleTemplateResourceRules waits for resource rules with non-empty verbs to be present or absent in a template's ClusterRoles.
+func VerifyRoleTemplateResourceRules(client *rancher.Client, clusterID, templateName, apiGroup, resource string, expectedPresent bool) error {
+	err := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.TwoMinuteTimeout, true, func(ctx context.Context) (bool, error) {
+		roles, err := GetClusterRolesForRoleTemplates(client, clusterID, templateName)
+		if err != nil {
+			return false, err
+		}
+		for _, role := range roles.Items {
+			for _, rule := range role.Rules {
+				if (slices.Contains(rule.APIGroups, apiGroup) || slices.Contains(rule.APIGroups, Wildcard)) && (slices.Contains(rule.Resources, resource) || slices.Contains(rule.Resources, Wildcard)) && len(rule.Verbs) > 0 {
+					return expectedPresent, nil
+				}
+			}
+		}
+		return !expectedPresent, nil
+	})
+	if err != nil {
+		return fmt.Errorf("RoleTemplate %s resource %s/%s expected present=%t: %w", templateName, apiGroup, resource, expectedPresent, err)
+	}
+	return nil
+}
+
+// VerifyUserNamespaceRuleRestriction verifies namespace get grants include the allowed namespace without unrestricted or denied namespace access.
+func VerifyUserNamespaceRuleRestriction(client *rancher.Client, clusterID, userName, allowedNamespace, deniedNamespace string) error {
+	err := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.TwoMinuteTimeout, true, func(ctx context.Context) (bool, error) {
+		bindings, err := extrbacapi.ListClusterRoleBindings(client, clusterID, metav1.ListOptions{})
+		if err != nil {
+			return false, err
+		}
+		foundScopedGrant := false
+		for _, binding := range bindings.Items {
+			if !slices.ContainsFunc(binding.Subjects, func(subject rbacv1.Subject) bool {
+				return subject.Kind == rbacv1.UserKind && subject.Name == userName
+			}) {
+				continue
+			}
+			rules, err := GetClusterRoleRules(client, clusterID, binding.RoleRef.Name)
+			if err != nil {
+				return false, err
+			}
+			for _, rule := range rules {
+				if (slices.Contains(rule.APIGroups, "") || slices.Contains(rule.APIGroups, Wildcard)) && (slices.Contains(rule.Resources, NamespaceResource) || slices.Contains(rule.Resources, Wildcard)) && (slices.Contains(rule.Verbs, GetVerb) || slices.Contains(rule.Verbs, Wildcard)) {
+					if len(rule.ResourceNames) == 0 || slices.Contains(rule.ResourceNames, deniedNamespace) {
+						return false, fmt.Errorf("namespace access unexpectedly unrestricted or includes %s in %s", deniedNamespace, binding.RoleRef.Name)
+					}
+					foundScopedGrant = foundScopedGrant || slices.Contains(rule.ResourceNames, allowedNamespace)
+				}
+			}
+		}
+		return foundScopedGrant, nil
+	})
+	if err != nil {
+		return fmt.Errorf("namespace rule restriction for user %s: %w", userName, err)
+	}
+
+	return nil
 }

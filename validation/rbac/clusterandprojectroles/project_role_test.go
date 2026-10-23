@@ -9,6 +9,7 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
+	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	"github.com/rancher/shepherd/pkg/session"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
@@ -137,6 +138,8 @@ func (pr *ProjectRolesTestSuite) TestProjectOwnerCanAddProjectMember() {
 	ownerBinding, err := rbacapi.CreateProjectRoleTemplateBinding(pr.client, owner.Name, project, rbac.ProjectOwner.String())
 	require.NoError(pr.T(), err)
 
+	require.NoError(pr.T(), rbacapi.VerifyUserCanI(ownerClient, extclusterapi.LocalCluster, rbacapi.CreateVerb, rbacapi.ManagementAPIGroup, rbacapi.PrtbResource, ownerBinding.Namespace, "", true))
+
 	memberBinding, err := rbacapi.CreateProjectRoleTemplateBinding(ownerClient, member.Name, project, rbac.ProjectMember.String())
 	require.NoError(pr.T(), err, "project owner should be able to add a project member")
 
@@ -146,7 +149,7 @@ func (pr *ProjectRolesTestSuite) TestProjectOwnerCanAddProjectMember() {
 	require.Equal(pr.T(), rbac.ProjectMember.String(), persistedBinding.RoleTemplateName)
 	require.Equal(pr.T(), ownerBinding.ProjectName, persistedBinding.ProjectName)
 
-	require.NoError(pr.T(), rbacapi.VerifyUserPermission(memberClient, pr.cluster.ID, "list", rbacapi.PodsResource, namespace.Name, "", true, false))
+	require.NoError(pr.T(), rbacapi.VerifyUserPermission(memberClient, pr.cluster.ID, rbacapi.ListVerb, rbacapi.PodsResource, namespace.Name, "", true, false))
 }
 
 func TestProjectRolesTestSuite(t *testing.T) {
