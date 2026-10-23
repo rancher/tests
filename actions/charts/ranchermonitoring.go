@@ -9,6 +9,7 @@ import (
 	catalogv1 "github.com/rancher/rancher/pkg/apis/catalog.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/clients/rancher/catalog"
+	shepherdCharts "github.com/rancher/shepherd/extensions/charts"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/extensions/kubectl"
@@ -160,7 +161,21 @@ func InstallRancherMonitoringChart(client *rancher.Client, installOptions *Insta
 	if err != nil {
 		return err
 	}
-	return nil
+
+	// Wait for the monitoring workloads to be Ready so the chart is actually serving
+	// (Prometheus and Alertmanager run as StatefulSets; the operator and Grafana as Deployments).
+	// Without this, callers can race against Prometheus not yet scraping any targets.
+	err = shepherdCharts.WatchAndWaitDeployments(client, installOptions.Cluster.ID, RancherMonitoringNamespace, metav1.ListOptions{})
+	if err != nil {
+		return err
+	}
+
+	err = shepherdCharts.WatchAndWaitDaemonSets(client, installOptions.Cluster.ID, RancherMonitoringNamespace, metav1.ListOptions{})
+	if err != nil {
+		return err
+	}
+
+	return shepherdCharts.WatchAndWaitStatefulSets(client, installOptions.Cluster.ID, RancherMonitoringNamespace, metav1.ListOptions{})
 }
 
 // newMonitoringChartInstallAction is a private helper function that returns chart install action with monitoring and payload options.
