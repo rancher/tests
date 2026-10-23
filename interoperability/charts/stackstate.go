@@ -352,6 +352,107 @@ func newStackstateAgentChartUpgradeAction(p *charts.PayloadOpts, stackstateConfi
 	return chartUpgradeAction
 }
 
+// UpgradeStackStateServerChart upgrades the suse-observability server chart on the cluster
+// carried by installOptions and waits for the app to transition to deployed state.
+// additionalValues must carry the install-time server values (base config, ingress and HA
+// sizing profile): the chart-upgrade path deliberately re-applies those values instead of
+// a blind version bump, because upgrading on chart defaults would silently drop the HA
+// sizing profile and the stackstate service credentials (url/api key/license), breaking
+// the agent-to-server pipeline mid-upgrade (rancher/tests#946 Further Notes calls this
+// per-product values migration out explicitly). Wrap calls in charts.RetryOnWatchError,
+// as with UpgradeStackstateAgentChart, to absorb transient watch failures.
+func UpgradeStackStateServerChart(client *rancher.Client, installOptions *charts.InstallOptions, additionalValues map[string]interface{}) error {
+	serverSetting, err := client.Management.Setting.ByID(serverURLSettingID)
+	if err != nil {
+		return err
+	}
+
+	stackstateServerChartUpgradeActionPayload := &charts.PayloadOpts{
+		InstallOptions: *installOptions,
+		Name:           StackStateServerChartRepo,
+		Namespace:      StackStateServerNamespace,
+		Host:           serverSetting.Value,
+	}
+
+	chartUpgradeAction := newStackStateServerChartUpgradeAction(stackstateServerChartUpgradeActionPayload, additionalValues)
+
+	catalogClient, err := client.GetClusterCatalogClient(installOptions.Cluster.ID)
+	if err != nil {
+		return err
+	}
+
+	err = catalogClient.UpgradeChart(chartUpgradeAction, StackStateServerChartRepo)
+	if err != nil {
+		return err
+	}
+
+	adminClient, err := rancher.NewClient(client.RancherConfig.AdminToken, client.Session)
+	if err != nil {
+		return err
+	}
+
+	adminCatalogClient, err := adminClient.GetClusterCatalogClient(installOptions.Cluster.ID)
+	if err != nil {
+		return err
+	}
+
+	// wait for chart to be in status pending upgrade
+	watchAppInterface, err := adminCatalogClient.Apps(StackStateServerNamespace).Watch(context.TODO(), metav1.ListOptions{
+		FieldSelector:  "metadata.name=" + StackStateServerChartRepo,
+		TimeoutSeconds: &defaults.WatchTimeoutSeconds,
+	})
+	if err != nil {
+		return err
+	}
+
+	err = wait.WatchWait(watchAppInterface, func(event watch.Event) (ready bool, err error) {
+		app := event.Object.(*catalogv1.App)
+
+		state := app.Status.Summary.State
+		if state == string(catalogv1.StatusPendingUpgrade) {
+			return true, nil
+		}
+		return false, nil
+	})
+	if err != nil {
+		return err
+	}
+
+	watchAppInterface, err = adminCatalogClient.Apps(StackStateServerNamespace).Watch(context.TODO(), metav1.ListOptions{
+		FieldSelector:  "metadata.name=" + StackStateServerChartRepo,
+		TimeoutSeconds: &defaults.WatchTimeoutSeconds,
+	})
+	if err != nil {
+		return err
+	}
+
+	err = wait.WatchWait(watchAppInterface, func(event watch.Event) (ready bool, err error) {
+		app := event.Object.(*catalogv1.App)
+
+		state := app.Status.Summary.State
+		if state == string(catalogv1.StatusDeployed) {
+			return true, nil
+		}
+		return false, nil
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// newStackStateServerChartUpgradeAction is a private helper function that returns the chart
+// upgrade action carrying the install-time server values, mirroring the agent upgrade action.
+func newStackStateServerChartUpgradeAction(p *charts.PayloadOpts, additionalValues map[string]interface{}) *types.ChartUpgradeAction {
+
+	chartUpgrade := charts.NewChartUpgrade(p.Name, p.Name, p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, p.DefaultRegistry, additionalValues)
+	chartUpgrades := []types.ChartUpgrade{*chartUpgrade}
+	chartUpgradeAction := charts.NewChartUpgradeAction(p.Namespace, chartUpgrades)
+
+	return chartUpgradeAction
+}
+
 // CreateClusterRepo creates a new ClusterRepo resource in the Kubernetes cluster using the provided catalog client.
 // It takes the client, repository name, and repository URL as arguments and returns an error if the operation fails.
 func CreateClusterRepo(client *rancher.Client, catalogClient *catalog.Client, name, url string) error {

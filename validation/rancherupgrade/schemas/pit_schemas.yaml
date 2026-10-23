@@ -1,0 +1,135 @@
+- projects: [RANCHERINT]
+  suite: Rancher Upgrade/Longhorn
+  cases:
+  - title: "Longhorn pre-upgrade setup"
+    description: "Install Longhorn and seed a checksum workload on a Longhorn volume before the Rancher server upgrade"
+    automation: 2
+    steps:
+    - action: "Create a project on the Rancher local cluster"
+      data: ""
+      expectedresult: "The project is created successfully"
+      position: 1
+    - action: "Install the Longhorn chart at the latest version offered by the pre-upgrade Rancher"
+      data: "Chart: longhorn from the rancher-charts repo"
+      expectedresult: "Longhorn installs and its deployments and daemonsets become Ready"
+      position: 2
+    - action: "Create the checksum workload on a Longhorn-backed PVC"
+      data: "1GiB PVC and nginx deployment named rancher-upgrade-longhorn with data file /auto-mnt/checksum-data"
+      expectedresult: "PVC is Bound, deployment rolls out, and the checksum data is written to the Longhorn volume"
+      position: 3
+    custom_field:
+      "15": "TestLonghornPreUpgrade"
+  - title: "Longhorn post-upgrade validation"
+    description: "Verify Longhorn and its volume data survive the Rancher server upgrade"
+    automation: 2
+    steps:
+    - action: "Wait for the Rancher server to report the upgraded version"
+      data: "rancherUpgradeInput.targetVersion"
+      expectedresult: "The server-version setting equals the target version"
+      position: 1
+    - action: "Check the Longhorn chart installation state"
+      data: "Chart: longhorn in longhorn-system"
+      expectedresult: "The chart is still installed"
+      position: 2
+    - action: "Verify the checksum workload on the Longhorn volume"
+      data: "PVC rancher-upgrade-longhorn and data file /auto-mnt/checksum-data"
+      expectedresult: "PVC is Bound and the sha256 of the data file matches the pre-upgrade content"
+      position: 3
+    custom_field:
+      "15": "TestLonghornPostUpgrade"
+  - title: "Longhorn chart upgrade after Rancher upgrade"
+    description: "Upgrade Longhorn to the version offered by the upgraded Rancher catalog and verify workload data"
+    automation: 2
+    steps:
+    - action: "Wait for the Rancher server to report the upgraded version"
+      data: "rancherUpgradeInput.targetVersion"
+      expectedresult: "The server-version setting equals the target version"
+      position: 1
+    - action: "Resolve the latest Longhorn chart version from the cluster-scoped catalog"
+      data: "Chart: longhorn from the rancher-charts repo"
+      expectedresult: "The latest cluster-scoped chart version is resolved and differs from the installed pre-upgrade version"
+      position: 2
+    - action: "Upgrade the Longhorn chart with retry"
+      data: "longhorn and longhorn-crd to the latest version"
+      expectedresult: "The longhorn chart reaches Deployed state and workloads become Ready"
+      position: 3
+    - action: "Verify the chart version and the checksum workload"
+      data: "Chart version equals latest; PVC rancher-upgrade-longhorn and data file /auto-mnt/checksum-data"
+      expectedresult: "Installed chart version matches latest and the sha256 of the data file still matches the pre-upgrade content"
+      position: 4
+    custom_field:
+      "15": "TestLonghornChartUpgrade"
+
+- projects: [RANCHERINT]
+  suite: Rancher Upgrade/Observability
+  cases:
+  - title: "SUSE Observability pre-upgrade setup"
+    description: "Install the SUSE Observability server and a stackstate agent reporting to it before the Rancher server upgrade"
+    automation: 2
+    steps:
+    - action: "Ensure the prime server-charts ClusterRepo exists on the local cluster"
+      data: "ClusterRepo suse-observability at https://charts.rancher.com/server-charts/prime/suse-observability"
+      expectedresult: "The ClusterRepo is available to the cluster-scoped catalog"
+      position: 1
+    - action: "Install the suse-observability server chart in the System project on the local cluster"
+      data: "Chart: suse-observability at the latest cluster-scoped version with base, ingress and 150-ha sizing values"
+      expectedresult: "The chart reaches Deployed state, its deployments and daemonsets become Ready, and its pods are healthy"
+      position: 2
+    - action: "Install the stackstate agent chart on the shared downstream cluster"
+      data: "Chart: stackstate-k8s-agent from rancher-partner-charts with cluster, apiKey and url values from stackstateConfigs"
+      expectedresult: "The chart reaches Deployed state, its deployments and daemonsets become Ready, and its pods are healthy"
+      position: 3
+    - action: "Verify the agent is reporting to the server"
+      data: "Agent workloads ready in the stackstate namespace on the downstream cluster"
+      expectedresult: "The agent pods stay healthy against the server URL, seeding pre-upgrade monitoring state"
+      position: 4
+    custom_field:
+      "15": "TestObservabilityPreUpgrade"
+  - title: "SUSE Observability post-upgrade validation"
+    description: "Verify the SUSE Observability server stays healthy and agents keep reporting across the Rancher server upgrade"
+    automation: 2
+    steps:
+    - action: "Wait for the Rancher server to report the upgraded version"
+      data: "rancherUpgradeInput.targetVersion"
+      expectedresult: "The server-version setting equals the target version"
+      position: 1
+    - action: "Check the suse-observability server chart installation state"
+      data: "Chart: suse-observability in the suse-observability namespace on the local cluster"
+      expectedresult: "The chart is still installed"
+      position: 2
+    - action: "Verify the server workloads are healthy"
+      data: "Deployments and daemonsets in the suse-observability namespace on the local cluster"
+      expectedresult: "All deployments and daemonsets reach their expected replicas and the server pods are healthy"
+      position: 3
+    - action: "Verify monitoring continuity via the agent"
+      data: "Chart: stackstate-k8s-agent in the stackstate namespace on the downstream cluster"
+      expectedresult: "The agent chart is still installed, its workloads are Ready, and its pods are healthy and reporting"
+      position: 4
+    custom_field:
+      "15": "TestObservabilityPostUpgrade"
+  - title: "SUSE Observability chart upgrade after Rancher upgrade"
+    description: "Upgrade the suse-observability server and stackstate agent charts to the versions offered by the upgraded Rancher catalog and re-verify health"
+    automation: 2
+    steps:
+    - action: "Wait for the Rancher server to report the upgraded version"
+      data: "rancherUpgradeInput.targetVersion"
+      expectedresult: "The server-version setting equals the target version"
+      position: 1
+    - action: "Resolve the latest server and agent chart versions from the cluster-scoped catalogs"
+      data: "suse-observability from the prime server-charts ClusterRepo on the local cluster; stackstate-k8s-agent from rancher-partner-charts on the downstream cluster"
+      expectedresult: "The latest cluster-scoped versions are resolved and differ from the installed pre-upgrade versions"
+      position: 2
+    - action: "Upgrade the suse-observability server chart with the install-time values"
+      data: "Base, ingress and 150-ha sizing values re-applied to avoid dropping the HA profile and service credentials"
+      expectedresult: "The server chart reaches Deployed state at the latest version and its workloads become Ready"
+      position: 3
+    - action: "Upgrade the stackstate agent chart"
+      data: "stackstate-k8s-agent upgraded to the latest version with cluster, apiKey and url values"
+      expectedresult: "The agent chart reaches Deployed state at the latest version and its workloads become Ready"
+      position: 4
+    - action: "Verify post-upgrade health and reporting"
+      data: "Server and agent chart versions equal the resolved latest versions"
+      expectedresult: "Both charts report the latest versions and the agent pods are healthy and reporting to the server"
+      position: 5
+    custom_field:
+      "15": "TestObservabilityChartUpgrade"
