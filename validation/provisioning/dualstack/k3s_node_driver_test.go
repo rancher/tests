@@ -43,7 +43,10 @@ func nodeDriverK3SSetup(t *testing.T) nodeDriverK3STest {
 
 	k.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	k.cattleConfig, err = defaults.LoadPackageDefaults(k.cattleConfig, "")
+	providerName, err := provisioning.GetProviderFromConfig(k.cattleConfig)
+	require.NoError(t, err)
+
+	k.cattleConfig, err = defaults.LoadPackageDefaults(k.cattleConfig, "", providerName)
 	require.NoError(t, err)
 
 	k.cattleConfig, err = defaults.LoadSecretsManagerDefaults(k.cattleConfig)

@@ -38,7 +38,6 @@ import (
 const (
 	localCluster           = "local"
 	templateChartConfigKey = "templateChart"
-	templateChartDefaults  = "defaults/template-chart.yaml"
 )
 
 type templateTest struct {
@@ -61,13 +60,16 @@ func templateSetup(t *testing.T) templateTest {
 
 	r.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
+	providerName, err := provisioning.GetProviderFromConfig(r.cattleConfig)
+	require.NoError(t, err)
+
 	_, setupFile, _, ok := runtime.Caller(0)
 	require.True(t, ok)
 
 	setupDir := filepath.Dir(setupFile)
-	templateChartDefaultsPath := filepath.Join(setupDir, templateChartDefaults)
+	templateChartDefaultsPath := filepath.Join(setupDir, "defaults", providerName+".yaml")
 
-	r.cattleConfig, err = configDefaults.LoadPackageDefaults(r.cattleConfig, templateChartDefaultsPath)
+	r.cattleConfig, err = configDefaults.LoadPackageDefaults(r.cattleConfig, templateChartDefaultsPath, providerName)
 	require.NoError(t, err)
 
 	r.cattleConfig, err = configDefaults.LoadSecretsManagerDefaults(r.cattleConfig)

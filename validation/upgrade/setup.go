@@ -55,7 +55,10 @@ func Setup(t *testing.T, clusterType string, isWindows bool) *upgradeTest {
 
 	u.CattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	u.CattleConfig, err = defaults.LoadPackageDefaults(u.CattleConfig, "")
+	providerName, err := provisioning.GetProviderFromConfig(u.CattleConfig)
+	require.NoError(t, err)
+
+	u.CattleConfig, err = defaults.LoadPackageDefaults(u.CattleConfig, "", providerName)
 	require.NoError(t, err)
 
 	loggingConfig := new(logging.Logging)

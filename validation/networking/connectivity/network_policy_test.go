@@ -17,6 +17,7 @@ import (
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/networking"
 	projectsapi "github.com/rancher/tests/actions/projects"
+	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/workloads"
 	"github.com/stretchr/testify/require"
@@ -50,7 +51,10 @@ func (n *NetworkPolicyTestSuite) SetupSuite() {
 
 	n.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	n.cattleConfig, err = defaults.LoadPackageDefaults(n.cattleConfig, "")
+	providerName, err := provisioning.GetProviderFromConfig(n.cattleConfig)
+	require.NoError(n.T(), err)
+
+	n.cattleConfig, err = defaults.LoadPackageDefaults(n.cattleConfig, "", providerName)
 	require.NoError(n.T(), err)
 
 	loggingConfig := new(logging.Logging)

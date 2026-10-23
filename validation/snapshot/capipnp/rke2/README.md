@@ -78,7 +78,7 @@ This package contains a defaults folder which contains default test configuratio
 2. Reduce the amount of yaml data that needs to be stored in our pipelines.
 3. Make it easier to run tests
 
-Any data the user provides will override these defaults which are stored here: [defaults](../defaults/defaults.yaml). 
+Any data the user provides will override these defaults which are stored here: [defaults](../../defaults/aws.yaml).
 
 ## Logging
 This package supports several logging levels. You can set the logging levels via the cattle config and all levels above the provided level will be logged while all logs below that logging level will be omitted. 

@@ -25,6 +25,7 @@ import (
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/networking"
 	projectsapi "github.com/rancher/tests/actions/projects"
+	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/services"
 	"github.com/rancher/tests/actions/workloads"
@@ -68,7 +69,10 @@ func (p *PortTestSuite) SetupSuite() {
 
 	p.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	p.cattleConfig, err = defaults.LoadPackageDefaults(p.cattleConfig, "")
+	providerName, err := provisioning.GetProviderFromConfig(p.cattleConfig)
+	require.NoError(p.T(), err)
+
+	p.cattleConfig, err = defaults.LoadPackageDefaults(p.cattleConfig, "", providerName)
 	require.NoError(p.T(), err)
 
 	loggingConfig := new(logging.Logging)
