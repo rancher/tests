@@ -37,6 +37,7 @@ type AWSMachineConfig struct {
 	SecurityGroup      []string `json:"securityGroup" yaml:"securityGroup"`
 	SSHUser            string   `json:"sshUser" yaml:"sshUser"`
 	SubnetID           string   `json:"subnetId" yaml:"subnetId"`
+	Tags               string   `json:"tags" yaml:"tags"`
 	UsePrivateAddress  bool     `json:"usePrivateAddress" yaml:"usePrivateAddress"`
 	VPCID              string   `json:"vpcId" yaml:"vpcId"`
 	VolumeType         string   `json:"volumeType" yaml:"volumeType"`
@@ -79,6 +80,7 @@ func NewAWSMachineConfig(machineConfigs MachineConfigs, generatedPoolName, names
 		machineConfig.Object["securityGroup"] = awsMachineConfig.SecurityGroup
 		machineConfig.Object["sshUser"] = awsMachineConfig.SSHUser
 		machineConfig.Object["subnetId"] = awsMachineConfig.SubnetID
+		machineConfig.Object["tags"] = mergeMachineConfigTags(awsMachineConfig.Tags, ciMachineConfigTags())
 		machineConfig.Object["type"] = AWSPoolType
 		machineConfig.Object["usePrivateAddress"] = awsMachineConfig.UsePrivateAddress
 		machineConfig.Object["volumeType"] = awsMachineConfig.VolumeType

@@ -287,6 +287,8 @@ pipeline {
 
                         // ── Build environment file for Docker ─────────
                         def envLines = []
+                        envLines += "JOB_NAME=${env.JOB_NAME}"
+                        envLines += "BUILD_NUMBER=${env.BUILD_NUMBER}"
                         envLines += "CATTLE_TEST_CONFIG=/workspace/${env.TESTS_DIR}/validation/cattle-config.yaml"
                         envLines += "AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}"
                         envLines += "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}"

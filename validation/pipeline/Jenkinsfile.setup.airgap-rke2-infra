@@ -24,6 +24,11 @@
 def libraryBranch = env.QA_JENKINS_LIBRARY_BRANCH ?: 'main'
 library "qa-jenkins-library@${libraryBranch}"
 
+def ciDefaultTagsTfvars() {
+    def ciJob = (env.JOB_NAME ?: '').replaceAll('[^A-Za-z0-9 _.:/=+@-]', '-')
+    return "\naws_default_tags = {\n  ci_job   = \"${ciJob}\"\n  ci_build = \"${env.BUILD_NUMBER ?: ''}\"\n}\n"
+}
+
 pipeline {
     agent any
 
@@ -197,7 +202,7 @@ pipeline {
 
                             infrastructure.writeConfig(
                                 path:    "${tofuModulePath}/terraform.tfvars",
-                                content: terraformConfig
+                                content: terraformConfig + ciDefaultTagsTfvars()
                             )
                         }
 
