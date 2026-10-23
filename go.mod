@@ -1,6 +1,6 @@
 module github.com/rancher/tests
 
-go 1.27.2
+go 1.27.3
 
 replace (
 	github.com/containerd/containerd => github.com/containerd/containerd v1.6.27 // for compatibilty with docker 20.10.x
@@ -17,7 +17,7 @@ replace (
 
 	github.com/rancher/tests/actions => ./actions
 	github.com/rancher/tests/interoperability => ./interoperability
-	github.com/rancher/tfp-automation => github.com/rancher/tfp-automation v0.0.0-20261020173242-0688cbb01121
+	github.com/rancher/tfp-automation => github.com/rancher/tfp-automation v0.0.0-20261023234248-bef41d02c39f
 
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc => go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.53.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp => go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.53.0
@@ -87,7 +87,7 @@ require (
 	github.com/rancher/shepherd v0.0.0-20261021194219-25800d4c8ac6
 	github.com/rancher/tests/actions v0.0.0-20261008182219-05530174171d
 	github.com/rancher/tests/interoperability v0.0.0
-	github.com/rancher/tfp-automation v0.0.0-20261020173242-0688cbb01121
+	github.com/rancher/tfp-automation v0.0.0-20261023234248-bef41d02c39f
 	github.com/rancher/wrangler/v3 v3.8.0-rc.2
 	github.com/sirupsen/logrus v1.10.2
 	github.com/stretchr/testify v1.12.1
