@@ -548,6 +548,25 @@ rancherUpgradePipeline:
                           Chart flavor:   ${params.RANCHER_CHART_REPO_FLAVOR}
                         """.stripIndent()
                     currentBuild.description = "Upgrade ${env.RANCHER_FROM_VERSION} -> ${env.RANCHER_TO_VERSION} (${params.RANCHER_CHART_REPO_FLAVOR}) | ${params.HOSTNAME_PREFIX} | ${params.TEST_MODULE}"
+
+                    if (params.TEST_MODULE == 'observability') {
+                        // Pre-deploy guard: fail before any infra spend when
+                        // the SUSE Observability license credential is absent
+                        // or empty; the post-deploy config injection reuses it.
+                        def licenseProblem = ''
+                        try {
+                            withCredentials([string(credentialsId: 'STACKSTATE_LICENSE', variable: 'STACKSTATE_LICENSE_CHECK')]) {
+                                if (!env.STACKSTATE_LICENSE_CHECK?.trim()) {
+                                    licenseProblem = 'STACKSTATE_LICENSE exists but is empty; set the SUSE Observability license key and rerun'
+                                }
+                            }
+                        } catch (Exception e) {
+                            licenseProblem = "observability module needs the STACKSTATE_LICENSE folder credential (SUSE Observability license key); add it to the rancher_qa folder and rerun (checked pre-deploy to avoid infra spend)"
+                        }
+                        if (licenseProblem) {
+                            error licenseProblem
+                        }
+                    }
                 }
             }
         }
@@ -779,8 +798,9 @@ rancher_use_bundled_system_charts: true
                     if (params.TEST_MODULE == 'observability') {
                         // SUSE Observability needs its license plus the
                         // connection settings the server and the agent share.
-                        // The license is a folder credential (fail fast here,
-                        // before any infra spend); the URL defaults to the
+                        // The license is the STACKSTATE_LICENSE folder
+                        // credential, checked pre-deploy by the guard in the
+                        // version-resolution stage; the URL defaults to the
                         // in-cluster router service, which the co-located
                         // agent can always reach; the cluster API key is
                         // self-consistent because this suite installs the
