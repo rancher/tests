@@ -19,7 +19,7 @@ import (
 )
 
 func TestSnapshotRestoreWindows(t *testing.T) {
-	t.Parallel()
+	snapshot.ParallelIfOwnCluster(t)
 
 	s := snapshot.Setup(t, defaults.RKE2, false, true)
 
@@ -40,6 +40,7 @@ func TestSnapshotRestoreWindows(t *testing.T) {
 	for _, tt := range tests {
 		t.Cleanup(func() {
 			logrus.Infof("Running cleanup (%s)", tt.name)
+			s.WaitClusterReady()
 			s.Session.Cleanup()
 		})
 

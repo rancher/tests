@@ -19,7 +19,7 @@ import (
 )
 
 func TestSnapshotRestoreK8sUpgrade(t *testing.T) {
-	t.Parallel()
+	snapshot.ParallelIfOwnCluster(t)
 
 	s := snapshot.Setup(t, defaults.RKE2, false, false)
 
@@ -40,6 +40,7 @@ func TestSnapshotRestoreK8sUpgrade(t *testing.T) {
 	for _, tt := range tests {
 		t.Cleanup(func() {
 			logrus.Infof("Running cleanup (%s)", tt.name)
+			s.WaitClusterReady()
 			s.Session.Cleanup()
 		})
 
@@ -58,9 +59,11 @@ func TestSnapshotRestoreK8sUpgrade(t *testing.T) {
 			require.NoError(t, err)
 
 			logrus.Infof("Restoring snapshot %s on cluster %s", snapshotName, tt.cluster.Name)
-			restoredCluster, err := etcdsnapshot.RestoreAndValidateSnapshotV2Prov(s.StandardUserClient, snapshotName, tt.etcdSnapshot, clusterObject, tt.cluster.ID)
+			_, err = etcdsnapshot.RestoreAndValidateSnapshotV2Prov(s.StandardUserClient, snapshotName, tt.etcdSnapshot, clusterObject, tt.cluster.ID)
 			require.NoError(t, err)
-			require.Equal(t, restoredCluster.Spec.KubernetesVersion, clusterObject.Spec.KubernetesVersion)
+
+			err = provisioning.VerifyKubernetesVersion(s.StandardUserClient, tt.cluster, clusterObject.Spec.KubernetesVersion)
+			require.NoError(t, err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", tt.cluster.Name)
 			err = provisioning.VerifyClusterReady(s.StandardUserClient, tt.cluster)
