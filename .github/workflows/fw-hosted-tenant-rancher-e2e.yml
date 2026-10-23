@@ -246,6 +246,7 @@ jobs:
       - name: Write cattle-config.yaml
         id: cattle_config
         env:
+          CLEANUP: ${{ github.event.inputs.cleanup }}
           HOST_URL: ${{ steps.urls.outputs.host_url }}
           TENANT_URL: ${{ steps.urls.outputs.tenant_url }}
           HOST_TOKEN: ${{ steps.tokens.outputs.host_token }}
@@ -256,7 +257,7 @@ jobs:
           rancher:
             host: "${HOST_URL}"
             adminToken: "${HOST_TOKEN}"
-            cleanup: true
+            cleanup: ${CLEANUP}
             insecure: true
             clusterName: "imported-tenant-1"
 
@@ -264,7 +265,7 @@ jobs:
             clients:
               - host: "${TENANT_URL}"
                 adminToken: "${TENANT_TOKEN}"
-                cleanup: true
+                cleanup: ${CLEANUP}
                 insecure: true
                 clusterName: "local"
           EOF

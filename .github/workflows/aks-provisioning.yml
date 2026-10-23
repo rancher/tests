@@ -241,7 +241,7 @@ jobs:
             host: "${{ env.HOSTNAME_PREFIX }}.${{ vars.AZURE_LOCATION }}.cloudapp.azure.com"
             adminPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
             insecure: true
-            cleanup: true
+            cleanup: ${{ env.CLEANUP_ENABLED }}
           terraform:
             cni: "${{ vars.CNI }}"
             defaultClusterRoleForProjectMembers: "true"
