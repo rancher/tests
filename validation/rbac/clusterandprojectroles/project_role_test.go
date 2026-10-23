@@ -12,6 +12,7 @@ import (
 	"github.com/rancher/shepherd/pkg/session"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
+	userapi "github.com/rancher/tests/actions/kubeapi/users"
 	rbac "github.com/rancher/tests/actions/rbac"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
@@ -116,6 +117,36 @@ func (pr *ProjectRolesTestSuite) TestManageProjectUserRoleCannotAddProjectOwner(
 	_, err = addNewUserAsPOClient.WranglerContext.Mgmt.Project().Get(pr.cluster.ID, adminProject.Name, metav1.GetOptions{})
 	require.Error(pr.T(), err)
 	require.True(pr.T(), apierrors.IsForbidden(err))
+}
+
+func (pr *ProjectRolesTestSuite) TestProjectOwnerCanAddProjectMember() {
+	subSession := pr.session.NewSession()
+	defer subSession.Cleanup()
+
+	log.Info("Verifying that a project owner can add another user as project member")
+
+	owner, ownerClient, err := userapi.CreateUserWithRolesAndClient(pr.client, rbac.StandardUser.String())
+	require.NoError(pr.T(), err)
+
+	member, memberClient, err := userapi.CreateUserWithRolesAndClient(pr.client, rbac.StandardUser.String())
+	require.NoError(pr.T(), err)
+
+	project, namespace, err := projectapi.CreateProjectAndNamespace(pr.client, pr.cluster.ID)
+	require.NoError(pr.T(), err)
+
+	ownerBinding, err := rbacapi.CreateProjectRoleTemplateBinding(pr.client, owner.Name, project, rbac.ProjectOwner.String())
+	require.NoError(pr.T(), err)
+
+	memberBinding, err := rbacapi.CreateProjectRoleTemplateBinding(ownerClient, member.Name, project, rbac.ProjectMember.String())
+	require.NoError(pr.T(), err, "project owner should be able to add a project member")
+
+	persistedBinding, err := pr.client.WranglerContext.Mgmt.ProjectRoleTemplateBinding().Get(memberBinding.Namespace, memberBinding.Name, metav1.GetOptions{})
+	require.NoError(pr.T(), err)
+	require.Equal(pr.T(), member.Name, persistedBinding.UserName)
+	require.Equal(pr.T(), rbac.ProjectMember.String(), persistedBinding.RoleTemplateName)
+	require.Equal(pr.T(), ownerBinding.ProjectName, persistedBinding.ProjectName)
+
+	require.NoError(pr.T(), rbacapi.VerifyUserPermission(memberClient, pr.cluster.ID, "list", rbacapi.PodsResource, namespace.Name, "", true, false))
 }
 
 func TestProjectRolesTestSuite(t *testing.T) {
