@@ -108,7 +108,7 @@ func (n *NeuVectorTestSuite) TestNeuVectorChartInstallation() {
 	require.NoError(n.T(), err)
 
 	n.T().Log("Verifying all expected NeuVector services are active")
-	err = verifyNeuVectorServicesActive(client, n.cluster.ID)
+	err = VerifyNeuVectorServicesActive(client, n.cluster.ID)
 	require.NoError(n.T(), err)
 
 	if n.chartInstallOptions.DefaultRegistry != "" {
@@ -119,7 +119,7 @@ func (n *NeuVectorTestSuite) TestNeuVectorChartInstallation() {
 	}
 
 	n.T().Log("Verifying NeuVector manager web UI is accessible via service proxy")
-	respUI, err := verifyNeuVectorWebUIAccessible(client, n.cluster.ID)
+	respUI, err := VerifyNeuVectorWebUIAccessible(client, n.cluster.ID)
 	require.NoError(n.T(), err, "NeuVector manager web UI should be accessible via Rancher service proxy")
 	require.NotEmpty(n.T(), respUI, "Expected non-empty response from NeuVector manager web UI")
 }
