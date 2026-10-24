@@ -86,6 +86,7 @@ var (
 		"readDeployments":   definePolicyRules([]string{"get", "list"}, []string{"deployments"}, []string{AppsAPIGroup}),
 		"readPods":          definePolicyRules([]string{"get", "list"}, []string{"pods"}, []string{""}),
 		"readNamespaces":    definePolicyRules([]string{"get", "list"}, []string{"namespaces"}, []string{""}),
+		"readConfigMaps":    definePolicyRules([]string{"get", "list"}, []string{"configmaps"}, []string{""}),
 		"readSecrets":       definePolicyRules([]string{"get", "list"}, []string{"secrets"}, []string{""}),
 		"readStatefulSets":  definePolicyRules([]string{"get", "list"}, []string{"statefulsets"}, []string{AppsAPIGroup}),
 		"deleteDeployments": definePolicyRules([]string{"delete"}, []string{"deployments"}, []string{AppsAPIGroup}),
