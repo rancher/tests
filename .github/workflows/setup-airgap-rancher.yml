@@ -144,13 +144,13 @@ jobs:
 
       - name: Update /etc/hosts to add Rancher FQDN
         run: |
-          sudo sed -i 's/^127\.0\.0\.1.*/127.0.0.1 localhost ${{ env.HOSTNAME_PREFIX }}-internal.${{ secrets.AWS_ROUTE_53_ZONE }}/' /etc/hosts
+          sudo sed -i 's/^127\.0\.0\.1.*/127.0.0.1 localhost ${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}/' /etc/hosts
 
       - name: Create config.yaml
         run: |
           cat > config.yaml <<EOF
           rancher:
-            host: "${{ env.HOSTNAME_PREFIX }}-internal.${{ secrets.AWS_ROUTE_53_ZONE }}:8443"
+            host: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}:8443"
             adminPassword: "$RANCHER_PASSWORD"
             insecure: true
             cleanup: true
@@ -198,7 +198,7 @@ jobs:
               osGroup: "${{ vars.OS_GROUP }}"
               rancherAgentImage: "${{ secrets.RANCHER_AGENT_IMAGE }}"
               rancherChartRepository: "${{ secrets.RANCHER_HELM_CHART_URL }}"
-              rancherHostname: "${{ env.HOSTNAME_PREFIX }}-internal.${{ secrets.AWS_ROUTE_53_ZONE }}"
+              rancherHostname: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
               rancherImage: "${{ secrets.RANCHER_IMAGE }}"
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
@@ -239,7 +239,7 @@ jobs:
 
       - name: Update /etc/hosts to remove Rancher FQDN
         run: |
-          sudo sed -i 's/127\.0\.0\.1 localhost ${{ env.HOSTNAME_PREFIX }}-internal.${{ secrets.AWS_ROUTE_53_ZONE }}/127.0.0.1 localhost/' /etc/hosts
+          sudo sed -i 's/127\.0\.0\.1 localhost ${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}/127.0.0.1 localhost/' /etc/hosts
 
       - name: Refresh AWS credentials
         if: always()
