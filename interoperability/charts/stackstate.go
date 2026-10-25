@@ -3,6 +3,7 @@ package charts
 import (
 	"context"
 	"fmt"
+	"time"
 
 	catalogv1 "github.com/rancher/rancher/pkg/apis/catalog.cattle.io/v1"
 	rv1 "github.com/rancher/rancher/pkg/apis/catalog.cattle.io/v1"
@@ -16,13 +17,21 @@ import (
 	"github.com/rancher/tests/interoperability/observability"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
+	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kwait "k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 )
 
-var (
-	timeoutSeconds = int64(defaults.TwoMinuteTimeout)
+const (
+	// clusterRepoCreateRetries bounds the create attempts for a ClusterRepo on
+	// a freshly settled management cluster.
+	clusterRepoCreateRetries = 4
+	// clusterRepoCreateRetryDelay is the spacing between ClusterRepo create attempts.
+	clusterRepoCreateRetryDelay = 15 * time.Second
 )
+
+var timeoutSeconds = int64(defaults.TwoMinuteTimeout)
 
 // InstallStackStateServerChart installs the StackState chart into the specified Kubernetes cluster and namespace.
 // It uses Rancher client and configuration details, and waits for the chart deployment to complete successfully.
@@ -34,7 +43,6 @@ var (
 // - additionalValues: additional Helm chart values as a map for custom configurations.
 // Returns an error if the chart installation fails or its status cannot be confirmed.
 func InstallStackStateServerChart(client *rancher.Client, installOptions *charts.InstallOptions, systemProjectID string, additionalValues map[string]interface{}) error {
-
 	serverSetting, err := client.Management.Setting.ByID(serverURLSettingID)
 	if err != nil {
 		log.Info("Error getting server setting.")
@@ -80,7 +88,6 @@ func InstallStackStateServerChart(client *rancher.Client, installOptions *charts
 		}
 		return false, nil
 	})
-
 	if err != nil {
 		log.Info("Unable to obtain the status of the installed app ")
 		return err
@@ -212,7 +219,6 @@ func InstallStackstateAgentChart(client *rancher.Client, installOptions *charts.
 		}
 		return false, nil
 	})
-
 	if err != nil {
 		log.Info("Unable to obtain the status of the installed app ")
 		return err
@@ -241,7 +247,6 @@ func newStackstateAgentChartInstallAction(p *charts.PayloadOpts, stackstateConfi
 }
 
 func newStackStateServerChartInstallAction(p *charts.PayloadOpts, systemProjectID string, additionalValues map[string]interface{}) *types.ChartInstallAction {
-
 	chartInstall := charts.NewChartInstall(p.Name, p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, StackStateServerChartRepo, systemProjectID, p.DefaultRegistry, additionalValues)
 
 	chartInstalls := []types.ChartInstall{*chartInstall}
@@ -334,7 +339,6 @@ func UpgradeStackstateAgentChart(client *rancher.Client, installOptions *charts.
 
 // newStackstateAgentChartUpgradeAction is a private helper function that returns chart upgrade action.
 func newStackstateAgentChartUpgradeAction(p *charts.PayloadOpts, stackstateConfigs *observability.StackStateConfig) *types.ChartUpgradeAction {
-
 	stackstateValues := map[string]interface{}{
 		"stackstate": map[string]interface{}{
 			"cluster": map[string]interface{}{
@@ -445,7 +449,6 @@ func UpgradeStackStateServerChart(client *rancher.Client, installOptions *charts
 // newStackStateServerChartUpgradeAction is a private helper function that returns the chart
 // upgrade action carrying the install-time server values, mirroring the agent upgrade action.
 func newStackStateServerChartUpgradeAction(p *charts.PayloadOpts, additionalValues map[string]interface{}) *types.ChartUpgradeAction {
-
 	chartUpgrade := charts.NewChartUpgrade(p.Name, p.Name, p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, p.DefaultRegistry, additionalValues)
 	chartUpgrades := []types.ChartUpgrade{*chartUpgrade}
 	chartUpgradeAction := charts.NewChartUpgradeAction(p.Namespace, chartUpgrades)
@@ -455,17 +458,43 @@ func newStackStateServerChartUpgradeAction(p *charts.PayloadOpts, additionalValu
 
 // CreateClusterRepo creates a new ClusterRepo resource in the Kubernetes cluster using the provided catalog client.
 // It takes the client, repository name, and repository URL as arguments and returns an error if the operation fails.
+// Creation is retried a bounded number of times with spacing: freshly deployed
+// management clusters have answered ClusterRepo POSTs with bare internal errors
+// while their catalog controllers and validators were still settling.
 func CreateClusterRepo(client *rancher.Client, catalogClient *catalog.Client, name, url string) error {
 	ctx := context.Background()
 	repo := &rv1.ClusterRepo{
 		ObjectMeta: metav1.ObjectMeta{Name: name},
 		Spec:       rv1.RepoSpec{URL: url},
 	}
-	_, err := catalogClient.ClusterRepos().Create(ctx, repo, metav1.CreateOptions{})
+
+	var lastErr error
+	for attempt := 1; attempt <= clusterRepoCreateRetries; attempt++ {
+		_, lastErr = catalogClient.ClusterRepos().Create(ctx, repo, metav1.CreateOptions{})
+		if lastErr == nil {
+			break
+		}
+		// A failed attempt may still have persisted server-side; a present
+		// repo satisfies the caller's desired state, so treat AlreadyExists
+		// as success and fall through to the cleanup registration.
+		if k8sErrors.IsAlreadyExists(lastErr) {
+			log.Infof("ClusterRepo %s already exists after a failed create attempt; treating as created", name)
+			lastErr = nil
+			break
+		}
+		log.Warnf("ClusterRepo %s create attempt %d/%d failed: %v", name, attempt, clusterRepoCreateRetries, lastErr)
+		if attempt < clusterRepoCreateRetries {
+			_ = kwait.PollUntilContextTimeout(ctx, clusterRepoCreateRetryDelay, clusterRepoCreateRetryDelay+time.Second, true, func(context.Context) (bool, error) {
+				return true, nil
+			})
+		}
+	}
+	if lastErr != nil {
+		return fmt.Errorf("creating ClusterRepo %s at %s: %w", name, url, lastErr)
+	}
 
 	client.Session.RegisterCleanupFunc(func() error {
-
-		var propagation = metav1.DeletePropagationForeground
+		propagation := metav1.DeletePropagationForeground
 		err := catalogClient.ClusterRepos().Delete(context.Background(), name, metav1.DeleteOptions{PropagationPolicy: &propagation})
 		if err != nil {
 			return err
@@ -473,7 +502,7 @@ func CreateClusterRepo(client *rancher.Client, catalogClient *catalog.Client, na
 
 		return err
 	})
-	return err
+	return nil
 }
 
 // StructToMap Helper function to convert struct to map[string]interface{}
