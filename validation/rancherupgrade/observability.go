@@ -3,12 +3,15 @@
 package rancherupgrade
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	provv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
+	"github.com/rancher/shepherd/clients/rancher/catalog"
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	extencharts "github.com/rancher/shepherd/extensions/charts"
 	extensionscluster "github.com/rancher/shepherd/extensions/clusters"
@@ -22,6 +25,7 @@ import (
 	"gopkg.in/yaml.v2"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
 const (
@@ -50,6 +54,12 @@ const (
 	// primeImageRegistry is the prime registry the suse-observability server
 	// images pull from, matching validation/observability.
 	primeImageRegistry = "registry.rancher.com"
+
+	// catalogIndexPollInterval and catalogIndexPollTimeout bound the wait for
+	// a freshly created ClusterRepo's chart index to be fetched and indexed
+	// by the catalog controller.
+	catalogIndexPollInterval = 10 * time.Second
+	catalogIndexPollTimeout  = 5 * time.Minute
 
 	// ingressProxyBodySizeAnnotation mirrors the ingress annotation used by
 	// validation/observability for the StackState server ingress.
@@ -197,4 +207,24 @@ func podStatusClusterName(client *rancher.Client, displayName string) (string, e
 	}
 
 	return extensionscluster.GetClusterIDByName(client, displayName)
+}
+
+// latestChartVersionAfterRepoCreate polls the cluster-scoped catalog for the
+// latest chart version from a freshly created ClusterRepo. The catalog
+// controller fetches and indexes the chart repo's index asynchronously, so the
+// first version lookups after a create can fail before the repo is ready.
+func latestChartVersionAfterRepoCreate(catalogClient *catalog.Client, chartName, repoName string) (string, error) {
+	var latestVersion string
+	err := kwait.PollUntilContextTimeout(context.TODO(), catalogIndexPollInterval, catalogIndexPollTimeout, true, func(context.Context) (bool, error) {
+		version, err := catalogClient.GetLatestChartVersion(chartName, repoName)
+		if err != nil {
+			return false, nil
+		}
+		latestVersion = version
+		return true, nil
+	})
+	if err != nil {
+		return "", fmt.Errorf("chart %s from repo %s did not appear in the cluster-scoped catalog within %s: %w", chartName, repoName, catalogIndexPollTimeout, err)
+	}
+	return latestVersion, nil
 }

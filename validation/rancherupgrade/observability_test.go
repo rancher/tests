@@ -90,7 +90,10 @@ func (s *ObservabilityUpgradeTestSuite) TestObservabilityPreUpgrade() {
 	}
 	require.NoError(s.T(), err)
 
-	latestServerVersion, err := serverCatalogClient.GetLatestChartVersion(interoperableCharts.StackStateServerChartRepo, interoperableCharts.StackStateServerChartRepo)
+	// The ClusterRepo above may have been created seconds ago; its chart index
+	// is fetched and indexed asynchronously, so poll for the version instead
+	// of a single lookup.
+	latestServerVersion, err := latestChartVersionAfterRepoCreate(serverCatalogClient, interoperableCharts.StackStateServerChartRepo, interoperableCharts.StackStateServerChartRepo)
 	require.NoError(s.T(), err)
 
 	err = ensureNamespace(s.client, s.serverCluster.ID, systemProjectName, interoperableCharts.StackStateServerNamespace)
