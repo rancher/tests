@@ -109,7 +109,7 @@ func (s *ObservabilityUpgradeTestSuite) TestObservabilityPreUpgrade() {
 	serverSystemProjectID, err := systemProjectID(s.client, s.serverCluster.ID)
 	require.NoError(s.T(), err)
 
-	sizingValues, err := loadHASizingValues()
+	sizingValues, err := loadSizingValues()
 	require.NoError(s.T(), err)
 	serverValues, err := stackstateServerValues(stackstateConfigs, sizingValues)
 	require.NoError(s.T(), err)
@@ -271,10 +271,10 @@ func (s *ObservabilityUpgradeTestSuite) TestObservabilityChartUpgrade() {
 		installedAgent.ChartDetails.Spec.Chart.Metadata.Version, latestAgentVersion)
 
 	// Re-apply the install-time server values rather than a blind version bump:
-	// upgrading on chart defaults would drop the HA sizing profile and the
+	// upgrading on chart defaults would drop the sizing profile and the
 	// stackstate service credentials (rancher/tests#946 Further Notes on
 	// per-product values migration).
-	sizingValues, err := loadHASizingValues()
+	sizingValues, err := loadSizingValues()
 	require.NoError(s.T(), err)
 	serverValues, err := stackstateServerValues(stackstateConfigs, sizingValues)
 	require.NoError(s.T(), err)

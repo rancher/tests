@@ -46,11 +46,14 @@ const (
 	// connection settings (url, api key, license, admin password).
 	stackstateConfigFileKey = "stackstateConfigs"
 
-	// haSizingValuesPath points at the observability package's 150-ha sizing
-	// profile. It is read from the sibling package instead of being forked into
-	// this one so both suites stay pinned to a single source of truth for HA
-	// sizing; `go test` always runs with the package directory as CWD.
-	haSizingValuesPath = "../observability/resources/150-ha_sizing_values.yaml"
+	// sizingValuesPath points at the observability package's 10-nonha
+	// sizing profile. It is read from the sibling package instead of being
+	// forked into this one so both suites stay pinned to a single source of
+	// truth for sizing; `go test` always runs with the package directory as
+	// CWD. The HA profile is not an option here: it requests ~27 cores,
+	// which can never schedule on the pipeline's 3-node t3a.2xlarge cluster
+	// (~22 allocatable cores), leaving pods Pending until the helm deadline.
+	sizingValuesPath = "../observability/resources/10-nonha_sizing_values.yaml"
 
 	// primeImageRegistry is the prime registry the suse-observability server
 	// images pull from, matching validation/observability.
@@ -87,16 +90,18 @@ func loadStackStateConfig() *observability.StackStateConfig {
 	return stackstateConfigs
 }
 
-// loadHASizingValues reads the observability package's 150-ha sizing profile and
-// returns it as suse-observability chart values, so this suite installs the same
-// HA sizing profile as validation/observability without forking the values.
-func loadHASizingValues() (map[string]interface{}, error) {
-	sizingData, err := os.ReadFile(haSizingValuesPath)
+// loadSizingValues reads the observability package's 10-nonha sizing profile
+// and returns it as suse-observability chart values. This suite validates
+// continuity across a Rancher upgrade, not fleet-scale throughput, and runs
+// against the pipeline's 3-node cluster, where the nonha profile is the only
+// one whose resource requests fit.
+func loadSizingValues() (map[string]interface{}, error) {
+	sizingData, err := os.ReadFile(sizingValuesPath)
 	if err != nil {
 		return nil, err
 	}
 
-	var sizingConfig observability.SizingConfigHA
+	var sizingConfig observability.SizingConfigNonHA
 	if err = yaml.Unmarshal(sizingData, &sizingConfig); err != nil {
 		return nil, err
 	}
@@ -104,10 +109,9 @@ func loadHASizingValues() (map[string]interface{}, error) {
 	return interoperableCharts.StructToMap(sizingConfig)
 }
 
-// stackstateServerValues builds the suse-observability server chart values,
-// mirroring validation/observability's HA-values installation: base config
-// (prime registry, url, admin password, api key, license) plus ingress config,
-// merged over the HA sizing profile.
+// stackstateServerValues builds the suse-observability server chart values:
+// base config (prime registry, url, admin password, api key, license) plus
+// ingress config, merged over the 10-nonha sizing profile.
 func stackstateServerValues(stackstateConfigs *observability.StackStateConfig, sizingValues map[string]interface{}) (map[string]interface{}, error) {
 	baseConfig := observability.BaseConfig{
 		Global: observability.GlobalConfig{
