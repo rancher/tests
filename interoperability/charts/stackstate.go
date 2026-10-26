@@ -38,6 +38,11 @@ const (
 	// first render.
 	chartActionRetryDelay = 30 * time.Second
 
+	// stackstateHelmActionTimeout is the helm timeout carried by the chart
+	// actions. The default ten minutes does not cover a cold cluster pulling
+	// the full SUSE Observability image set: build 35's install hit the helm
+	// deadline with workloads still pulling, and the app failed.
+	stackstateHelmActionTimeout = 30 * time.Minute
 	// chartTemplatePollInterval and chartTemplatePollTimeout bound the wait
 	// for a fresh ClusterRepo's chart template to be fetched and cached
 	// server-side; the template requires downloading the chart tarball, which
@@ -309,6 +314,7 @@ func newStackstateAgentChartInstallAction(p *charts.PayloadOpts, stackstateConfi
 
 	chartInstalls := []types.ChartInstall{*chartInstall}
 	chartInstallAction := charts.NewChartInstallAction(p.Namespace, p.ProjectID, chartInstalls)
+	chartInstallAction.Timeout = &metav1.Duration{Duration: stackstateHelmActionTimeout}
 
 	return chartInstallAction
 }
@@ -318,6 +324,7 @@ func newStackStateServerChartInstallAction(p *charts.PayloadOpts, systemProjectI
 
 	chartInstalls := []types.ChartInstall{*chartInstall}
 	chartInstallAction := charts.NewChartInstallAction(p.Namespace, p.ProjectID, chartInstalls)
+	chartInstallAction.Timeout = &metav1.Duration{Duration: stackstateHelmActionTimeout}
 
 	return chartInstallAction
 }
@@ -421,6 +428,7 @@ func newStackstateAgentChartUpgradeAction(p *charts.PayloadOpts, stackstateConfi
 	chartUpgrade := charts.NewChartUpgrade(p.Name, p.Name, p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, p.DefaultRegistry, stackstateValues)
 	chartUpgrades := []types.ChartUpgrade{*chartUpgrade}
 	chartUpgradeAction := charts.NewChartUpgradeAction(p.Namespace, chartUpgrades)
+	chartUpgradeAction.Timeout = &metav1.Duration{Duration: stackstateHelmActionTimeout}
 
 	return chartUpgradeAction
 }
@@ -523,6 +531,7 @@ func newStackStateServerChartUpgradeAction(p *charts.PayloadOpts, additionalValu
 	chartUpgrade := charts.NewChartUpgrade(p.Name, p.Name, p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, p.DefaultRegistry, additionalValues)
 	chartUpgrades := []types.ChartUpgrade{*chartUpgrade}
 	chartUpgradeAction := charts.NewChartUpgradeAction(p.Namespace, chartUpgrades)
+	chartUpgradeAction.Timeout = &metav1.Duration{Duration: stackstateHelmActionTimeout}
 
 	return chartUpgradeAction
 }
