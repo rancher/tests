@@ -3,8 +3,12 @@
 package rancherupgrade
 
 import (
+	"bytes"
 	"context"
+	_ "embed"
+	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"time"
@@ -22,11 +26,17 @@ import (
 	"github.com/rancher/tests/interoperability/observability"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
+	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
+	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
-	rest "k8s.io/client-go/rest"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/restmapper"
 )
 
 const (
@@ -80,6 +90,21 @@ const (
 	// ingressTLSSecretName mirrors the TLS secret name used by
 	// validation/observability for the StackState server ingress.
 	ingressTLSSecretName = "tls-secret"
+)
+
+const (
+	// defaultStorageClassAnnotation marks a StorageClass as the cluster
+	// default; the suse-observability PVCs request the default class.
+	defaultStorageClassAnnotation = "storageclass.kubernetes.io/is-default-class"
+
+	// localPathNamespace and localPathProvisionerName identify the
+	// local-path-provisioner objects applied by ensureDefaultStorageClass.
+	localPathNamespace       = "local-path-storage"
+	localPathProvisionerName = "local-path-provisioner"
+
+	// fieldManager is the server-side-apply field manager for manifests
+	// applied by this suite.
+	fieldManager = "rancher-tests-rancherupgrade"
 )
 
 // loadStackStateConfig returns the stackstateConfigs section of the test config.
@@ -260,16 +285,7 @@ func latestChartVersionAfterRepoCreate(catalogClient *catalog.Client, chartName,
 // operation's actual error. This is best-effort diagnostic evidence: capture
 // failures are logged and swallowed so they never mask the test's own failure.
 func logInstallDiagnostics(client *rancher.Client, catalogClient *catalog.Client, clusterID, namespace, appName string) {
-	restConfig := &rest.Config{
-		Host:        "https://" + client.RancherConfig.Host + "/k8s/clusters/" + clusterID,
-		BearerToken: client.RancherConfig.AdminToken,
-		TLSClientConfig: rest.TLSClientConfig{
-			Insecure: client.RancherConfig.Insecure != nil && *client.RancherConfig.Insecure,
-			CAFile:   client.RancherConfig.CAFile,
-			CAData:   []byte(client.RancherConfig.CACerts),
-		},
-	}
-	k8s, err := kubernetes.NewForConfig(restConfig)
+	k8s, err := clusterK8sClient(client, clusterID)
 	if err != nil {
 		log.Warnf("diagnostics: building the local cluster k8s client failed: %v", err)
 		return
@@ -297,6 +313,14 @@ func logInstallDiagnostics(client *rancher.Client, catalogClient *catalog.Client
 	}
 	logNamespaceWorkloadState(k8s, namespace)
 
+	if classes, err := k8s.StorageV1().StorageClasses().List(context.TODO(), meta.ListOptions{}); err != nil {
+		log.Warnf("diagnostics: listing storage classes failed: %v", err)
+	} else {
+		for i := range classes.Items {
+			log.Infof("diagnostics: storageclass %s default=%v provisioner=%s", classes.Items[i].Name, classes.Items[i].Annotations[defaultStorageClassAnnotation] == "true", classes.Items[i].Provisioner)
+		}
+	}
+
 	if ops, err := catalogClient.Operations(namespace).List(context.TODO(), meta.ListOptions{}); err != nil {
 		log.Warnf("diagnostics: listing catalog operations in %s failed: %v", namespace, err)
 	} else {
@@ -321,6 +345,124 @@ func logInstallDiagnostics(client *rancher.Client, catalogClient *catalog.Client
 	} else {
 		log.Infof("diagnostics: app %s status=%+v", appName, app.Status)
 	}
+}
+
+// localPathProvisionerManifest is the upstream local-path-provisioner
+// v0.0.30 deploy manifest (rancher/local-path-provisioner) with the default
+// StorageClass annotation added; see the resource file for details.
+//
+//go:embed resources/local-path-provisioner.yaml
+var localPathProvisionerManifest []byte
+
+// clusterRestConfig builds the proxied REST config for the given cluster.
+func clusterRestConfig(client *rancher.Client, clusterID string) *rest.Config {
+	return &rest.Config{
+		Host:        "https://" + client.RancherConfig.Host + "/k8s/clusters/" + clusterID,
+		BearerToken: client.RancherConfig.AdminToken,
+		TLSClientConfig: rest.TLSClientConfig{
+			Insecure: client.RancherConfig.Insecure != nil && *client.RancherConfig.Insecure,
+			CAFile:   client.RancherConfig.CAFile,
+			CAData:   []byte(client.RancherConfig.CACerts),
+		},
+	}
+}
+
+// clusterK8sClient builds a Kubernetes client for the given cluster through
+// Rancher's proxied API endpoint.
+func clusterK8sClient(client *rancher.Client, clusterID string) (*kubernetes.Clientset, error) {
+	return kubernetes.NewForConfig(clusterRestConfig(client, clusterID))
+}
+
+// ensureDefaultStorageClass guarantees the cluster has a default
+// StorageClass. The upgrade pipeline's RKE2 clusters ship without any
+// storage provisioner, so the suse-observability chart's PVCs, which request
+// the cluster default class, stay Pending forever and helm --wait burns its
+// full deadline (pipeline build 37's diagnostics: every namespace PVC
+// Pending, every statefulset blocked on volume binding). When a default
+// class already exists (Longhorn-enabled clusters) this is a no-op;
+// otherwise the local-path-provisioner manifest is applied and its
+// deployment waited on, mirroring how the longhorn module's suite provides
+// its own storage.
+func ensureDefaultStorageClass(client *rancher.Client, clusterID string) error {
+	restConfig := clusterRestConfig(client, clusterID)
+	k8s, err := kubernetes.NewForConfig(restConfig)
+	if err != nil {
+		return err
+	}
+
+	classes, err := k8s.StorageV1().StorageClasses().List(context.TODO(), meta.ListOptions{})
+	if err != nil {
+		return err
+	}
+	for i := range classes.Items {
+		if classes.Items[i].Annotations[defaultStorageClassAnnotation] == "true" {
+			log.Infof("pre-upgrade phase: default storage class %s already present", classes.Items[i].Name)
+			return nil
+		}
+	}
+
+	log.Info("pre-upgrade phase: no default storage class; applying local-path-provisioner")
+	if err := applyManifest(restConfig, localPathProvisionerManifest); err != nil {
+		return err
+	}
+
+	return kwait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 3*time.Minute, true, func(context.Context) (bool, error) {
+		deployment, err := k8s.AppsV1().Deployments(localPathNamespace).Get(context.TODO(), localPathProvisionerName, meta.GetOptions{})
+		if err != nil {
+			return false, nil //nolint:staticcheck // transient lookup errors are retried by the poll
+		}
+		for i := range deployment.Status.Conditions {
+			if deployment.Status.Conditions[i].Type == appsv1.DeploymentAvailable && deployment.Status.Conditions[i].Status == corev1.ConditionTrue {
+				return true, nil
+			}
+		}
+		return false, nil
+	})
+}
+
+// applyManifest server-side applies every document of a multi-object YAML
+// manifest to the cluster the REST config points at.
+func applyManifest(restConfig *rest.Config, manifest []byte) error {
+	dyn, err := dynamic.NewForConfig(restConfig)
+	if err != nil {
+		return err
+	}
+
+	discoveryClient, err := discovery.NewDiscoveryClientForConfig(restConfig)
+	if err != nil {
+		return err
+	}
+	groupResources, err := restmapper.GetAPIGroupResources(discoveryClient)
+	if err != nil {
+		return err
+	}
+	mapper := restmapper.NewDiscoveryRESTMapper(groupResources)
+
+	decoder := utilyaml.NewYAMLOrJSONDecoder(bytes.NewReader(manifest), 4096)
+	for {
+		object := unstructured.Unstructured{}
+		if err = decoder.Decode(&object); err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return err
+		}
+		if object.Object == nil {
+			continue
+		}
+
+		mapping, err := mapper.RESTMapping(object.GroupVersionKind().GroupKind(), object.GroupVersionKind().Version)
+		if err != nil {
+			return fmt.Errorf("mapping %s: %w", object.GroupVersionKind(), err)
+		}
+		if _, err = dyn.Resource(mapping.Resource).Namespace(object.GetNamespace()).Apply(
+			context.TODO(), object.GetName(), &object, meta.ApplyOptions{FieldManager: fieldManager, Force: true},
+		); err != nil {
+			return fmt.Errorf("applying %s %s: %w", object.GetKind(), object.GetName(), err)
+		}
+	}
+
+	return nil
 }
 
 // logNamespaceWorkloadState dumps the readiness of every workload object in

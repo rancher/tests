@@ -114,6 +114,11 @@ func (s *ObservabilityUpgradeTestSuite) TestObservabilityPreUpgrade() {
 	serverValues, err := stackstateServerValues(stackstateConfigs, sizingValues)
 	require.NoError(s.T(), err)
 
+	// The chart's PVCs request the cluster default storage class; the
+	// pipeline's RKE2 clusters ship none, which leaves every PVC Pending and
+	// helm --wait burning its full deadline.
+	require.NoError(s.T(), ensureDefaultStorageClass(s.client, s.serverCluster.ID))
+
 	// Re-entrant install: a partial install from an earlier attempt leaves the
 	// helm release name taken ("cannot re-use a name that is still in use").
 	// A deployed app already satisfies the phase; a stale partial one is
