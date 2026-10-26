@@ -17,6 +17,7 @@ import (
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/networking"
 	projectsapi "github.com/rancher/tests/actions/projects"
+	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/workloads"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -25,12 +26,13 @@ import (
 
 type NetworkPolicyTestSuite struct {
 	suite.Suite
-	session          *session.Session
-	client           *rancher.Client
-	cluster          *client.Cluster
-	cattleConfig     map[string]any
-	downstreamClient *v1.Client
-	namespace        *corev1.Namespace
+	session            *session.Session
+	client             *rancher.Client
+	standardUserClient *rancher.Client
+	cluster            *client.Cluster
+	cattleConfig       map[string]any
+	downstreamClient   *v1.Client
+	namespace          *corev1.Namespace
 }
 
 func (n *NetworkPolicyTestSuite) TearDownSuite() {
@@ -63,10 +65,16 @@ func (n *NetworkPolicyTestSuite) SetupSuite() {
 	n.cluster, err = n.client.Management.Cluster.ByID(clusterID)
 	require.NoError(n.T(), err)
 
-	n.downstreamClient, err = n.client.Steve.ProxyDownstream(n.cluster.ID)
+	n.T().Log("Creating a standard user and granting it cluster-owner on the target cluster")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(n.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), n.cluster, nil)
 	require.NoError(n.T(), err)
 
-	_, n.namespace, err = projectsapi.CreateProjectAndNamespace(n.client, n.cluster.ID)
+	n.standardUserClient = standardUserClient
+
+	n.downstreamClient, err = n.standardUserClient.Steve.ProxyDownstream(n.cluster.ID)
+	require.NoError(n.T(), err)
+
+	_, n.namespace, err = projectsapi.CreateProjectAndNamespace(n.standardUserClient, n.cluster.ID)
 	require.NoError(n.T(), err)
 }
 
@@ -85,7 +93,7 @@ func (n *NetworkPolicyTestSuite) TestPingPodsFromCPNode() {
 			workloadConfigs := new(workloads.Workloads)
 			operations.LoadObjectFromMap(workloads.WorkloadsConfigurationFileKey, n.cattleConfig, workloadConfigs)
 
-			err := networking.VerifyPodConnectivity(n.client, n.downstreamClient, n.cluster.ID, n.namespace.Name, networkPolicyTest.name, workloadConfigs)
+			err := networking.VerifyPodConnectivity(n.standardUserClient, n.downstreamClient, n.cluster.ID, n.namespace.Name, networkPolicyTest.name, workloadConfigs)
 			require.NoError(n.T(), err)
 		})
 	}

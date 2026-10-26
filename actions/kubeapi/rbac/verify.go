@@ -391,30 +391,47 @@ func VerifyBindingsForPrtb(client *rancher.Client, clusterID string, prtb *v3.Pr
 
 // VerifyMainACRContainsAllRules verifies that the main ACR contains all rules from the main role template and its child role templates
 func VerifyMainACRContainsAllRules(client *rancher.Client, clusterID, mainRTName string, childRTNames []string) error {
-	mainRules, err := GetClusterRoleRules(client, clusterID, mainRTName)
-	if err != nil {
-		return fmt.Errorf("failed to get mainRole rules: %w", err)
-	}
-
-	var allChildRules []rbacv1.PolicyRule
-	for _, childRTName := range childRTNames {
-		childRules, err := GetClusterRoleRules(client, clusterID, childRTName)
-		if err != nil {
-			return fmt.Errorf("failed to get childRole rules %s: %w", childRTName, err)
-		}
-		allChildRules = append(allChildRules, childRules...)
-	}
-
-	expectedRules := append(mainRules, allChildRules...)
-
 	acrNameRegular := mainRTName + ResourceAggregator
-	actualRulesRegular, err := GetClusterRoleRules(client, clusterID, acrNameRegular)
-	if err != nil {
-		return fmt.Errorf("failed to get ACR %s: %w", acrNameRegular, err)
-	}
 
-	if !ruleSlicesMatch(actualRulesRegular, expectedRules) {
-		return fmt.Errorf("ACR %s rules do not match expected combined rules", acrNameRegular)
+	var lastErr error
+	pollErr := kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.TwoMinuteTimeout, true, func(ctx context.Context) (bool, error) {
+		mainRules, err := GetClusterRoleRules(client, clusterID, mainRTName)
+		if err != nil {
+			lastErr = fmt.Errorf("failed to get mainRole rules: %w", err)
+			return false, nil
+		}
+
+		var allChildRules []rbacv1.PolicyRule
+		for _, childRTName := range childRTNames {
+			childRules, err := GetClusterRoleRules(client, clusterID, childRTName)
+			if err != nil {
+				lastErr = fmt.Errorf("failed to get childRole rules %s: %w", childRTName, err)
+				return false, nil
+			}
+			allChildRules = append(allChildRules, childRules...)
+		}
+
+		expectedRules := append(mainRules, allChildRules...)
+
+		actualRulesRegular, err := GetClusterRoleRules(client, clusterID, acrNameRegular)
+		if err != nil {
+			lastErr = fmt.Errorf("failed to get ACR %s: %w", acrNameRegular, err)
+			return false, nil
+		}
+
+		if !ruleSlicesMatch(actualRulesRegular, expectedRules) {
+			lastErr = fmt.Errorf("ACR %s rules do not match expected combined rules", acrNameRegular)
+			return false, nil
+		}
+
+		return true, nil
+	})
+
+	if pollErr != nil {
+		if lastErr != nil {
+			return lastErr
+		}
+		return pollErr
 	}
 
 	return nil
@@ -475,30 +492,47 @@ func compareSlices(a, b []string) int {
 }
 
 func verifyMgmtACR(client *rancher.Client, clusterID, acrName, mainRTName string, childRTNames []string, managementContext string) error {
-	mainRules, err := GetClusterRoleRules(client, clusterID, mainRTName)
-	if err != nil {
-		return err
-	}
-
-	allChildRules := []rbacv1.PolicyRule{}
-	for _, childRTName := range childRTNames {
-		childRules, err := GetClusterRoleRules(client, clusterID, childRTName)
+	// The aggregation controller rebuilds the management ACR asynchronously, so poll until the rules converge.
+	var lastErr error
+	pollErr := kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.TwoMinuteTimeout, true, func(ctx context.Context) (bool, error) {
+		mainRules, err := GetClusterRoleRules(client, clusterID, mainRTName)
 		if err != nil {
-			return err
+			lastErr = err
+			return false, nil
 		}
-		allChildRules = append(allChildRules, childRules...)
-	}
 
-	expectedRules := append(mainRules, allChildRules...)
-	mgmtRules := filterMgmtRules(expectedRules, managementContext)
+		allChildRules := []rbacv1.PolicyRule{}
+		for _, childRTName := range childRTNames {
+			childRules, err := GetClusterRoleRules(client, clusterID, childRTName)
+			if err != nil {
+				lastErr = err
+				return false, nil
+			}
+			allChildRules = append(allChildRules, childRules...)
+		}
 
-	acrRules, err := GetClusterRoleRules(client, clusterID, acrName)
-	if err != nil {
-		return fmt.Errorf("failed to get ACR %s: %w", acrName, err)
-	}
+		expectedRules := append(mainRules, allChildRules...)
+		mgmtRules := filterMgmtRules(expectedRules, managementContext)
 
-	if !ruleSlicesMatch(acrRules, mgmtRules) {
-		return fmt.Errorf("ACR %s rules do not match expected combined rules.\nExpected: %+v\nActual: %+v", acrName, mgmtRules, acrRules)
+		acrRules, err := GetClusterRoleRules(client, clusterID, acrName)
+		if err != nil {
+			lastErr = fmt.Errorf("failed to get ACR %s: %w", acrName, err)
+			return false, nil
+		}
+
+		if !ruleSlicesMatch(acrRules, mgmtRules) {
+			lastErr = fmt.Errorf("ACR %s rules do not match expected combined rules.\nExpected: %+v\nActual: %+v", acrName, mgmtRules, acrRules)
+			return false, nil
+		}
+
+		return true, nil
+	})
+
+	if pollErr != nil {
+		if lastErr != nil {
+			return lastErr
+		}
+		return pollErr
 	}
 
 	return nil
@@ -540,58 +574,73 @@ func verifyBindings(client *rancher.Client, clusterID, userName, roleTemplateNam
 		return err
 	}
 
-	for _, ns := range namespaces {
-		rbs, err := ctx.RBAC.RoleBinding().List(ns, metav1.ListOptions{})
+	var lastErr error
+	err = kwait.PollUntilContextTimeout(context.Background(), defaults.TenSecondTimeout, defaults.TwoMinuteTimeout, false, func(context.Context) (bool, error) {
+		for _, ns := range namespaces {
+			rbs, err := ctx.RBAC.RoleBinding().List(ns, metav1.ListOptions{})
+			if err != nil {
+				lastErr = fmt.Errorf("failed to list RoleBindings in namespace %s: %w", ns, err)
+				return false, nil
+			}
+
+			filtered := filterRoleBindings(rbs, userName, roleTemplateName)
+			if len(filtered) != expectedRBCount {
+				lastErr = fmt.Errorf("expected %d RoleBindings for user %s in namespace %s, got %d",
+					expectedRBCount, userName, ns, len(filtered))
+				return false, nil
+			}
+
+			if expectedRBCount > 0 {
+				expected := expectedRoleNames(clusterID, roleTemplateBindingName, roleTemplateName, expectedRBCount)
+				expectedSet := make(map[string]struct{}, len(expected))
+				for _, name := range expected {
+					expectedSet[name] = struct{}{}
+				}
+
+				for _, rb := range filtered {
+					if _, ok := expectedSet[rb.RoleRef.Name]; !ok {
+						lastErr = fmt.Errorf("unexpected RoleBinding RoleRef.Name %s, expected %v",
+							rb.RoleRef.Name, expected)
+						return false, nil
+					}
+				}
+			}
+		}
+
+		crbs, err := ctx.RBAC.ClusterRoleBinding().List(metav1.ListOptions{})
 		if err != nil {
-			return fmt.Errorf("failed to list RoleBindings in namespace %s: %w", ns, err)
+			lastErr = fmt.Errorf("failed to list ClusterRoleBindings: %w", err)
+			return false, nil
 		}
 
-		filtered := filterRoleBindings(rbs, userName, roleTemplateName)
-		if len(filtered) != expectedRBCount {
-			return fmt.Errorf("expected %d RoleBindings for user %s in namespace %s, got %d",
-				expectedRBCount, userName, ns, len(filtered))
+		filteredCRBs := filterClusterRoleBindings(crbs, userName, roleTemplateName)
+		if len(filteredCRBs) != expectedCRBCount {
+			lastErr = fmt.Errorf("expected %d ClusterRoleBindings, got %d",
+				expectedCRBCount, len(filteredCRBs))
+			return false, nil
 		}
 
-		if expectedRBCount > 0 {
-			expected := expectedRoleNames(clusterID, roleTemplateBindingName, roleTemplateName, expectedRBCount)
+		if expectedCRBCount > 0 {
+			expected := expectedRoleNames(clusterID, roleTemplateBindingName, roleTemplateName, expectedCRBCount)
 			expectedSet := make(map[string]struct{}, len(expected))
 			for _, name := range expected {
 				expectedSet[name] = struct{}{}
 			}
 
-			for _, rb := range filtered {
-				if _, ok := expectedSet[rb.RoleRef.Name]; !ok {
-					return fmt.Errorf("unexpected RoleBinding RoleRef.Name %s, expected %v",
-						rb.RoleRef.Name, expected)
+			for _, crb := range filteredCRBs {
+				if _, ok := expectedSet[crb.RoleRef.Name]; !ok {
+					lastErr = fmt.Errorf("unexpected ClusterRoleBinding RoleRef.Name %s, expected %v",
+						crb.RoleRef.Name, expected)
+					return false, nil
 				}
 			}
 		}
-	}
 
-	crbs, err := ctx.RBAC.ClusterRoleBinding().List(metav1.ListOptions{})
+		lastErr = nil
+		return true, nil
+	})
 	if err != nil {
-		return fmt.Errorf("failed to list ClusterRoleBindings: %w", err)
-	}
-
-	filteredCRBs := filterClusterRoleBindings(crbs, userName, roleTemplateName)
-	if len(filteredCRBs) != expectedCRBCount {
-		return fmt.Errorf("expected %d ClusterRoleBindings, got %d",
-			expectedCRBCount, len(filteredCRBs))
-	}
-
-	if expectedCRBCount > 0 {
-		expected := expectedRoleNames(clusterID, roleTemplateBindingName, roleTemplateName, expectedCRBCount)
-		expectedSet := make(map[string]struct{}, len(expected))
-		for _, name := range expected {
-			expectedSet[name] = struct{}{}
-		}
-
-		for _, crb := range filteredCRBs {
-			if _, ok := expectedSet[crb.RoleRef.Name]; !ok {
-				return fmt.Errorf("unexpected ClusterRoleBinding RoleRef.Name %s, expected %v",
-					crb.RoleRef.Name, expected)
-			}
-		}
+		return lastErr
 	}
 
 	return nil

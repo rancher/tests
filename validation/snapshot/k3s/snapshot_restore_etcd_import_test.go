@@ -1,3 +1,5 @@
+//go:build (validation || imported) && !pit.daily && !pit.weekly && !pit.event && !pit.harvester.daily && !pit.elemental
+
 package k3s
 
 import (

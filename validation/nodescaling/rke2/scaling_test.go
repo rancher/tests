@@ -60,44 +60,44 @@ func TestScalingNodePools(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.nodeRoles.Quantity = tt.scaleQuantity
 			logrus.Infof("Scaling up the node pool (%s)", tt.cluster.Name)
-			tt.cluster, err = machinepools.ScaleMachinePool(s.Client, tt.cluster, tt.nodeRoles)
+			tt.cluster, err = machinepools.ScaleMachinePool(s.StandardUserClient, tt.cluster, tt.nodeRoles)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", tt.cluster.Name)
-			err = provisioning.VerifyClusterReady(s.Client, tt.cluster)
+			err = provisioning.VerifyClusterReady(s.StandardUserClient, tt.cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster deployments (%s)", tt.cluster.Name)
-			err = deployment.VerifyClusterDeployments(s.Client, tt.cluster)
+			err = deployment.VerifyClusterDeployments(s.StandardUserClient, tt.cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster pods (%s)", tt.cluster.Name)
-			err = pods.VerifyClusterPods(s.Client, tt.cluster)
+			err = pods.VerifyClusterPods(s.StandardUserClient, tt.cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying service account token secret (%s)", tt.cluster.Name)
-			err = clusters.VerifyServiceAccountTokenSecret(s.Client, tt.cluster.Name)
+			err = clusters.VerifyServiceAccountTokenSecret(s.StandardUserClient, tt.cluster.Name)
 			require.NoError(t, err)
 
 			tt.nodeRoles.Quantity = -tt.scaleQuantity
 			logrus.Infof("Scaling down the node pool (%s)", tt.cluster.Name)
-			_, err = machinepools.ScaleMachinePool(s.Client, tt.cluster, tt.nodeRoles)
+			_, err = machinepools.ScaleMachinePool(s.StandardUserClient, tt.cluster, tt.nodeRoles)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", tt.cluster.Name)
-			err = provisioning.VerifyClusterReady(s.Client, tt.cluster)
+			err = provisioning.VerifyClusterReady(s.StandardUserClient, tt.cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster deployments (%s)", tt.cluster.Name)
-			err = deployment.VerifyClusterDeployments(s.Client, tt.cluster)
+			err = deployment.VerifyClusterDeployments(s.StandardUserClient, tt.cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster pods (%s)", tt.cluster.Name)
-			err = pods.VerifyClusterPods(s.Client, tt.cluster)
+			err = pods.VerifyClusterPods(s.StandardUserClient, tt.cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying service account token secret (%s)", tt.cluster.Name)
-			err = clusters.VerifyServiceAccountTokenSecret(s.Client, tt.cluster.Name)
+			err = clusters.VerifyServiceAccountTokenSecret(s.StandardUserClient, tt.cluster.Name)
 			require.NoError(t, err)
 		})
 

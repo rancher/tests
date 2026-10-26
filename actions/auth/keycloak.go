@@ -65,7 +65,7 @@ var keycloakPredefinedFields = []string{"email", "givenName", "surname"}
 type KeycloakSAMLFixture struct {
 	Admin            User
 	AdminPrincipalID string
-	AuthInput        *SAMLAuthConfig
+	AuthInput        *ExternalAuthConfig
 	EntityID         string
 	RancherAPIHost   string
 }
@@ -82,7 +82,7 @@ type samlKeycloakFixtureSpec struct {
 type samlKeycloakFixture struct {
 	Admin            User
 	AdminPrincipalID string
-	AuthInput        *SAMLAuthConfig
+	AuthInput        *ExternalAuthConfig
 	EntityID         string
 	RancherAPIHost   string
 }
@@ -150,7 +150,7 @@ func setupSAMLKeycloakFixture(client *rancher.Client, keycloakClient *keycloak.C
 	}
 
 	fixture := &samlKeycloakFixture{
-		AuthInput:      new(SAMLAuthConfig),
+		AuthInput:      new(ExternalAuthConfig),
 		EntityID:       entityID,
 		RancherAPIHost: rancherAPIHost,
 	}
@@ -239,7 +239,7 @@ func keycloakSAMLAdminAccount(keycloakClient *keycloak.Client, providerConfig *s
 	return created, err
 }
 
-func setupKeycloakSAMLAccounts(keycloakClient *keycloak.Client, providerConfig *saml.Config, authInput *SAMLAuthConfig, configKey string) error {
+func setupKeycloakSAMLAccounts(keycloakClient *keycloak.Client, providerConfig *saml.Config, authInput *ExternalAuthConfig, configKey string) error {
 	group, err := keycloakSAMLGroup(keycloakClient, providerConfig, configKey)
 	if err != nil {
 		return err
@@ -253,7 +253,7 @@ func setupKeycloakSAMLAccounts(keycloakClient *keycloak.Client, providerConfig *
 		return err
 	}
 
-	nestedGroup, err := keycloakSAMLChildGroup(keycloakClient, group, providerConfig.NestedGroup, keycloakNestedGroupPrefix)
+	nestedGroup, err := keycloakChildGroup(keycloakClient, group, providerConfig.NestedGroup, keycloakNestedGroupPrefix)
 	if err != nil {
 		return err
 	}
@@ -266,7 +266,7 @@ func setupKeycloakSAMLAccounts(keycloakClient *keycloak.Client, providerConfig *
 		return err
 	}
 
-	doubleNestedGroup, err := keycloakSAMLChildGroup(keycloakClient, nestedGroup, providerConfig.DoubleNestedGroup, keycloakDoubleNestedGroupPrefix)
+	doubleNestedGroup, err := keycloakChildGroup(keycloakClient, nestedGroup, providerConfig.DoubleNestedGroup, keycloakDoubleNestedGroupPrefix)
 	if err != nil {
 		return err
 	}
@@ -294,7 +294,7 @@ func setupKeycloakSAMLAccounts(keycloakClient *keycloak.Client, providerConfig *
 		authInput.ExcludedUsers = append(authInput.ExcludedUsers, outsider)
 	}
 
-	tiers := []keycloakSAMLTier{
+	tiers := []keycloakFixtureTier{
 		{
 			description:     "the allowed group",
 			group:           group,
@@ -326,16 +326,16 @@ func setupKeycloakSAMLAccounts(keycloakClient *keycloak.Client, providerConfig *
 		},
 	}
 
-	if err := verifyKeycloakSAMLFixture(keycloakClient, tiers, configKey); err != nil {
+	if err := verifyKeycloakFixture(keycloakClient, tiers, configKey); err != nil {
 		return err
 	}
 
-	logKeycloakSAMLFixture(tiers)
+	logKeycloakFixture(tiers)
 
 	return nil
 }
 
-type keycloakSAMLTier struct {
+type keycloakFixtureTier struct {
 	description     string
 	group           *keycloak.GroupRepresentation
 	groupFromConfig bool
@@ -344,7 +344,7 @@ type keycloakSAMLTier struct {
 	forbidden       []*keycloak.GroupRepresentation
 }
 
-func verifyKeycloakSAMLFixture(keycloakClient *keycloak.Client, tiers []keycloakSAMLTier, configKey string) error {
+func verifyKeycloakFixture(keycloakClient *keycloak.Client, tiers []keycloakFixtureTier, configKey string) error {
 	for _, tier := range tiers {
 		for _, user := range tier.users {
 			account, err := keycloakClient.GetUser(user.Username)
@@ -384,7 +384,7 @@ func verifyKeycloakSAMLFixture(keycloakClient *keycloak.Client, tiers []keycloak
 	return nil
 }
 
-func logKeycloakSAMLFixture(tiers []keycloakSAMLTier) {
+func logKeycloakFixture(tiers []keycloakFixtureTier) {
 	for _, tier := range tiers {
 		usernames := make([]string, 0, len(tier.users))
 		for _, user := range tier.users {
@@ -516,7 +516,7 @@ func keycloakSAMLGroupMembers(keycloakClient *keycloak.Client, group *keycloak.G
 	return members, nil
 }
 
-func keycloakSAMLChildGroup(keycloakClient *keycloak.Client, parent *keycloak.GroupRepresentation,
+func keycloakChildGroup(keycloakClient *keycloak.Client, parent *keycloak.GroupRepresentation,
 	name, prefix string) (*keycloak.GroupRepresentation, error) {
 	if name == "" {
 		return keycloakClient.CreateChildGroup(parent.ID, namegenerator.AppendRandomString(prefix))

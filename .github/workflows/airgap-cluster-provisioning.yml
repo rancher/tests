@@ -2,8 +2,6 @@
 name: Airgap Cluster Provisioning
 
 on:
-  schedule:
-    - cron: "0 9 * * 4"
   workflow_dispatch:
     inputs:
       rancher_version:
@@ -135,6 +133,7 @@ jobs:
             HB_PRIVATE_CERT_KEY, HB_PRIVATE_CERT_KEY
             HB_PRIVATE_CERT_KEY_NAME, HB_PRIVATE_CERT_KEY_NAME
             HB_AWS_REGION, HB_AWS_REGION
+            HB_AWS_ROUTE_53_ZONE, HB_AWS_ROUTE_53_ZONE
             HB_TERRAFORM_VERSION, HB_TERRAFORM_VERSION
             HB_RANCHER_ADMIN_PASSWORD, HB_RANCHER_ADMIN_PASSWORD
             HB_RANCHER_VERSION_2_16_HEAD, HB_RANCHER_VERSION_2_16_HEAD
@@ -242,13 +241,13 @@ jobs:
 
       - name: Update /etc/hosts to add Rancher FQDN
         run: |
-          sudo sed -i 's/^127\.0\.0\.1.*/127.0.0.1 localhost ${{ env.HOSTNAME_PREFIX }}-internal.<HB_AWS_ROUTE_53_ZONE>/' /etc/hosts
+          sudo sed -i 's/^127\.0\.0\.1.*/127.0.0.1 localhost ${{ env.HOSTNAME_PREFIX }}.${{ fromJSON(env.HB_AWS_ROUTE_53_ZONE).value }}/' /etc/hosts
 
       - name: Create config.yaml
         run: |
           cat > config.yaml <<EOF
           rancher:
-            host: "${{ env.HOSTNAME_PREFIX }}-internal.<HB_AWS_ROUTE_53_ZONE>:8443"
+            host: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>:8443"
             adminPassword: "<HB_RANCHER_ADMIN_PASSWORD>"
             insecure: true
             cleanup: true
@@ -276,7 +275,7 @@ jobs:
               chartVersion: "${{ env.RANCHER_CHART_VERSION }}"
               k3sVersion: "${{ fromJSON(env[format('HB_K3S_VERSION_2_{0}', matrix.version)]).value }}${{ fromJSON(env.HB_K3S_VERSION_SUFFIX).value }}"
               rancherAgentImage: "<HB_RANCHER_AGENT_IMAGE>"
-              rancherHostname: "${{ env.HOSTNAME_PREFIX }}-internal.<HB_AWS_ROUTE_53_ZONE>"
+              rancherHostname: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
               rke2Version: "${{ fromJSON(env[format('HB_RKE2_VERSION_2_{0}', matrix.version)]).value }}"
 

@@ -42,7 +42,7 @@ type KeycloakSAMLTerraformSuite struct {
 	keycloak         *keycloak.Client
 	cluster          *v3.Cluster
 	adminUser        *v3.User
-	authConfig       *authactions.SAMLAuthConfig
+	authConfig       *authactions.ExternalAuthConfig
 	cattleConfig     map[string]any
 	rancherConfig    *rancher.Config
 	terraformConfig  *tfpConfig.TerraformConfig
@@ -179,7 +179,7 @@ func (k *KeycloakSAMLTerraformSuite) TestKeycloakSAMLTerraformEnableProvider() {
 	defer authSession.Cleanup()
 
 	keycloakUser := k.authConfig.Users[0]
-	userPrincipalID := authactions.GetSAMLUserPrincipalID(authactions.KeycloakSAML, keycloakUser)
+	userPrincipalID := authactions.GetExternalUserPrincipalID(authactions.KeycloakSAML, keycloakUser)
 
 	logrus.Infof("Logging in as Keycloak SAML user %s", authactions.PrincipalNameOf(keycloakUser))
 	err = authactions.VerifyUserLogins(authAdmin, authactions.KeycloakSAML, []authactions.User{keycloakUser}, "provider enabled through terraform", true)
@@ -212,7 +212,7 @@ func (k *KeycloakSAMLTerraformSuite) TestKeycloakSAMLTerraformDisableProvider() 
 	defer authSession.Cleanup()
 
 	keycloakUser := k.authConfig.Users[0]
-	userPrincipalID := authactions.GetSAMLUserPrincipalID(authactions.KeycloakSAML, keycloakUser)
+	userPrincipalID := authactions.GetExternalUserPrincipalID(authactions.KeycloakSAML, keycloakUser)
 
 	logrus.Infof("Logging in as Keycloak SAML user %s so that a user record carrying its external principal exists", authactions.PrincipalNameOf(keycloakUser))
 	err = authactions.VerifyUserLogins(authAdmin, authactions.KeycloakSAML, []authactions.User{keycloakUser}, "external principal attachment", true)
@@ -225,7 +225,7 @@ func (k *KeycloakSAMLTerraformSuite) TestKeycloakSAMLTerraformDisableProvider() 
 	require.NoError(k.T(), err, "Failed to scope an admin client to the test subsession")
 
 	logrus.Info("Binding the Keycloak SAML group to a cluster role so that disabling the provider has a binding to clean up")
-	_, err = authactions.SetupSAMLRequiredAccessModePrincipals(subClient, k.cluster.ID, k.authConfig, authactions.KeycloakSAML)
+	_, err = authactions.SetupExternalRequiredAccessModePrincipals(subClient, k.cluster.ID, k.authConfig, authactions.KeycloakSAML)
 	require.NoError(k.T(), err, "Failed to bind the Keycloak SAML group to a cluster role")
 
 	logrus.Info("Disabling Keycloak SAML through terraform apply with enabled=false")
@@ -264,7 +264,7 @@ func (k *KeycloakSAMLTerraformSuite) TestKeycloakSAMLTerraformDestroyProvider() 
 	defer authSession.Cleanup()
 
 	keycloakUser := k.authConfig.Users[0]
-	userPrincipalID := authactions.GetSAMLUserPrincipalID(authactions.KeycloakSAML, keycloakUser)
+	userPrincipalID := authactions.GetExternalUserPrincipalID(authactions.KeycloakSAML, keycloakUser)
 
 	logrus.Infof("Logging in as Keycloak SAML user %s so that a user record carrying its external principal exists", authactions.PrincipalNameOf(keycloakUser))
 	err = authactions.VerifyUserLogins(authAdmin, authactions.KeycloakSAML, []authactions.User{keycloakUser}, "external principal attachment", true)
@@ -277,7 +277,7 @@ func (k *KeycloakSAMLTerraformSuite) TestKeycloakSAMLTerraformDestroyProvider() 
 	require.NoError(k.T(), err, "Failed to scope an admin client to the test subsession")
 
 	logrus.Info("Binding the Keycloak SAML group to a cluster role so that destroying the provider has a binding to clean up")
-	_, err = authactions.SetupSAMLRequiredAccessModePrincipals(subClient, k.cluster.ID, k.authConfig, authactions.KeycloakSAML)
+	_, err = authactions.SetupExternalRequiredAccessModePrincipals(subClient, k.cluster.ID, k.authConfig, authactions.KeycloakSAML)
 	require.NoError(k.T(), err, "Failed to bind the Keycloak SAML group to a cluster role")
 
 	logrus.Info("Destroying the Keycloak SAML auth config resource through terraform")

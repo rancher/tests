@@ -197,3 +197,42 @@ func VerifyProviderSessionRejected(authClient *rancher.Client) error {
 
 	return nil
 }
+
+// VerifyKubeAPIAuthLogged reports whether any kube-api-auth pod has gained every given reason since the baseline it was last read at
+func VerifyKubeAPIAuthLogged(client *rancher.Client, clusterID string, baseline map[string]string, reasons ...string) error {
+	current, err := KubeAPIAuthLogs(client, clusterID)
+	if err != nil {
+		return err
+	}
+
+	appended := strings.Builder{}
+
+	for pod, logs := range current {
+		appended.WriteString(logsSince(baseline[pod], logs))
+		appended.WriteString("\n")
+	}
+
+	for _, reason := range reasons {
+		if !strings.Contains(appended.String(), reason) {
+			return fmt.Errorf("no %s pod gained an entry naming %q, which is where a request refused with an empty body says why", KubeAPIAuthDaemonSet, reason)
+		}
+	}
+
+	return nil
+}
+
+func logsSince(baseline, current string) string {
+	trimmed := strings.TrimRight(baseline, "\n")
+	if trimmed == "" {
+		return current
+	}
+
+	lines := strings.Split(trimmed, "\n")
+	last := lines[len(lines)-1]
+
+	if marker := strings.LastIndex(current, last); marker >= 0 {
+		return current[marker+len(last):]
+	}
+
+	return current
+}

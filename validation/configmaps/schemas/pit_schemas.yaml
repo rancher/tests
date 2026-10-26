@@ -1,0 +1,25 @@
+- projects: [RANCHERINT]
+  suite: ConfigMaps
+  cases:
+  - title: "Steve Generated Fields On ConfigMap Update"
+    description: "Verify updating a ConfigMap via the Steve API does not produce warnings about generated fields being resubmitted"
+    automation: 2
+    steps:
+    - action: "Config a downstream cluster running in rancher"
+      data: ""
+      expectedresult: "A downstream cluster is active and ready to receive workloads"
+      position: 1
+    - action: "Add a standard user with cluster owner role to the cluster"
+      data: "Global role: standard user, Cluster role: cluster owner"
+      expectedresult: "Standard user is created and has cluster owner access"
+      position: 2
+    - action: "Create a ConfigMap via the Steve API"
+      data: "Namespace: default"
+      expectedresult: "ConfigMap is created successfully"
+      position: 3
+    - action: "Update the ConfigMap using its full Steve payload"
+      data: ""
+      expectedresult: "ConfigMap update succeeds without a 299 deprecation warning header for generated fields"
+      position: 4
+    custom_field:
+      "15": "TestSteveGeneratedFields"

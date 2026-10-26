@@ -8,9 +8,11 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
+	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/rancher"
 	scimclient "github.com/rancher/shepherd/clients/rancher/auth/scim"
 	"github.com/rancher/shepherd/extensions/defaults"
@@ -18,10 +20,14 @@ import (
 	configmapsapi "github.com/rancher/shepherd/extensions/kubeapi/configmaps"
 	extfeatures "github.com/rancher/shepherd/extensions/kubeapi/features"
 	extauthscim "github.com/rancher/shepherd/extensions/kubeapi/scim"
+	secretsapi "github.com/rancher/shepherd/extensions/kubeapi/secrets"
+	settingsapi "github.com/rancher/shepherd/extensions/kubeapi/settings"
 	"github.com/rancher/shepherd/pkg/clientbase"
+	"github.com/rancher/shepherd/pkg/config"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/auth"
+	"github.com/rancher/tests/actions/kubeapi/rancherserver"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -31,67 +37,253 @@ import (
 )
 
 const (
-	SCIMFeatureFlag     = "scim"
-	SCIMSecretNamespace = "cattle-global-data"
-	SCIMSecretDataKey   = "token"
+	SCIMInputConfigKey       = "scimInput"
+	SCIMFeatureFlag          = "scim"
+	SCIMSecretNamespace      = "cattle-global-data"
+	SCIMTokenSecretNamespace = "cattle-system"
+	SCIMSecretDataKey        = "token"
+	SCIMTokenExpirySetting   = "expire-scim-tokens-after"
 
-	scimSecretKindLabel   = "cattle.io/kind"
-	scimSecretKindValue   = "scim-auth-token"
-	scimAuthProviderLabel = "authn.management.cattle.io/provider"
-	scimCreateMaxAttempts = 3
+	SCIMConfigEnabledKey          = "enabled"
+	SCIMConfigPausedKey           = "paused"
+	SCIMConfigUserIDAttributeKey  = "userIdAttribute"
+	SCIMConfigGroupIDAttributeKey = "groupIdAttribute"
+	SCIMConfigExternalIDValue     = "externalId"
+	SCIMConfigUserNameValue       = "userName"
+	SCIMConfigTrue                = "true"
+	SCIMConfigFalse               = "false"
+
+	SCIMOperationGet    = "GET"
+	SCIMOperationUpdate = "PUT"
+	SCIMOperationPatch  = "PATCH"
+	SCIMOperationDelete = "DELETE"
+
+	SCIMFeatureDescription = "Enable SCIM identity provisioning"
+	SCIMExternalIDPrefix   = "scim-ext"
+	SCIMPathPrefix         = "/v1-scim/"
+
+	SCIMAuditUserPrefix   = "system:scim:"
+	SCIMAuditGroup        = "system:scim"
+	SCIMAuditProviderKey  = "scim.cattle.io/provider"
+	SCIMAuditTokenKey     = "scim.cattle.io/token-id"
+	SCIMAuditRedacted     = "[redacted]"
+	SCIMAuditPasswordPath = "password"
+
+	UserAttributeExternalIDKey = "externalid"
+	UserAttributeEmailKey      = "email"
+	UserAttributeUserNameKey   = "username"
+
+	scimSecretKindLabel     = "cattle.io/kind"
+	scimSecretKindValue     = "scim-auth-token"
+	scimAuthProviderLabel   = "authn.management.cattle.io/provider"
+	scimCreateMaxAttempts   = 3
+	scimPatchOpReplace      = "replace"
+	scimPatchPathActive     = "active"
+	scimListPageSize        = 100
+	scimProbeProvider       = "azuread"
+	scimProbeRefusalsNeeded = 3
 )
 
 var errNoSCIMTokenSecret = fmt.Errorf("no SCIM token secret found")
 
-// FetchSCIMBearerToken retrieves the SCIM bearer token for the given auth provider from the cattle-global-data namespace
+var (
+	tokenNamespaceMu    sync.Mutex
+	tokenNamespaceCache = map[string]string{}
+)
+
+// SCIMInput is the SCIM section of the test config
+type SCIMInput struct {
+	BuildType string `yaml:"buildType" json:"buildType"`
+}
+
+// FetchSCIMBearerToken retrieves the SCIM bearer token for the given auth provider from the namespace the Rancher server reads it from
 func FetchSCIMBearerToken(client *rancher.Client, providerName string) (string, error) {
-	logrus.Infof("Fetching SCIM bearer token from %s by label %s=%s",
-		SCIMSecretNamespace, scimAuthProviderLabel, providerName)
-	selector := labels.SelectorFromSet(labels.Set{
-		scimSecretKindLabel:   scimSecretKindValue,
-		scimAuthProviderLabel: providerName,
-	})
-	list, err := client.WranglerContext.Core.Secret().List(
-		SCIMSecretNamespace,
-		metav1.ListOptions{LabelSelector: selector.String()},
-	)
+	namespace, err := ResolveSCIMTokenNamespace(client, providerName)
 	if err != nil {
 		return "", err
 	}
-	if len(list.Items) == 0 {
+
+	return FetchSCIMBearerTokenFromNamespace(client, providerName, namespace)
+}
+
+// FetchSCIMBearerTokenFromNamespace retrieves the SCIM bearer token for the given auth provider from the given namespace
+func FetchSCIMBearerTokenFromNamespace(client *rancher.Client, providerName, namespace string) (string, error) {
+	logrus.Infof("Fetching SCIM bearer token from %s by label %s=%s",
+		namespace, scimAuthProviderLabel, providerName)
+
+	list, err := ListSCIMTokenSecrets(client, providerName, namespace)
+	if err != nil {
+		return "", err
+	}
+	if len(list) == 0 {
 		return "", errNoSCIMTokenSecret
 	}
-	newest := &list.Items[0]
-	for i := 1; i < len(list.Items); i++ {
-		if list.Items[i].CreationTimestamp.After(newest.CreationTimestamp.Time) {
-			newest = &list.Items[i]
+	newest := &list[0]
+	for i := 1; i < len(list); i++ {
+		if list[i].CreationTimestamp.After(newest.CreationTimestamp.Time) {
+			newest = &list[i]
 		}
 	}
-	if len(list.Items) > 1 {
+	if len(list) > 1 {
 		logrus.Warnf("Multiple SCIM token secrets found for provider %s, using newest: %s", providerName, newest.Name)
 	}
 	token, ok := newest.Data[SCIMSecretDataKey]
 	if !ok || len(token) == 0 {
 		return "", fmt.Errorf("key %q not found or empty in secret %s/%s",
-			SCIMSecretDataKey, SCIMSecretNamespace, newest.Name)
+			SCIMSecretDataKey, namespace, newest.Name)
 	}
-	logrus.Infof("Found SCIM token in secret %s/%s", SCIMSecretNamespace, newest.Name)
+	logrus.Infof("Found SCIM token in secret %s/%s", namespace, newest.Name)
 	return string(token), nil
 }
 
-// CreateSCIMTokenSecret generates a new random bearer token and stores it as a Kubernetes secret in the cattle-global-data namespace
+// ListSCIMTokenSecrets returns the SCIM token secrets of the given auth provider in the given namespace
+func ListSCIMTokenSecrets(client *rancher.Client, providerName, namespace string) ([]corev1.Secret, error) {
+	list, err := secretsapi.ListSecrets(client, extclusterapi.LocalCluster, namespace,
+		metav1.ListOptions{LabelSelector: scimTokenSelector(providerName).String()})
+	if err != nil {
+		return nil, err
+	}
+
+	return list.Items, nil
+}
+
+func scimTokenSelector(providerName string) labels.Selector {
+	return labels.SelectorFromSet(labels.Set{
+		scimSecretKindLabel:   scimSecretKindValue,
+		scimAuthProviderLabel: providerName,
+	})
+}
+
+// CreateSCIMTokenSecret generates a new random bearer token and stores it in the namespace the Rancher server reads SCIM tokens from
 func CreateSCIMTokenSecret(client *rancher.Client, providerName string) (string, error) {
+	namespace, err := ResolveSCIMTokenNamespace(client, providerName)
+	if err != nil {
+		return "", err
+	}
+
+	secretName := fmt.Sprintf("scim-token-%s", providerName)
+	_, token, err := CreateSCIMTokenSecretInNamespace(client, providerName, namespace, secretName)
+
+	return token, err
+}
+
+// ResolveSCIMTokenNamespace returns the namespace the Rancher server reads the given provider's SCIM tokens from
+func ResolveSCIMTokenNamespace(client *rancher.Client, providerName string) (string, error) {
+	key := client.RancherConfig.Host + "/" + providerName
+
+	tokenNamespaceMu.Lock()
+	defer tokenNamespaceMu.Unlock()
+
+	if namespace, known := tokenNamespaceCache[key]; known {
+		return namespace, nil
+	}
+
+	namespace, err := probeSCIMTokenNamespace(client, providerName)
+	if err != nil {
+		return "", err
+	}
+
+	logrus.Infof("The Rancher server reads SCIM tokens for provider %s from %s", providerName, namespace)
+	tokenNamespaceCache[key] = namespace
+
+	return namespace, nil
+}
+
+// probeSCIMTokenNamespace plants a token secret in the legacy namespace and reports which namespace the Rancher server honours
+func probeSCIMTokenNamespace(client *rancher.Client, providerName string) (string, error) {
+	secretName := namegen.AppendRandomString("scim-token-probe")
+
+	_, token, err := CreateSCIMTokenSecretInNamespace(client, providerName, SCIMSecretNamespace, secretName)
+	if err != nil {
+		return "", err
+	}
+	defer func() {
+		if err := secretsapi.DeleteSecret(client, extclusterapi.LocalCluster, SCIMSecretNamespace, secretName, false); err != nil {
+			logrus.WithError(err).Warnf("Failed to delete the SCIM token probe secret %s/%s", SCIMSecretNamespace, secretName)
+		}
+	}()
+
+	probeClient := NewSCIMClientWithToken(client.RancherConfig.Host, providerName, token)
+
+	namespace := ""
+	refusals := 0
+
+	pollErr := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, true,
+		func(ctx context.Context) (bool, error) {
+			resp, listErr := probeClient.Users().List(nil)
+			if listErr != nil {
+				refusals = 0
+				return false, nil
+			}
+
+			switch resp.StatusCode {
+			case http.StatusOK:
+				namespace = SCIMSecretNamespace
+				return true, nil
+			case http.StatusUnauthorized:
+				refusals++
+				if refusals < scimProbeRefusalsNeeded {
+					return false, nil
+				}
+
+				namespace = SCIMTokenSecretNamespace
+
+				return true, nil
+			default:
+				refusals = 0
+				return false, nil
+			}
+		})
+	if pollErr != nil && !kwait.Interrupted(pollErr) {
+		return "", pollErr
+	}
+
+	if namespace == "" {
+		return "", fmt.Errorf("the probe never got a settled answer for which namespace provider %s reads SCIM tokens from", providerName)
+	}
+
+	return namespace, nil
+}
+
+// FetchSCIMTokenSecretNames returns the names of the given provider's SCIM token secrets across both namespaces a Rancher server may read them from
+func FetchSCIMTokenSecretNames(client *rancher.Client, providerName string) ([]string, error) {
+	var names []string
+
+	for _, namespace := range []string{SCIMTokenSecretNamespace, SCIMSecretNamespace} {
+		list, err := secretsapi.ListSecrets(client, extclusterapi.LocalCluster, namespace,
+			metav1.ListOptions{LabelSelector: scimTokenSelector(providerName).String()})
+		if err != nil {
+			return nil, err
+		}
+
+		names = append(names, list.Names()...)
+	}
+
+	return names, nil
+}
+
+// VerifySCIMTokenNamespaceEnforced reports whether the Rancher server refuses a SCIM token secret that sits only in cattle-global-data
+func VerifySCIMTokenNamespaceEnforced(client *rancher.Client, providerName string) (bool, error) {
+	namespace, err := ResolveSCIMTokenNamespace(client, providerName)
+	if err != nil {
+		return false, err
+	}
+
+	return namespace == SCIMTokenSecretNamespace, nil
+}
+
+// CreateSCIMTokenSecretInNamespace generates a new random bearer token and stores it as a labelled Kubernetes secret of the given name in the given namespace
+func CreateSCIMTokenSecretInNamespace(client *rancher.Client, providerName, namespace, secretName string) (*corev1.Secret, string, error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
-		return "", err
+		return nil, "", err
 	}
 	token := hex.EncodeToString(b)
 
-	secretName := fmt.Sprintf("scim-token-%s", providerName)
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      secretName,
-			Namespace: SCIMSecretNamespace,
+			Namespace: namespace,
 			Labels: map[string]string{
 				scimSecretKindLabel:   scimSecretKindValue,
 				scimAuthProviderLabel: providerName,
@@ -102,12 +294,50 @@ func CreateSCIMTokenSecret(client *rancher.Client, providerName string) (string,
 		},
 	}
 
-	logrus.Infof("Creating SCIM token secret %s/%s", SCIMSecretNamespace, secretName)
-	_, err := client.WranglerContext.Core.Secret().Create(secret)
+	logrus.Infof("Creating SCIM token secret %s/%s", namespace, secretName)
+	created, err := secretsapi.CreateSecretWithTemplate(client, extclusterapi.LocalCluster, secret)
 	if err != nil {
-		return "", err
+		return nil, "", err
 	}
-	return token, nil
+
+	return created, token, nil
+}
+
+// DeleteSCIMTokenSecrets removes the given provider's SCIM token secrets from both namespaces a Rancher server may read them from
+func DeleteSCIMTokenSecrets(client *rancher.Client, providerName string) error {
+	for _, namespace := range []string{SCIMTokenSecretNamespace, SCIMSecretNamespace} {
+		secrets, err := ListSCIMTokenSecrets(client, providerName, namespace)
+		if err != nil {
+			return err
+		}
+
+		for _, secret := range secrets {
+			if err := secretsapi.DeleteSecret(client, extclusterapi.LocalCluster, namespace, secret.Name, false); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// SetSCIMTokenExpiry writes the expire-scim-tokens-after setting and returns a function that restores its previous value
+func SetSCIMTokenExpiry(client *rancher.Client, value string) (func() error, error) {
+	setting, err := client.WranglerContext.Mgmt.Setting().Get(SCIMTokenExpirySetting, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	previous := setting.Value
+
+	logrus.Infof("Setting %s to %s", SCIMTokenExpirySetting, value)
+	if err := settingsapi.UpdateGlobalSetting(client, SCIMTokenExpirySetting, value); err != nil {
+		return nil, err
+	}
+
+	return func() error {
+		logrus.Infof("Restoring %s to %q", SCIMTokenExpirySetting, previous)
+		return settingsapi.UpdateGlobalSetting(client, SCIMTokenExpirySetting, previous)
+	}, nil
 }
 
 // SetupSCIMClient ensures the SCIM feature flag is enabled and the auth provider is active, then fetches or creates a bearer token secret and returns a configured
@@ -128,6 +358,10 @@ func SetupSCIMClient(client *rancher.Client, providerName string) (*scimclient.C
 		return nil, err
 	}
 
+	if err = SetSCIMConfigMap(client, providerName, BaselineSCIMConfigMap()); err != nil {
+		return nil, err
+	}
+
 	token, err := FetchSCIMBearerToken(client, providerName)
 	if err != nil {
 		if err != errNoSCIMTokenSecret {
@@ -145,6 +379,44 @@ func SetupSCIMClient(client *rancher.Client, providerName string) (*scimclient.C
 		TokenKey: token,
 		Insecure: true,
 	}, providerName), nil
+}
+
+// FetchExpectedBuildType returns the Rancher build type the config says the SCIM suites run against
+func FetchExpectedBuildType() string {
+	input := new(SCIMInput)
+	config.LoadConfig(SCIMInputConfigKey, input)
+
+	return strings.ToLower(input.BuildType)
+}
+
+// VerifyExpectedBuildType errors when the Rancher server does not report the build type the config expects
+func VerifyExpectedBuildType(client *rancher.Client) error {
+	return rancherserver.VerifyBuildType(client, FetchExpectedBuildType())
+}
+
+// VerifySCIMServable reports whether the Rancher server serves the SCIM endpoints, and why it does not when it cannot
+func VerifySCIMServable(client *rancher.Client) (bool, string, error) {
+	feature, err := client.Management.Feature.ByID(SCIMFeatureFlag)
+	if err != nil {
+		return false, "", err
+	}
+
+	if feature.Value != nil && *feature.Value {
+		return true, "", nil
+	}
+
+	if feature.Status != nil && feature.Status.Prime {
+		prime, err := rancherserver.IsRancherPrimeBuild(client)
+		if err != nil {
+			return false, "", err
+		}
+
+		if !prime {
+			return false, fmt.Sprintf("The %s feature is Prime only and this Rancher server reports a community build, so the SCIM endpoints answer 404", SCIMFeatureFlag), nil
+		}
+	}
+
+	return false, fmt.Sprintf("The %s feature is disabled on this Rancher server, so the SCIM endpoints answer 404", SCIMFeatureFlag), nil
 }
 
 // NewSCIMClientWithToken returns a SCIM client configured with the given host, provider, and bearer token
@@ -173,26 +445,32 @@ func WaitForSCIMResourceDeletion(getFunc func() (int, error)) error {
 	)
 }
 
-// createSCIMResourceWithRetry invokes create up to scimCreateMaxAttempts times, retrying
-// only when the SCIM response is a transient 5xx. Success and non-5xx errors (e.g. 409
-// duplicate, 400 bad request) return immediately.
 func createSCIMResourceWithRetry(create func() (*scimclient.Response, error)) (*scimclient.Response, error) {
 	var resp *scimclient.Response
 	var err error
-	for attempt := 1; attempt <= scimCreateMaxAttempts; attempt++ {
+
+	attempt := 0
+	retryWindow := time.Duration(scimCreateMaxAttempts) * defaults.FiveSecondTimeout
+
+	pollErr := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, retryWindow, true, func(context.Context) (bool, error) {
+		attempt++
 		resp, err = create()
 		if err == nil {
-			return resp, nil
+			return true, nil
 		}
-		// Retry only transient server-side failures; surface client errors immediately.
+
 		if resp == nil || resp.StatusCode < http.StatusInternalServerError {
-			return resp, err
+			return true, nil
 		}
-		if attempt < scimCreateMaxAttempts {
-			logrus.Warnf("SCIM create returned %d (attempt %d/%d), retrying in %s: %v", resp.StatusCode, attempt, scimCreateMaxAttempts, defaults.FiveSecondTimeout, err)
-			time.Sleep(defaults.FiveSecondTimeout)
-		}
+
+		logrus.Warnf("SCIM create returned %d (attempt %d/%d), retrying in %s: %v", resp.StatusCode, attempt, scimCreateMaxAttempts, defaults.FiveSecondTimeout, err)
+
+		return false, nil
+	})
+	if pollErr != nil && !kwait.Interrupted(pollErr) {
+		return resp, pollErr
 	}
+
 	return resp, err
 }
 
@@ -220,6 +498,82 @@ func CreateSCIMUser(scimClient *scimclient.Client, ts *session.Session, external
 		return "", "", err
 	}
 	return name, id, nil
+}
+
+// DeleteSCIMUserByUserName removes every SCIM user carrying the given userName, so a directory identity can be provisioned again
+func DeleteSCIMUserByUserName(scimClient *scimclient.Client, userName string) error {
+	query := url.Values{}
+	query.Set("filter", fmt.Sprintf("userName eq %q", userName))
+
+	resp, err := scimClient.Users().List(query)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("listing SCIM users named %s answered %d: %s", userName, resp.StatusCode, string(resp.Body))
+	}
+
+	body, err := DecodeJSONBody(resp)
+	if err != nil {
+		return err
+	}
+
+	resources, _ := body["Resources"].([]interface{})
+	for _, resource := range resources {
+		entry, ok := resource.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		id, ok := entry["id"].(string)
+		if !ok {
+			continue
+		}
+
+		logrus.Infof("Deleting the SCIM user %s so %s can be provisioned again", id, userName)
+		if _, err := scimClient.Users().Delete(id); err != nil {
+			return err
+		}
+
+		if err := WaitForSCIMResourceDeletion(func() (int, error) {
+			getResp, getErr := scimClient.Users().ByID(id)
+			if getErr != nil {
+				return 0, nil
+			}
+			return getResp.StatusCode, nil
+		}); err != nil {
+			return fmt.Errorf("the SCIM user %s was not deleted: %w", id, err)
+		}
+	}
+
+	return nil
+}
+
+// CreateSCIMUserForAuthUser creates an active SCIM user whose userName is the directory name the auth provider builds the user's login principal from
+func CreateSCIMUserForAuthUser(scimClient *scimclient.Client, ts *session.Session, distinguishedName, externalID, email string) (string, error) {
+	user := scimclient.User{
+		Schemas:    []string{scimclient.SCIMSchemaUser},
+		UserName:   distinguishedName,
+		ExternalID: externalID,
+		Active:     scimclient.BoolPtr(true),
+	}
+	if email != "" {
+		user.Emails = []scimclient.Email{{Value: email, Primary: true}}
+	}
+
+	resp, err := createSCIMResourceWithRetry(func() (*scimclient.Response, error) {
+		return extauthscim.CreateUserWithTemplate(scimClient, ts, user)
+	})
+	if err != nil {
+		return "", err
+	}
+
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("POST /Users for %s: expected %d or %d, got %d: %s",
+			distinguishedName, http.StatusOK, http.StatusCreated, resp.StatusCode, string(resp.Body))
+	}
+
+	return resp.IDFromBody()
 }
 
 // ProvisionSCIMUserWithoutAttribute creates an active SCIM user with the given externalID, deletes its
@@ -372,7 +726,8 @@ func pollSCIMCreateReady(scimClient *scimclient.Client, timeout time.Duration) e
 	// Require two consecutive 201 responses to guard against the handler
 	// briefly accepting a request during a transient state after a ConfigMap change.
 	consecutiveOK := 0
-	return kwait.PollUntilContextTimeout(
+	lastStatus := 0
+	pollErr := kwait.PollUntilContextTimeout(
 		context.Background(),
 		defaults.FiveSecondTimeout,
 		timeout,
@@ -396,12 +751,25 @@ func pollSCIMCreateReady(scimClient *scimclient.Client, timeout time.Duration) e
 				return consecutiveOK >= 2, nil
 			}
 			consecutiveOK = 0
-			if resp.StatusCode >= 500 {
+			lastStatus = resp.StatusCode
+
+			// A restarting Rancher answers 404 until it registers the SCIM routes, 401 until the token
+			// cache syncs and 503 while the provider is still coming up.
+			switch {
+			case resp.StatusCode >= 500,
+				resp.StatusCode == http.StatusNotFound,
+				resp.StatusCode == http.StatusUnauthorized:
 				return false, nil
 			}
+
 			return false, fmt.Errorf("unexpected SCIM create probe status: %d", resp.StatusCode)
 		},
 	)
+	if pollErr != nil {
+		return fmt.Errorf("the SCIM write path never became ready, last probe status %d: %w", lastStatus, pollErr)
+	}
+
+	return nil
 }
 
 func pollWranglerAPIReady(client *rancher.Client) error {
@@ -470,6 +838,24 @@ func WaitForSCIMEndpointStatus(scimClient *scimclient.Client, expectedStatus int
 			if err != nil {
 				return false, nil
 			}
+			return resp.StatusCode == expectedStatus, nil
+		},
+	)
+}
+
+// WaitForSCIMDiscoveryStatus polls GET /ServiceProviderConfig until it answers the expected status
+func WaitForSCIMDiscoveryStatus(scimClient *scimclient.Client, expectedStatus int) error {
+	return kwait.PollUntilContextTimeout(
+		context.Background(),
+		defaults.FiveSecondTimeout,
+		defaults.FiveMinuteTimeout,
+		false,
+		func(ctx context.Context) (bool, error) {
+			resp, err := scimClient.Discovery().ServiceProviderConfig()
+			if err != nil {
+				return false, nil
+			}
+
 			return resp.StatusCode == expectedStatus, nil
 		},
 	)
@@ -634,6 +1020,213 @@ func WaitForRancherUserName(client *rancher.Client, userID, expectedName string)
 		}
 		return mgmtUser.Name == expectedName, nil
 	})
+}
+
+// ByIDResult is what one by-ID SCIM request answered
+type ByIDResult struct {
+	Operation  string
+	StatusCode int
+	Body       string
+}
+
+type scimByIDCall struct {
+	operation string
+	do        func() (*scimclient.Response, error)
+}
+
+func runSCIMByIDCalls(calls []scimByIDCall) ([]ByIDResult, error) {
+	results := make([]ByIDResult, 0, len(calls))
+	for _, call := range calls {
+		resp, err := call.do()
+		if err != nil {
+			return nil, fmt.Errorf("the by-ID %s request failed: %w", call.operation, err)
+		}
+		results = append(results, ByIDResult{
+			Operation:  call.operation,
+			StatusCode: resp.StatusCode,
+			Body:       string(resp.Body),
+		})
+	}
+	return results, nil
+}
+
+// FetchSCIMUserByIDResults runs every by-ID SCIM user request against the given id, the destructive one last, and returns what each one answered
+func FetchSCIMUserByIDResults(scimClient *scimclient.Client, userID, replacementUserName string) ([]ByIDResult, error) {
+	replacement := scimclient.User{
+		Schemas:  []string{scimclient.SCIMSchemaUser},
+		UserName: replacementUserName,
+	}
+
+	return runSCIMByIDCalls([]scimByIDCall{
+		{operation: SCIMOperationGet, do: func() (*scimclient.Response, error) {
+			return scimClient.Users().ByID(userID)
+		}},
+		{operation: SCIMOperationUpdate, do: func() (*scimclient.Response, error) {
+			return scimClient.Users().Update(userID, replacement)
+		}},
+		{operation: SCIMOperationPatch, do: func() (*scimclient.Response, error) {
+			return PatchUser(scimClient, userID, scimPatchOpReplace, scimPatchPathActive, false)
+		}},
+		{operation: SCIMOperationDelete, do: func() (*scimclient.Response, error) {
+			return scimClient.Users().Delete(userID)
+		}},
+	})
+}
+
+// FetchSCIMGroupByIDResults runs every by-ID SCIM group request against the given id, the destructive one last, and returns what each one answered
+func FetchSCIMGroupByIDResults(scimClient *scimclient.Client, groupID, replacementDisplayName string) ([]ByIDResult, error) {
+	replacement := scimclient.Group{
+		Schemas:     []string{scimclient.SCIMSchemaGroup},
+		ID:          groupID,
+		DisplayName: replacementDisplayName,
+	}
+
+	return runSCIMByIDCalls([]scimByIDCall{
+		{operation: SCIMOperationGet, do: func() (*scimclient.Response, error) {
+			return scimClient.Groups().ByID(groupID)
+		}},
+		{operation: SCIMOperationUpdate, do: func() (*scimclient.Response, error) {
+			return scimClient.Groups().Update(groupID, replacement)
+		}},
+		{operation: SCIMOperationPatch, do: func() (*scimclient.Response, error) {
+			return PatchGroup(scimClient, groupID, scimPatchOpReplace, "externalId", replacementDisplayName)
+		}},
+		{operation: SCIMOperationDelete, do: func() (*scimclient.Response, error) {
+			return scimClient.Groups().Delete(groupID)
+		}},
+	})
+}
+
+// CreateGroupOwnedByProvider creates a Rancher group labelled as owned by the given auth provider and registers its cleanup
+func CreateGroupOwnedByProvider(client *rancher.Client, ts *session.Session, providerName string) (*v3.Group, error) {
+	group := &v3.Group{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "grp-",
+			Labels: map[string]string{
+				scimAuthProviderLabel: providerName,
+			},
+		},
+		DisplayName: namegen.AppendRandomString("scim-foreign-group"),
+		Provider:    providerName,
+	}
+
+	logrus.Infof("Creating a Rancher group owned by the %s provider", providerName)
+	created, err := client.WranglerContext.Mgmt.Group().Create(group)
+	if err != nil {
+		return nil, err
+	}
+
+	if ts != nil {
+		ts.RegisterCleanupFunc(func() error {
+			err := client.WranglerContext.Mgmt.Group().Delete(created.Name, &metav1.DeleteOptions{})
+			if apierrors.IsNotFound(err) {
+				return nil
+			}
+			return err
+		})
+	}
+
+	return created, nil
+}
+
+// VerifyGroupExists errors when the given Rancher group is absent
+func VerifyGroupExists(client *rancher.Client, groupName string) error {
+	_, err := client.WranglerContext.Mgmt.Group().Get(groupName, metav1.GetOptions{})
+	return err
+}
+
+// VerifySCIMProviderScopingEnforced reports whether the Rancher server refuses a by-ID request for an object another provider owns
+func VerifySCIMProviderScopingEnforced(client *rancher.Client, scimClient *scimclient.Client, providerName string) (bool, error) {
+	probe, err := CreateGroupOwnedByProvider(client, nil, scimProbeProvider)
+	if err != nil {
+		return false, err
+	}
+	defer func() {
+		if err := client.WranglerContext.Mgmt.Group().Delete(probe.Name, &metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+			logrus.WithError(err).Warnf("Failed to delete the provider scoping probe group %s", probe.Name)
+		}
+	}()
+
+	scoped := true
+	pollErr := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, true,
+		func(ctx context.Context) (bool, error) {
+			resp, getErr := scimClient.Groups().ByID(probe.Name)
+			if getErr != nil {
+				return false, nil
+			}
+
+			switch resp.StatusCode {
+			case http.StatusNotFound:
+				return true, nil
+			case http.StatusOK:
+				scoped = false
+				return true, nil
+			default:
+				return false, nil
+			}
+		})
+	if pollErr != nil && !kwait.Interrupted(pollErr) {
+		return false, pollErr
+	}
+
+	return scoped, nil
+}
+
+// VerifyByIDResultsStatus errors when any by-ID result carries a status other than the expected one
+func VerifyByIDResultsStatus(results []ByIDResult, expected int) error {
+	if len(results) == 0 {
+		return fmt.Errorf("no by-ID results to check")
+	}
+
+	for _, result := range results {
+		if result.StatusCode != expected {
+			return fmt.Errorf("the by-ID %s request answered %d, want %d: %s",
+				result.Operation, result.StatusCode, expected, result.Body)
+		}
+	}
+
+	return nil
+}
+
+// FetchSCIMUserIDs pages through the given provider's SCIM user list and returns every id it carries
+func FetchSCIMUserIDs(scimClient *scimclient.Client) ([]string, error) {
+	ids := []string{}
+
+	for start := 1; ; {
+		query := url.Values{}
+		query.Set("startIndex", strconv.Itoa(start))
+		query.Set("count", strconv.Itoa(scimListPageSize))
+
+		resp, err := scimClient.Users().List(query)
+		if err != nil {
+			return nil, err
+		}
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("listing SCIM users answered %d: %s", resp.StatusCode, string(resp.Body))
+		}
+
+		body, err := DecodeJSONBody(resp)
+		if err != nil {
+			return nil, err
+		}
+
+		resources, _ := body["Resources"].([]interface{})
+		for _, resource := range resources {
+			entry, ok := resource.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if id, ok := entry["id"].(string); ok {
+				ids = append(ids, id)
+			}
+		}
+
+		total, _ := body["totalResults"].(float64)
+		start += len(resources)
+		if len(resources) == 0 || start > int(total) {
+			return ids, nil
+		}
+	}
 }
 
 // CountSCIMCodes counts 200 and 429 responses in a SCIM result slice. Used by

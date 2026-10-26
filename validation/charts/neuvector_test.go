@@ -72,7 +72,7 @@ func (n *NeuVectorTestSuite) SetupSuite() {
 	}
 }
 
-func (n *NeuVectorTestSuite) TestNeuVectorInstallation() {
+func (n *NeuVectorTestSuite) TestNeuVectorChartInstallation() {
 	subSession := n.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -92,7 +92,7 @@ func (n *NeuVectorTestSuite) TestNeuVectorInstallation() {
 		catalogClient, err := client.GetClusterCatalogClient(n.cluster.ID)
 		require.NoError(n.T(), err)
 
-		n.T().Log("Waiting nuvector chart installation to complete")
+		n.T().Log("Waiting NeuVector chart installation to complete")
 		err = actionsCharts.RetryOnWatchError(actionsCharts.DefaultWatchRetries, func() error {
 			return charts.WaitChartInstall(catalogClient, actionsCharts.NeuVectorNamespace, actionsCharts.NeuVectorChartName)
 		})

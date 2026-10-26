@@ -46,15 +46,15 @@ func TestDeleteInitMachine(t *testing.T) {
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", tt.cluster.Name)
-			err = provisioning.VerifyClusterReady(d.Client, tt.cluster)
+			err = provisioning.VerifyClusterReady(d.StandardUserClient, tt.cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster deployments (%s)", tt.cluster.Name)
-			err = deployment.VerifyClusterDeployments(d.Client, tt.cluster)
+			err = deployment.VerifyClusterDeployments(d.StandardUserClient, tt.cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster pods (%s)", tt.cluster.Name)
-			err = pods.VerifyClusterPods(d.Client, tt.cluster)
+			err = pods.VerifyClusterPods(d.StandardUserClient, tt.cluster)
 			require.NoError(t, err)
 		})
 

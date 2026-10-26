@@ -1,0 +1,33 @@
+- projects: [RANCHERINT]
+  suite: Upgrade
+  cases:
+  - title: "Upgrading RKE2 Cluster Kubernetes Version"
+    description: "Verify an RKE2 cluster can be upgraded to the latest available Kubernetes version and remains healthy afterward"
+    automation: 2
+    steps:
+    - action: "Config an RKE2 cluster running in rancher"
+      data: ""
+      expectedresult: "An RKE2 cluster is active and ready to receive workloads"
+      position: 1
+    - action: "Determine the latest available Kubernetes version for RKE2"
+      data: ""
+      expectedresult: "Latest Kubernetes version is retrieved successfully"
+      position: 2
+    - action: "Upgrade the cluster to the latest Kubernetes version"
+      data: ""
+      expectedresult: "Cluster upgrade completes and the cluster's Kubernetes version matches the latest version"
+      position: 3
+    - action: "Verify the cluster is ready"
+      data: ""
+      expectedresult: "Cluster reaches active/ready state"
+      position: 4
+    - action: "Verify cluster deployments"
+      data: ""
+      expectedresult: "All cluster deployments are in Ready state"
+      position: 5
+    - action: "Verify cluster pods"
+      data: ""
+      expectedresult: "All cluster pods are in Running state"
+      position: 6
+    custom_field:
+      "15": "Upgrading_RKE2_cluster"

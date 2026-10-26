@@ -6,11 +6,24 @@
 /validation/fleet @rancher/qa-pit-crew
 /validation/observability @rancher/qa-pit-crew
 
-
+/actions/capipnp @rancher/rancher-team-2-hostbusters-qa
+/actions/certificates @rancher/rancher-team-2-hostbusters-qa
+/actions/clusters @rancher/rancher-team-2-hostbusters-qa
+/actions/etcdsnapshot @rancher/rancher-team-2-hostbusters-qa
+/actions/encryptionkeyrotation @rancher/rancher-team-2-hostbusters-qa
 /actions/provisioning @rancher/rancher-team-2-hostbusters-qa
 /actions/provisioninginput @rancher/rancher-team-2-hostbusters-qa
+/actions/scaling @rancher/rancher-team-2-hostbusters-qa
+/actions/upgrade @rancher/rancher-team-2-hostbusters-qa
 
+/validation/certificates @rancher/rancher-team-2-hostbusters-qa
+/validation/deleting @rancher/rancher-team-2-hostbusters-qa
+/validation/encryptionkeyrotation @rancher/rancher-team-2-hostbusters-qa
+/validation/nodescaling @rancher/rancher-team-2-hostbusters-qa
 /validation/provisioning @rancher/rancher-team-2-hostbusters-qa
+/validation/recurring @rancher/rancher-team-2-hostbusters-qa
+/validation/snapshot @rancher/rancher-team-2-hostbusters-qa
+/validation/upgrade @rancher/rancher-team-2-hostbusters-qa
 
 /actions/auth @rancher/team-collie-qa
 /actions/projects @rancher/team-collie-qa

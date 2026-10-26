@@ -1,0 +1,51 @@
+- projects: [RANCHERINT]
+  suite: Node Annotations
+  cases:
+  - title: "Node Annotation RBAC Enforcement"
+    description: "Verify node annotation updates are permitted for a cluster owner and denied for a cluster member"
+    automation: 2
+    steps:
+    - action: "Config a downstream cluster running in rancher"
+      data: ""
+      expectedresult: "A downstream cluster is active and ready to receive workloads"
+      position: 1
+    - action: "Select a test node on the cluster"
+      data: ""
+      expectedresult: "A node is found and selected for testing"
+      position: 2
+    - action: "Add a standard user with cluster owner role and attempt to update a node annotation"
+      data: "Global role: standard user, Cluster role: cluster owner"
+      expectedresult: "Annotation update succeeds and the new annotation value is verified on the node"
+      position: 3
+    - action: "Add a standard user with cluster member role and attempt to update a node annotation"
+      data: "Global role: standard user, Cluster role: cluster member"
+      expectedresult: "Annotation update is denied with a permission/forbidden error"
+      position: 4
+    custom_field:
+      "15": "TestRBACAnnotations"
+  - title: "Node Annotations Table Driven Scenarios"
+    description: "Verify add, update, delete and edge-case (unicode, bulk, long value, add-delete-add cycle) node annotation operations behave as expected"
+    automation: 2
+    steps:
+    - action: "Config a downstream cluster running in rancher"
+      data: ""
+      expectedresult: "A downstream cluster is active and ready to receive workloads"
+      position: 1
+    - action: "Select a test node on the cluster"
+      data: ""
+      expectedresult: "A node is found and selected for testing"
+      position: 2
+    - action: "Run setup for the scenario, if any, to seed initial annotations"
+      data: ""
+      expectedresult: "Initial annotations are applied and verified on the node"
+      position: 3
+    - action: "Apply the scenario operation (add, update, or delete) to the node annotations"
+      data: "Operation: add/update/delete"
+      expectedresult: "Operation succeeds, or fails as expected when expectedError is set"
+      position: 4
+    - action: "Verify the final annotation state on the node"
+      data: ""
+      expectedresult: "Annotations reflect the expected post-operation state"
+      position: 5
+    custom_field:
+      "15": "TestNodeAnnotationsWithTableTests"

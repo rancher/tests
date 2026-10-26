@@ -257,3 +257,95 @@
       position: 10
     custom_field:
       "15": "AWS_OutOfTree"
+  - title: "RKE2 vSphere Out-of-Tree Cloud Provider"
+    description: "Provision an RKE2 node driver cluster on vSphere with the rancher-vsphere cloud provider enabled and verify cloud provider integration"
+    automation: 2
+    steps:
+    - action: "Create standard user and initialize Rancher client"
+      data: ""
+      expectedresult: "Standard user and Rancher client are created successfully"
+      position: 1
+    - action: "Load cluster configuration and verify vSphere provider"
+      data: "Machine pools: 3 etcd nodes, 2 controlplane nodes, 2 worker nodes; CloudProvider: rancher-vsphere"
+      expectedresult: "Cluster configuration loaded and vSphere provider confirmed"
+      position: 2
+    - action: "Create vSphere cloud provider credentials"
+      data: ""
+      expectedresult: "vSphere cloud credentials are created successfully"
+      position: 3
+    - action: "Create machine configuration for vSphere"
+      data: ""
+      expectedresult: "vSphere machine configuration is created successfully"
+      position: 4
+    - action: "Provision RKE2 cluster with the vSphere out-of-tree cloud provider"
+      data: ""
+      expectedresult: "Cluster provisioning request is accepted"
+      position: 5
+    - action: "Verify cluster is active and ready"
+      data: ""
+      expectedresult: "Cluster reaches active state with all nodes ready"
+      position: 6
+    - action: "Verify cluster deployments"
+      data: ""
+      expectedresult: "All cluster deployments are running and healthy"
+      position: 7
+    - action: "Verify cluster pods"
+      data: ""
+      expectedresult: "All cluster pods are running"
+      position: 8
+    - action: "Verify service account token secret"
+      data: ""
+      expectedresult: "Service account token secret exists on the cluster"
+      position: 9
+    - action: "Verify vSphere cloud provider integration"
+      data: ""
+      expectedresult: "vSphere cloud provider is functional and correctly integrated with the cluster"
+      position: 10
+    custom_field:
+      "15": "vSphere_OutOfTree"
+  - title: "RKE2 Harvester Out-of-Tree Cloud Provider"
+    description: "Provision an RKE2 node driver cluster on Harvester with the out-of-tree cloud provider enabled and verify cloud provider integration"
+    automation: 2
+    steps:
+    - action: "Create standard user and initialize Rancher client"
+      data: ""
+      expectedresult: "Standard user and Rancher client are created successfully"
+      position: 1
+    - action: "Load cluster configuration and verify Harvester provider"
+      data: "Machine pools: 1 etcd node, 2 controlplane nodes, 2 worker nodes; Provider: harvester"
+      expectedresult: "Cluster configuration loaded and Harvester provider confirmed"
+      position: 2
+    - action: "Create Harvester cloud provider credentials"
+      data: ""
+      expectedresult: "Harvester cloud credentials are created successfully"
+      position: 3
+    - action: "Create machine configuration for Harvester"
+      data: ""
+      expectedresult: "Harvester machine configuration is created successfully"
+      position: 4
+    - action: "Provision RKE2 cluster with the Harvester out-of-tree cloud provider"
+      data: ""
+      expectedresult: "Cluster provisioning request is accepted"
+      position: 5
+    - action: "Verify cluster is active and ready"
+      data: ""
+      expectedresult: "Cluster reaches active state with all nodes ready"
+      position: 6
+    - action: "Verify cluster deployments"
+      data: ""
+      expectedresult: "All cluster deployments are running and healthy"
+      position: 7
+    - action: "Verify cluster pods"
+      data: ""
+      expectedresult: "All cluster pods are running"
+      position: 8
+    - action: "Verify service account token secret"
+      data: ""
+      expectedresult: "Service account token secret exists on the cluster"
+      position: 9
+    - action: "Verify Harvester cloud provider integration"
+      data: ""
+      expectedresult: "Harvester cloud provider is functional and correctly integrated with the cluster"
+      position: 10
+    custom_field:
+      "15": "Harvester_oot"

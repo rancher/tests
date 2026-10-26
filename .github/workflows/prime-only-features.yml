@@ -249,6 +249,8 @@ jobs:
           cat > config.yaml <<EOF
           rancher:
             host: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
+            adminPassword: "<HB_RANCHER_ADMIN_PASSWORD>"
+            insecure: true
 
           awsCredentials:
             accessKey: "$AWS_ACCESS_KEY"

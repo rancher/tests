@@ -1,0 +1,41 @@
+- projects: [RANCHERINT]
+  suite: Encryption Key Rotation
+  cases:
+  - title: "RKE2 Encryption Key Rotation"
+    description: "Verify an RKE2 cluster's secrets encryption key can be rotated and the cluster remains healthy afterward"
+    automation: 2
+    steps:
+    - action: "Config an RKE2 cluster running in rancher"
+      data: ""
+      expectedresult: "An RKE2 cluster is active and ready to receive workloads"
+      position: 1
+    - action: "Create an etcd snapshot on the cluster"
+      data: ""
+      expectedresult: "Snapshot is created successfully"
+      position: 2
+    - action: "Enable secrets encryption on the cluster"
+      data: ""
+      expectedresult: "Secrets encryption is enabled successfully"
+      position: 3
+    - action: "Rotate the encryption key on the cluster"
+      data: ""
+      expectedresult: "Encryption key rotation completes successfully"
+      position: 4
+    - action: "Verify the encryption key was rotated"
+      data: ""
+      expectedresult: "Cluster status reflects the rotated encryption key"
+      position: 5
+    - action: "Verify the cluster is ready"
+      data: ""
+      expectedresult: "Cluster reaches active/ready state"
+      position: 6
+    - action: "Verify cluster deployments"
+      data: ""
+      expectedresult: "All cluster deployments are in Ready state"
+      position: 7
+    - action: "Verify cluster pods"
+      data: ""
+      expectedresult: "All cluster pods are in Running state"
+      position: 8
+    custom_field:
+      "15": "RKE2_Encryption_Key_Rotation"

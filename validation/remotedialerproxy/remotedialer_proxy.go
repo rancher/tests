@@ -3,6 +3,7 @@ package remotedialerproxy
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net/http"
 	"os"
@@ -15,11 +16,15 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/kubeconfig"
+	"github.com/rancher/tests/actions/rbac"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/httpstream"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -120,7 +125,28 @@ func remotedialerProxyValidations(t *testing.T, client *rancher.Client, cluster 
 
 			phase, _ := status["phase"].(string)
 			logrus.Infof("pod=%s status=%s", name, phase)
-			require.Equal(t, "Running", phase)
+			require.Equal(t, "Running", phase, "pod %s is not Running", name)
+
+			conditions, ok := status["conditions"].([]any)
+			require.True(t, ok, "pod %s has no readable status conditions", name)
+
+			ready := false
+			for _, condition := range conditions {
+				conditionMap, ok := condition.(map[string]any)
+				if !ok {
+					continue
+				}
+
+				conditionType, _ := conditionMap["type"].(string)
+				conditionStatus, _ := conditionMap["status"].(string)
+
+				if conditionType == "Ready" && conditionStatus == "True" {
+					ready = true
+					break
+				}
+			}
+
+			require.True(t, ready, "pod %s is not Ready", name)
 			found = true
 		}
 
@@ -139,6 +165,114 @@ func remotedialerProxyValidations(t *testing.T, client *rancher.Client, cluster 
 		clusterObject, err := client.Management.Cluster.ByID(status.ClusterName)
 		require.NoError(t, err)
 
+		// Create a temporary cluster-member user.
+		standardUser, standardUserClient, err := rbac.AddUserWithRoleToCluster(
+			client,
+			rbac.StandardUser.String(),
+			rbac.ClusterMember.String(),
+			clusterObject,
+			nil,
+		)
+		require.NoError(t, err)
+		require.NotNil(t, standardUser)
+
+		t.Cleanup(func() {
+			bindings, listErr := client.WranglerContext.Mgmt.
+				ClusterRoleTemplateBinding().
+				List(clusterObject.ID, metav1.ListOptions{})
+			if listErr != nil {
+				logrus.Errorf("Failed to list cluster role template bindings for cleanup: %v", listErr)
+			} else {
+				for _, binding := range bindings.Items {
+					if binding.UserName != standardUser.Username {
+						continue
+					}
+
+					if deleteErr := client.WranglerContext.Mgmt.
+						ClusterRoleTemplateBinding().
+						Delete(binding.Namespace, binding.Name, &metav1.DeleteOptions{}); deleteErr != nil {
+						logrus.Errorf(
+							"Failed to delete cluster role template binding %s/%s: %v",
+							binding.Namespace,
+							binding.Name,
+							deleteErr,
+						)
+					}
+				}
+			}
+		})
+
+		// Verify the cluster member can generate a downstream kubeconfig.
+		memberKubeConfig, err := kubeconfig.GetKubeconfig(
+			standardUserClient,
+			clusterObject.ID,
+		)
+		require.NoError(t, err)
+		require.NotNil(t, memberKubeConfig)
+
+		logrus.Infof(
+			"Cluster member %s successfully generated downstream kubeconfig",
+			standardUser.Username,
+		)
+
+		// Configure a Kubernetes client using the cluster-member credentials.
+		memberRawConfig, err := (*memberKubeConfig).RawConfig()
+		require.NoError(t, err)
+
+		memberContext := proxiedContext(memberRawConfig)
+		if memberContext == "" {
+			memberContext = memberRawConfig.CurrentContext
+			logrus.Warnf(
+				"No context containing %q found in member kubeconfig; using current context %q",
+				proxyPathMarker,
+				memberContext,
+			)
+		}
+
+		memberOverrides := &clientcmd.ConfigOverrides{
+			CurrentContext: memberContext,
+		}
+
+		memberRestConfig, err := clientcmd.NewDefaultClientConfig(
+			memberRawConfig,
+			memberOverrides,
+		).ClientConfig()
+		require.NoError(t, err)
+
+		logrus.Infof("Cluster-member downstream REST host: %s", memberRestConfig.Host)
+		require.Contains(
+			t,
+			memberRestConfig.Host,
+			proxyPathMarker,
+			"Cluster-member kubeconfig is not routed through the remotedialer proxy",
+		)
+
+		memberClient, err := kubernetes.NewForConfig(memberRestConfig)
+		require.NoError(t, err)
+
+		// Node listing is a permitted operation for this cluster member.
+		_, err = memberClient.CoreV1().Nodes().List(
+			context.Background(),
+			metav1.ListOptions{Limit: 1},
+		)
+		require.NoError(t, err, "Cluster member should be able to list downstream nodes")
+		logrus.Info("Cluster member can list downstream nodes")
+
+		// Verify Secret listing is denied in the default namespace.
+		_, err = memberClient.CoreV1().Secrets("default").List(
+			context.Background(),
+			metav1.ListOptions{Limit: 1},
+		)
+		require.Error(t, err, "Expected cluster member Secret listing to be denied in default namespace")
+		require.True(
+			t,
+			apierrors.IsForbidden(err),
+			"Expected Forbidden when cluster member lists Secrets in default namespace; got: %v",
+			err,
+		)
+
+		logrus.Info("Cluster-member Secret listing correctly denied in namespace default")
+
 		client, err = client.ReLogin()
 		require.NoError(t, err)
 
@@ -146,7 +280,6 @@ func remotedialerProxyValidations(t *testing.T, client *rancher.Client, cluster 
 		require.NoError(t, err)
 
 		kubeConfig := *kubeConfigPtr
-
 		rawConfig, err := kubeConfig.RawConfig()
 		require.NoError(t, err)
 
@@ -156,23 +289,30 @@ func remotedialerProxyValidations(t *testing.T, client *rancher.Client, cluster 
 			logrus.Infof("Using proxied kubeconfig context: %s", ctxName)
 			overrides.CurrentContext = ctxName
 		} else {
-			logrus.Warnf("No context containing %q found; falling back to current-context %q",
-				proxyPathMarker, rawConfig.CurrentContext)
+			logrus.Warnf(
+				"No context containing %q found; falling back to current-context %q",
+				proxyPathMarker,
+				rawConfig.CurrentContext,
+			)
 		}
 
 		restConfig, err = clientcmd.NewDefaultClientConfig(rawConfig, overrides).ClientConfig()
 		require.NoError(t, err)
 
 		logrus.Infof("Downstream REST host: %s", restConfig.Host)
-		require.Contains(t, restConfig.Host, proxyPathMarker,
-			"REST config is not routed through the remotedialer proxy")
+		require.Contains(
+			t,
+			restConfig.Host,
+			proxyPathMarker,
+			"REST config is not routed through the remotedialer proxy",
+		)
 
 		downstreamClient, err = kubernetes.NewForConfig(restConfig)
 		require.NoError(t, err)
 
 		require.Eventually(t, func() bool {
 			nodes, err := downstreamClient.CoreV1().Nodes().List(
-				context.TODO(),
+				context.Background(),
 				metav1.ListOptions{},
 			)
 			return err == nil && len(nodes.Items) > 0
@@ -182,6 +322,7 @@ func remotedialerProxyValidations(t *testing.T, client *rancher.Client, cluster 
 	// Validate exec through remotedialer proxy
 	t.Run("exec_validation", func(t *testing.T) {
 		require.NotNil(t, downstreamClient, "downstream_kube_access must pass first")
+		require.NotNil(t, restConfig, "downstream REST config must be initialized")
 
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
@@ -190,8 +331,8 @@ func remotedialerProxyValidations(t *testing.T, client *rancher.Client, cluster 
 			ctx,
 			metav1.ListOptions{Limit: 10},
 		)
-		require.NoError(t, err)
-		require.NotEmpty(t, pods.Items)
+		require.NoError(t, err, "failed to list pods in namespace %q for exec validation", rdpNamespace)
+		require.NotEmpty(t, pods.Items, "no pods found in namespace %q for exec validation", rdpNamespace)
 
 		var pod corev1.Pod
 		for _, p := range pods.Items {
@@ -200,7 +341,19 @@ func remotedialerProxyValidations(t *testing.T, client *rancher.Client, cluster 
 				break
 			}
 		}
-		require.NotEmpty(t, pod.Name)
+		require.NotEmpty(
+			t,
+			pod.Name,
+			"no cattle-cluster-agent pod found in namespace %q; discovered pods: %v",
+			rdpNamespace,
+			func() []string {
+				names := make([]string, 0, len(pods.Items))
+				for _, p := range pods.Items {
+					names = append(names, p.Name)
+				}
+				return names
+			}(),
+		)
 
 		req := downstreamClient.CoreV1().RESTClient().
 			Post().
@@ -215,47 +368,249 @@ func remotedialerProxyValidations(t *testing.T, client *rancher.Client, cluster 
 			}, scheme.ParameterCodec)
 
 		wsExecutor, err := remotecommand.NewWebSocketExecutor(restConfig, "GET", req.URL().String())
-		require.NoError(t, err)
+		require.NoError(
+			t,
+			err,
+			"failed to create WebSocket exec executor for pod %s/%s",
+			rdpNamespace,
+			pod.Name,
+		)
 
 		spdyExecutor, err := remotecommand.NewSPDYExecutor(restConfig, "POST", req.URL())
-		require.NoError(t, err)
+		require.NoError(
+			t,
+			err,
+			"failed to create SPDY exec executor for pod %s/%s",
+			rdpNamespace,
+			pod.Name,
+		)
 
 		executor, err := remotecommand.NewFallbackExecutor(
 			wsExecutor,
 			spdyExecutor,
 			httpstream.IsUpgradeFailure,
 		)
-		require.NoError(t, err)
+		require.NoError(
+			t,
+			err,
+			"failed to create fallback exec executor for pod %s/%s",
+			rdpNamespace,
+			pod.Name,
+		)
 
 		var stdout, stderr bytes.Buffer
 		err = executor.StreamWithContext(ctx, remotecommand.StreamOptions{
 			Stdout: &stdout,
 			Stderr: &stderr,
 		})
-		require.NoError(t, err, "stderr: %s", stderr.String())
+		require.NoError(
+			t,
+			err,
+			"remote exec failed for pod %s/%s; stdout=%q stderr=%q",
+			rdpNamespace,
+			pod.Name,
+			stdout.String(),
+			stderr.String(),
+		)
 
-		require.Contains(t, stdout.String(), "rdp-ok")
+		actualStdout := strings.TrimSpace(stdout.String())
+		require.Equal(
+			t,
+			"rdp-ok",
+			actualStdout,
+			"remote exec returned unexpected stdout for pod %s/%s; stderr=%q",
+			rdpNamespace,
+			pod.Name,
+			stderr.String(),
+		)
+		require.Empty(
+			t,
+			stderr.String(),
+			"remote exec unexpectedly wrote to stderr for pod %s/%s; stdout=%q",
+			rdpNamespace,
+			pod.Name,
+			stdout.String(),
+		)
+
+		logrus.Infof(
+			"RDP exec validation passed for pod=%s/%s: stdout=%q",
+			rdpNamespace,
+			pod.Name,
+			actualStdout,
+		)
 	})
 
 	// Validate watch through remotedialer proxy
 	t.Run("watch_validation", func(t *testing.T) {
 		require.NotNil(t, downstreamClient, "downstream_kube_access must pass first")
 
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		const watchTimeout = 30 * time.Second
+
+		ctx, cancel := context.WithTimeout(context.Background(), watchTimeout)
 		defer cancel()
 
-		w, err := downstreamClient.CoreV1().Pods(rdpNamespace).Watch(
+		configMapName := fmt.Sprintf(
+			"rdp-watch-validation-%d",
+			time.Now().UnixNano(),
+		)
+
+		w, err := downstreamClient.CoreV1().ConfigMaps(rdpNamespace).Watch(
 			ctx,
 			metav1.ListOptions{},
 		)
-		require.NoError(t, err)
+		require.NoError(
+			t,
+			err,
+			"failed to establish ConfigMap watch through remotedialer proxy in namespace %q",
+			rdpNamespace,
+		)
 		defer w.Stop()
 
-		select {
-		case <-w.ResultChan():
-			logrus.Info("RDP watch event received")
-		case <-ctx.Done():
-			require.Fail(t, "no watch events received")
+		configMap := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      configMapName,
+				Namespace: rdpNamespace,
+			},
+			Data: map[string]string{
+				"validation": "rdp-watch-ok",
+			},
+		}
+
+		_, err = downstreamClient.CoreV1().ConfigMaps(rdpNamespace).Create(
+			ctx,
+			configMap,
+			metav1.CreateOptions{},
+		)
+		require.NoError(
+			t,
+			err,
+			"failed to create watch validation ConfigMap %s/%s",
+			rdpNamespace,
+			configMapName,
+		)
+
+		defer func() {
+			cleanupCtx, cleanupCancel := context.WithTimeout(
+				context.Background(),
+				10*time.Second,
+			)
+			defer cleanupCancel()
+
+			err := downstreamClient.CoreV1().ConfigMaps(rdpNamespace).Delete(
+				cleanupCtx,
+				configMapName,
+				metav1.DeleteOptions{},
+			)
+			if err != nil && !apierrors.IsNotFound(err) {
+				t.Errorf(
+					"failed to clean up watch validation ConfigMap %s/%s: %v",
+					rdpNamespace,
+					configMapName,
+					err,
+				)
+				return
+			}
+
+			err = wait.PollUntilContextTimeout(
+				cleanupCtx,
+				250*time.Millisecond,
+				5*time.Second,
+				true,
+				func(ctx context.Context) (bool, error) {
+					_, err := downstreamClient.CoreV1().ConfigMaps(rdpNamespace).Get(
+						ctx,
+						configMapName,
+						metav1.GetOptions{},
+					)
+					if apierrors.IsNotFound(err) {
+						return true, nil
+					}
+					if err != nil {
+						return false, err
+					}
+					return false, nil
+				},
+			)
+			if err != nil {
+				t.Errorf(
+					"ConfigMap %s/%s was not confirmed removed after cleanup: %v",
+					rdpNamespace,
+					configMapName,
+					err,
+				)
+			}
+		}()
+
+		for {
+			select {
+			case event, ok := <-w.ResultChan():
+				if !ok {
+					t.Fatalf(
+						"ConfigMap watch channel closed before receiving Added event for %s/%s",
+						rdpNamespace,
+						configMapName,
+					)
+				}
+
+				if event.Type == watch.Error {
+					t.Fatalf(
+						"ConfigMap watch returned an error event while waiting for %s/%s: %#v",
+						rdpNamespace,
+						configMapName,
+						event.Object,
+					)
+				}
+
+				watchedConfigMap, ok := event.Object.(*corev1.ConfigMap)
+				if !ok {
+					t.Fatalf(
+						"ConfigMap watch returned unexpected object type %T (event type %s) while waiting for %s/%s",
+						event.Object,
+						event.Type,
+						rdpNamespace,
+						configMapName,
+					)
+				}
+
+				// Ignore events for ConfigMaps unrelated to this validation.
+				if watchedConfigMap.Name != configMapName ||
+					watchedConfigMap.Namespace != rdpNamespace {
+					continue
+				}
+
+				require.Equal(
+					t,
+					watch.Added,
+					event.Type,
+					"unexpected event type for ConfigMap %s/%s",
+					rdpNamespace,
+					configMapName,
+				)
+				require.Equal(
+					t,
+					"rdp-watch-ok",
+					watchedConfigMap.Data["validation"],
+					"unexpected validation data in ConfigMap %s/%s",
+					rdpNamespace,
+					configMapName,
+				)
+
+				logrus.Infof(
+					"RDP watch received Added event for ConfigMap %s/%s",
+					rdpNamespace,
+					configMapName,
+				)
+				return
+
+			case <-ctx.Done():
+				t.Fatalf(
+					"timed out after %s waiting for Added event for ConfigMap %s/%s through remotedialer proxy: %v",
+					watchTimeout,
+					rdpNamespace,
+					configMapName,
+					ctx.Err(),
+				)
+			}
 		}
 	})
 
@@ -273,9 +628,16 @@ func remotedialerProxyValidations(t *testing.T, client *rancher.Client, cluster 
 		require.NoError(t, err)
 		require.NotEmpty(t, pods.Items)
 
-		pod, targetPort := podWithContainerPort(pods.Items)
+		pod, containerName, targetPort := podWithContainerPort(pods.Items)
 		require.NotEmpty(t, pod.Name, "no running pod with a declared container port found in %s", rdpNamespace)
-		logrus.Infof("Port-forwarding to pod=%s port=%d", pod.Name, targetPort)
+		require.Positive(t, targetPort, "target container port must be positive")
+
+		logrus.Infof(
+			"Port-forwarding to pod=%s container=%s port=%d",
+			pod.Name,
+			containerName,
+			targetPort,
+		)
 
 		reqURL := downstreamClient.CoreV1().RESTClient().
 			Post().
@@ -288,14 +650,23 @@ func remotedialerProxyValidations(t *testing.T, client *rancher.Client, cluster 
 		transport, upgrader, err := spdy.RoundTripperFor(restConfig)
 		require.NoError(t, err)
 
-		spdyDialer := spdy.NewDialer(upgrader, &http.Client{Transport: transport}, "POST", reqURL)
+		spdyDialer := spdy.NewDialer(
+			upgrader,
+			&http.Client{Transport: transport},
+			"POST",
+			reqURL,
+		)
 
 		wsDialer, err := portforward.NewSPDYOverWebsocketDialer(reqURL, restConfig)
 		require.NoError(t, err)
 
-		dialer := portforward.NewFallbackDialer(wsDialer, spdyDialer, httpstream.IsUpgradeFailure)
+		dialer := portforward.NewFallbackDialer(
+			wsDialer,
+			spdyDialer,
+			httpstream.IsUpgradeFailure,
+		)
 
-		stopChan := make(chan struct{}, 1)
+		stopChan := make(chan struct{})
 		readyChan := make(chan struct{})
 		errChan := make(chan error, 1)
 
@@ -313,18 +684,68 @@ func remotedialerProxyValidations(t *testing.T, client *rancher.Client, cluster 
 			errChan <- fw.ForwardPorts()
 		}()
 
+		t.Cleanup(func() {
+			close(stopChan)
+		})
+
+		var localPort int
+
 		select {
 		case <-readyChan:
 			ports, err := fw.GetPorts()
 			require.NoError(t, err)
-			logrus.Infof("RDP port-forward ready on localhost:%d -> %d", ports[0].Local, ports[0].Remote)
+			require.NotEmpty(t, ports, "port-forward returned no ports")
+
+			localPort = int(ports[0].Local)
+			logrus.Infof(
+				"RDP port-forward ready on localhost:%d -> %d",
+				ports[0].Local,
+				ports[0].Remote,
+			)
+
 		case err := <-errChan:
 			require.NoError(t, err, "port-forward failed before becoming ready")
-		case <-time.After(60 * time.Second):
-			require.Fail(t, "port-forward never became ready")
+
+		case <-ctx.Done():
+			require.FailNow(t, "timed out waiting for port-forward readiness")
 		}
 
-		close(stopChan)
+		httpsClient := &http.Client{
+			Timeout: 10 * time.Second,
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{
+					InsecureSkipVerify: true,
+				},
+			},
+		}
+		defer httpsClient.CloseIdleConnections()
+
+		webhookURL := fmt.Sprintf("https://127.0.0.1:%d/healthz", localPort)
+		resp, err := httpsClient.Get(webhookURL)
+		require.NoError(
+			t,
+			err,
+			"failed to make HTTPS request through the remotedialer port-forward",
+		)
+		defer resp.Body.Close()
+
+		require.Equal(
+			t,
+			http.StatusOK,
+			resp.StatusCode,
+			"webhook health endpoint returned unexpected status: %s",
+			resp.Status,
+		)
+
+		logrus.Infof(
+			"Rancher webhook health check passed through RDP port-forward: status=%s",
+			resp.Status,
+		)
+
+		logrus.Infof(
+			"Successfully connected through RDP port-forward on localhost:%d",
+			localPort,
+		)
 	})
 }
 
@@ -346,20 +767,33 @@ func proxiedContext(rawConfig clientcmdapi.Config) string {
 	return ""
 }
 
-func podWithContainerPort(items []corev1.Pod) (corev1.Pod, int32) {
+func podWithContainerPort(items []corev1.Pod) (corev1.Pod, string, int32) {
 	for _, p := range items {
 		if p.Status.Phase != corev1.PodRunning {
+			continue
+		}
+
+		ready := false
+		for _, condition := range p.Status.Conditions {
+			if condition.Type == corev1.PodReady &&
+				condition.Status == corev1.ConditionTrue {
+				ready = true
+				break
+			}
+		}
+
+		if !ready {
 			continue
 		}
 
 		for _, c := range p.Spec.Containers {
 			for _, port := range c.Ports {
 				if port.ContainerPort > 0 {
-					return p, port.ContainerPort
+					return p, c.Name, port.ContainerPort
 				}
 			}
 		}
 	}
 
-	return corev1.Pod{}, 0
+	return corev1.Pod{}, "", 0
 }

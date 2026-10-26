@@ -1,4 +1,4 @@
-//go:build (validation || infra.any || cluster.any || extended) && !sanity && !stress
+//go:build (validation || infra.any || cluster.any || extended || pit.weekly) && !sanity && !stress
 
 package nodeannotations
 
@@ -24,9 +24,11 @@ import (
 
 type NodeAnnotationsTestSuite struct {
 	suite.Suite
-	client  *rancher.Client
-	session *session.Session
-	cluster *management.Cluster
+	client             *rancher.Client
+	standardUserClient *rancher.Client
+	steveClient        *v1.Client
+	session            *session.Session
+	cluster            *management.Cluster
 }
 
 func (na *NodeAnnotationsTestSuite) SetupSuite() {
@@ -43,6 +45,13 @@ func (na *NodeAnnotationsTestSuite) SetupSuite() {
 	require.NoError(na.T(), err)
 	na.cluster, err = na.client.Management.Cluster.ByID(clusterID)
 	require.NoError(na.T(), err)
+
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(na.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), na.cluster, nil)
+	require.NoError(na.T(), err)
+	na.standardUserClient = standardUserClient
+
+	na.steveClient, err = na.standardUserClient.Steve.ProxyDownstream(na.cluster.ID)
+	require.NoError(na.T(), err)
 	log.Info("Test suite setup completed")
 }
 
@@ -52,7 +61,7 @@ func (na *NodeAnnotationsTestSuite) TearDownSuite() {
 }
 
 func (na *NodeAnnotationsTestSuite) getTestNode() (string, error) {
-	steveNodes, err := na.client.Steve.SteveType("node").List(nil)
+	steveNodes, err := na.steveClient.SteveType("node").List(nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to list nodes via Steve: %v", err)
 	}
@@ -70,10 +79,10 @@ func (na *NodeAnnotationsTestSuite) getTestNode() (string, error) {
 	return nodeName, nil
 }
 
-func (na *NodeAnnotationsTestSuite) updateNodeAnnotationsV1Complete(client *rancher.Client, nodeName string, annotations map[string]string) error {
+func (na *NodeAnnotationsTestSuite) updateNodeAnnotationsV1Complete(steveClient *v1.Client, nodeName string, annotations map[string]string) error {
 	log.Infof("🔧 Updating annotations via v1 API with complete payload for node %s", nodeName)
 
-	nodeObject, err := client.Steve.SteveType("node").ByID(nodeName)
+	nodeObject, err := steveClient.SteveType("node").ByID(nodeName)
 	if err != nil {
 		return fmt.Errorf("failed to get node object for '%s': %v", nodeName, err)
 	}
@@ -97,7 +106,7 @@ func (na *NodeAnnotationsTestSuite) updateNodeAnnotationsV1Complete(client *ranc
 
 	log.Info("📤 Sending complete payload to v1/Steve API...")
 
-	_, err = client.Steve.SteveType("node").Update(nodeObject, completePayload)
+	_, err = steveClient.SteveType("node").Update(nodeObject, completePayload)
 	if err != nil {
 		log.Errorf("❌ V1 API update failed: %v", err)
 		return err
@@ -109,7 +118,7 @@ func (na *NodeAnnotationsTestSuite) updateNodeAnnotationsV1Complete(client *ranc
 
 func (na *NodeAnnotationsTestSuite) verifyAnnotationState(nodeName string, key string, expectedValue *string) error {
 	return wait.PollImmediate(1*time.Second, 30*time.Second, func() (bool, error) {
-		nodeObject, err := na.client.Steve.SteveType("node").ByID(nodeName)
+		nodeObject, err := na.steveClient.SteveType("node").ByID(nodeName)
 		if err != nil {
 			log.Errorf("Error getting node %s: %v", nodeName, err)
 			return false, err
@@ -316,7 +325,7 @@ func (na *NodeAnnotationsTestSuite) TestNodeAnnotationsWithTableTests() {
 		return func() {
 			log.Info("Setting up initial annotations")
 
-			nodeObject, err := na.client.Steve.SteveType("node").ByID(nodeName)
+			nodeObject, err := na.steveClient.SteveType("node").ByID(nodeName)
 			require.NoError(na.T(), err)
 
 			initialAnnotations := make(map[string]string)
@@ -335,7 +344,7 @@ func (na *NodeAnnotationsTestSuite) TestNodeAnnotationsWithTableTests() {
 				initialAnnotations[k] = v
 			}
 
-			err = na.updateNodeAnnotationsV1Complete(na.client, nodeName, initialAnnotations)
+			err = na.updateNodeAnnotationsV1Complete(na.steveClient, nodeName, initialAnnotations)
 			require.NoError(na.T(), err)
 
 			for k, v := range annotations {
@@ -463,7 +472,7 @@ func (na *NodeAnnotationsTestSuite) TestNodeAnnotationsWithTableTests() {
 				require.NoError(na.T(), err)
 
 				log.Info("Deleting annotation")
-				nodeObject, err := na.client.Steve.SteveType("node").ByID(nodeName)
+				nodeObject, err := na.steveClient.SteveType("node").ByID(nodeName)
 				require.NoError(na.T(), err)
 
 				deleteAnnotations := make(map[string]string)
@@ -479,7 +488,7 @@ func (na *NodeAnnotationsTestSuite) TestNodeAnnotationsWithTableTests() {
 					}
 				}
 
-				err = na.updateNodeAnnotationsV1Complete(na.client, nodeName, deleteAnnotations)
+				err = na.updateNodeAnnotationsV1Complete(na.steveClient, nodeName, deleteAnnotations)
 				require.NoError(na.T(), err)
 
 				err = na.verifyAnnotationState(nodeName, cycleKey, nil)
@@ -517,7 +526,7 @@ func (na *NodeAnnotationsTestSuite) TestNodeAnnotationsWithTableTests() {
 				tt.setup()
 			}
 
-			nodeObject, err := na.client.Steve.SteveType("node").ByID(nodeName)
+			nodeObject, err := na.steveClient.SteveType("node").ByID(nodeName)
 			require.NoError(na.T(), err)
 
 			updatedAnnotations := make(map[string]string)
@@ -544,7 +553,7 @@ func (na *NodeAnnotationsTestSuite) TestNodeAnnotationsWithTableTests() {
 				}
 			}
 
-			err = na.updateNodeAnnotationsV1Complete(na.client, nodeName, updatedAnnotations)
+			err = na.updateNodeAnnotationsV1Complete(na.steveClient, nodeName, updatedAnnotations)
 
 			if tt.expectedError {
 				require.Error(na.T(), err)

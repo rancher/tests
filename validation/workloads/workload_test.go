@@ -19,6 +19,7 @@ import (
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/logging"
 	projectsapi "github.com/rancher/tests/actions/projects"
+	"github.com/rancher/tests/actions/rbac"
 	"github.com/rancher/tests/actions/workloads"
 	"github.com/rancher/tests/actions/workloads/cronjob"
 	"github.com/rancher/tests/actions/workloads/daemonset"
@@ -34,11 +35,12 @@ import (
 
 type WorkloadTestSuite struct {
 	suite.Suite
-	client           *rancher.Client
-	session          *session.Session
-	cluster          *management.Cluster
-	cattleConfig     map[string]any
-	downstreamClient *v1.Client
+	client             *rancher.Client
+	standardUserClient *rancher.Client
+	session            *session.Session
+	cluster            *management.Cluster
+	cattleConfig       map[string]any
+	downstreamClient   *v1.Client
 }
 
 func (w *WorkloadTestSuite) TearDownSuite() {
@@ -74,7 +76,13 @@ func (w *WorkloadTestSuite) SetupSuite() {
 	w.cluster, err = w.client.Management.Cluster.ByID(clusterID)
 	require.NoError(w.T(), err)
 
-	w.downstreamClient, err = w.client.Steve.ProxyDownstream(w.cluster.ID)
+	log.Info("Creating a standard user and granting it cluster-owner on the target cluster")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(w.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), w.cluster, nil)
+	require.NoError(w.T(), err)
+
+	w.standardUserClient = standardUserClient
+
+	w.downstreamClient, err = w.standardUserClient.Steve.ProxyDownstream(w.cluster.ID)
 	require.NoError(w.T(), err)
 }
 
@@ -98,7 +106,7 @@ func (w *WorkloadTestSuite) TestDeployments() {
 			workloadConfigs := new(workloads.Workloads)
 			operations.LoadObjectFromMap(workloads.WorkloadsConfigurationFileKey, w.cattleConfig, workloadConfigs)
 
-			_, namespace, err := projectsapi.CreateProjectAndNamespace(w.client, w.cluster.ID)
+			_, namespace, err := projectsapi.CreateProjectAndNamespace(w.standardUserClient, w.cluster.ID)
 			require.NoError(w.T(), err)
 
 			workloadConfigs.Deployment.ObjectMeta.Namespace = namespace.Name
@@ -111,7 +119,7 @@ func (w *WorkloadTestSuite) TestDeployments() {
 			require.NoError(w.T(), err)
 
 			logrus.Infof("Verifying deployment with name: %s", testDeployment.Name)
-			err = workloadTest.verifyFunc(w.client, w.cluster.ID, testDeployment.Namespace, testDeployment.Name)
+			err = workloadTest.verifyFunc(w.standardUserClient, w.cluster.ID, testDeployment.Namespace, testDeployment.Name)
 			require.NoError(w.T(), err)
 		})
 	}
@@ -132,7 +140,7 @@ func (w *WorkloadTestSuite) TestCronjobs() {
 			workloadConfigs := new(workloads.Workloads)
 			operations.LoadObjectFromMap(workloads.WorkloadsConfigurationFileKey, w.cattleConfig, workloadConfigs)
 
-			_, namespace, err := projectsapi.CreateProjectAndNamespace(w.client, w.cluster.ID)
+			_, namespace, err := projectsapi.CreateProjectAndNamespace(w.standardUserClient, w.cluster.ID)
 			require.NoError(w.T(), err)
 
 			workloadConfigs.CronJob.ObjectMeta.Namespace = namespace.Name
@@ -144,7 +152,7 @@ func (w *WorkloadTestSuite) TestCronjobs() {
 			require.NoError(w.T(), err)
 
 			logrus.Infof("Verifying cronjob with name: %s", testCronjob.Name)
-			err = workloadTest.verifyFunc(w.client, w.cluster.ID, testCronjob.ObjectMeta.Namespace, testCronjob.ObjectMeta.Name)
+			err = workloadTest.verifyFunc(w.standardUserClient, w.cluster.ID, testCronjob.ObjectMeta.Namespace, testCronjob.ObjectMeta.Name)
 			require.NoError(w.T(), err)
 		})
 	}
@@ -164,7 +172,7 @@ func (w *WorkloadTestSuite) TestDaemonsets() {
 			workloadConfigs := new(workloads.Workloads)
 			operations.LoadObjectFromMap(workloads.WorkloadsConfigurationFileKey, w.cattleConfig, workloadConfigs)
 
-			_, namespace, err := projectsapi.CreateProjectAndNamespace(w.client, w.cluster.ID)
+			_, namespace, err := projectsapi.CreateProjectAndNamespace(w.standardUserClient, w.cluster.ID)
 			require.NoError(w.T(), err)
 
 			workloadConfigs.DaemonSet.ObjectMeta.Namespace = namespace.Name
@@ -175,7 +183,7 @@ func (w *WorkloadTestSuite) TestDaemonsets() {
 			require.NoError(w.T(), err)
 
 			logrus.Infof("Verifying daemonset with name: %s", testDaemonset.Name)
-			err = workloadTest.verifyFunc(w.client, w.cluster.ID, testDaemonset.Namespace, testDaemonset.Name)
+			err = workloadTest.verifyFunc(w.standardUserClient, w.cluster.ID, testDaemonset.Namespace, testDaemonset.Name)
 			require.NoError(w.T(), err)
 		})
 	}
@@ -195,7 +203,7 @@ func (w *WorkloadTestSuite) TestStatefulSets() {
 			workloadConfigs := new(workloads.Workloads)
 			operations.LoadObjectFromMap(workloads.WorkloadsConfigurationFileKey, w.cattleConfig, workloadConfigs)
 
-			_, namespace, err := projectsapi.CreateProjectAndNamespace(w.client, w.cluster.ID)
+			_, namespace, err := projectsapi.CreateProjectAndNamespace(w.standardUserClient, w.cluster.ID)
 			require.NoError(w.T(), err)
 
 			workloadConfigs.StatefulSet.ObjectMeta.Namespace = namespace.Name
@@ -206,7 +214,7 @@ func (w *WorkloadTestSuite) TestStatefulSets() {
 			require.NoError(w.T(), err)
 
 			logrus.Infof("Verifying statefulset with name: %s", testStatefulset.Name)
-			err = workloadTest.verifyFunc(w.client, w.cluster.ID, testStatefulset.Namespace, testStatefulset.Name)
+			err = workloadTest.verifyFunc(w.standardUserClient, w.cluster.ID, testStatefulset.Namespace, testStatefulset.Name)
 			require.NoError(w.T(), err)
 		})
 	}

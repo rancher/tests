@@ -1,4 +1,4 @@
-//go:build validation || recurring || proxy || ipv6 || dualstack
+//go:build validation || recurring || proxy || ipv6 || dualstack || pit.weekly
 
 package rke2
 
@@ -45,7 +45,7 @@ func TestUpgradeKubernetes(t *testing.T) {
 
 		t.Run(tt.name, func(t *testing.T) {
 			logrus.Infof("Upgrading cluster (%s) to the latest Kubernetes version", tt.cluster.Name)
-			cluster, err := upgrade.UpgradeCluster(t, u.Client, tt.cluster, latestVersion[0])
+			cluster, err := upgrade.UpgradeCluster(t, u.StandardUserClient, tt.cluster, latestVersion[0])
 			require.NoError(t, err)
 
 			updatedClusterSpec := &provv1.ClusterSpec{}
@@ -56,15 +56,15 @@ func TestUpgradeKubernetes(t *testing.T) {
 			logrus.Infof("Cluster has been upgraded to: %s", updatedClusterSpec.KubernetesVersion)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
-			err = provisioning.VerifyClusterReady(u.Client, cluster)
+			err = provisioning.VerifyClusterReady(u.StandardUserClient, cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
-			err = deployment.VerifyClusterDeployments(u.Client, cluster)
+			err = deployment.VerifyClusterDeployments(u.StandardUserClient, cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
-			err = pods.VerifyClusterPods(u.Client, cluster)
+			err = pods.VerifyClusterPods(u.StandardUserClient, cluster)
 			require.NoError(t, err)
 		})
 

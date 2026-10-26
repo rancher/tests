@@ -63,6 +63,7 @@ var (
 type LonghornTestSuite struct {
 	suite.Suite
 	client             *rancher.Client
+	standardUserClient *rancher.Client
 	session            *session.Session
 	longhornTestConfig longhorn.TestConfig
 	cluster            *clusters.ClusterMeta
@@ -83,6 +84,14 @@ func (l *LonghornTestSuite) SetupSuite() {
 	l.cluster, err = clusters.NewClusterMeta(client, client.RancherConfig.ClusterName)
 	require.NoError(l.T(), err)
 
+	mgmtCluster, err := l.client.Management.Cluster.ByID(l.cluster.ID)
+	require.NoError(l.T(), err)
+
+	l.T().Log("Granting the standard user cluster-owner on the cluster")
+	_, standardUserClient, err := rbac.AddUserWithRoleToCluster(l.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), mgmtCluster, nil)
+	require.NoError(l.T(), err)
+	l.standardUserClient = standardUserClient
+
 	l.longhornTestConfig = longhorn.GetLonghornTestConfig()
 
 	projectConfig := &management.Project{
@@ -90,15 +99,15 @@ func (l *LonghornTestSuite) SetupSuite() {
 		Name:      l.longhornTestConfig.LonghornTestProject,
 	}
 
-	l.project, err = client.Management.Project.Create(projectConfig)
+	l.project, err = l.standardUserClient.Management.Project.Create(projectConfig)
 	require.NoError(l.T(), err)
 
-	chart, err := shepherdCharts.GetChartStatus(l.client, l.cluster.ID, charts.LonghornNamespace, charts.LonghornChartName)
+	chart, err := shepherdCharts.GetChartStatus(l.standardUserClient, l.cluster.ID, charts.LonghornNamespace, charts.LonghornChartName)
 	require.NoError(l.T(), err)
 
 	if !chart.IsAlreadyInstalled {
 		// Get latest versions of longhorn
-		latestLonghornVersion, err := l.client.Catalog.GetLatestChartVersion(charts.LonghornChartName, catalog.RancherChartRepo)
+		latestLonghornVersion, err := l.standardUserClient.Catalog.GetLatestChartVersion(charts.LonghornChartName, catalog.RancherChartRepo)
 		require.NoError(l.T(), err)
 
 		payloadOpts := charts.PayloadOpts{
@@ -112,7 +121,7 @@ func (l *LonghornTestSuite) SetupSuite() {
 		}
 
 		l.T().Logf("Installing Lonhgorn chart in cluster [%v] with latest version [%v] in project [%v] and namespace [%v]", l.cluster.Name, payloadOpts.Version, l.project.Name, payloadOpts.Namespace)
-		err = charts.InstallLonghornChart(l.client, payloadOpts, nil)
+		err = charts.InstallLonghornChart(l.standardUserClient, payloadOpts, nil)
 		require.NoError(l.T(), err)
 	}
 }
@@ -150,7 +159,7 @@ func (l *LonghornTestSuite) TestRBACIntegration() {
 }
 
 func (l *LonghornTestSuite) TestScaleStatefulSetWithPVC() {
-	steveClient, err := l.client.Steve.ProxyDownstream(l.cluster.ID)
+	steveClient, err := l.standardUserClient.Steve.ProxyDownstream(l.cluster.ID)
 	require.NoError(l.T(), err)
 
 	nodeList, err := steveClient.SteveType("node").List(nil)
@@ -163,39 +172,39 @@ func (l *LonghornTestSuite) TestScaleStatefulSetWithPVC() {
 	maxStatefulSetReplicas := int32(nodeCount + 1)
 
 	namespaceName := namegenerator.AppendRandomString("lhsts")
-	namespace, err := namespaceActions.CreateNamespace(l.client, namespaceName, "{}", map[string]string{}, map[string]string{}, l.project)
+	namespace, err := namespaceActions.CreateNamespace(l.standardUserClient, namespaceName, "{}", map[string]string{}, map[string]string{}, l.project)
 	require.NoError(l.T(), err)
 	l.T().Logf("Created namespace %s", namespaceName)
 
 	podTemplate := podapi.CreateContainerAndPodTemplate("")
-	statefulSet, err := statefulsetapi.CreateStatefulSet(l.client, l.cluster.ID, namespace.Name, podTemplate, minStatefulSetReplicas, true, l.longhornTestConfig.LonghornTestStorageClass)
+	statefulSet, err := statefulsetapi.CreateStatefulSet(l.standardUserClient, l.cluster.ID, namespace.Name, podTemplate, minStatefulSetReplicas, true, l.longhornTestConfig.LonghornTestStorageClass)
 	require.NoError(l.T(), err)
 	l.T().Logf("Created StetefulSet %s on namespace %s", statefulSet.Name, namespaceName)
 
 	// The template we want will always be the last one on the list.
 	volumeSourceName := statefulSet.Spec.VolumeClaimTemplates[len(statefulSet.Spec.VolumeClaimTemplates)-1].Name
-	storage.CheckVolumeAllocation(l.T(), l.client, l.cluster.ID, namespace.Name, l.longhornTestConfig.LonghornTestStorageClass, volumeSourceName, storage.MountPath)
+	storage.CheckVolumeAllocation(l.T(), l.standardUserClient, l.cluster.ID, namespace.Name, l.longhornTestConfig.LonghornTestStorageClass, volumeSourceName, storage.MountPath)
 
 	statefulSet.Spec.Replicas = &maxStatefulSetReplicas
 	err = charts.RetryOnWatchError(charts.DefaultWatchRetries, func() error {
-		statefulSet, err = extstatefulsetapi.UpdateStatefulSet(l.client, l.cluster.ID, statefulSet, true)
+		statefulSet, err = extstatefulsetapi.UpdateStatefulSet(l.standardUserClient, l.cluster.ID, statefulSet, true)
 		return err
 	})
 	require.NoError(l.T(), err)
 
-	err = shepherdCharts.WatchAndWaitStatefulSets(l.client, l.cluster.ID, namespaceName, metav1.ListOptions{
+	err = shepherdCharts.WatchAndWaitStatefulSets(l.standardUserClient, l.cluster.ID, namespaceName, metav1.ListOptions{
 		FieldSelector: "metadata.name=" + statefulSet.Name,
 	})
 	require.NoError(l.T(), err)
 
-	storage.CheckVolumeAllocation(l.T(), l.client, l.cluster.ID, namespace.Name, l.longhornTestConfig.LonghornTestStorageClass, volumeSourceName, storage.MountPath)
+	storage.CheckVolumeAllocation(l.T(), l.standardUserClient, l.cluster.ID, namespace.Name, l.longhornTestConfig.LonghornTestStorageClass, volumeSourceName, storage.MountPath)
 
 	pvcBeforeScaling, err := steveClient.SteveType(persistentvolumeclaims.PersistentVolumeClaimType).NamespacedSteveClient(namespace.Name).List(nil)
 	require.NoError(l.T(), err)
 	require.NotEmpty(l.T(), pvcBeforeScaling.Data)
 
 	statefulSet.Spec.Replicas = &minStatefulSetReplicas
-	statefulSet, err = extstatefulsetapi.UpdateStatefulSet(l.client, l.cluster.ID, statefulSet, true)
+	statefulSet, err = extstatefulsetapi.UpdateStatefulSet(l.standardUserClient, l.cluster.ID, statefulSet, true)
 	require.NoError(l.T(), err)
 
 	l.T().Logf("Verifying old volumes still exist")
@@ -215,7 +224,7 @@ func (l *LonghornTestSuite) TestScaleStatefulSetWithPVC() {
 		require.True(l.T(), slices.Contains(volumeNamesAfterScaling, pvcSpec.VolumeName))
 	}
 
-	err = shepherdCharts.WatchAndWaitStatefulSets(l.client, l.cluster.ID, namespaceName, metav1.ListOptions{
+	err = shepherdCharts.WatchAndWaitStatefulSets(l.standardUserClient, l.cluster.ID, namespaceName, metav1.ListOptions{
 		FieldSelector: "metadata.name=" + statefulSet.Name,
 	})
 	require.NoError(l.T(), err)
@@ -231,7 +240,7 @@ func (l *LonghornTestSuite) TestScaleStatefulSetWithPVC() {
 	require.NoError(l.T(), err)
 	l.T().Logf("Deleting pod and checking if the volume bound to PVC %s is successfully reattached", oldPodVolume.PersistentVolumeClaim.ClaimName)
 
-	err = shepherdCharts.WatchAndWaitStatefulSets(l.client, l.cluster.ID, namespace.Name, metav1.ListOptions{
+	err = shepherdCharts.WatchAndWaitStatefulSets(l.standardUserClient, l.cluster.ID, namespace.Name, metav1.ListOptions{
 		FieldSelector: "metadata.name=" + statefulSet.Name,
 	})
 	require.NoError(l.T(), err)
@@ -255,7 +264,7 @@ func (l *LonghornTestSuite) TestVolumeEncryption() {
 	var awsCreds cloudcredentials.AmazonEC2CredentialConfig
 	operations.LoadObjectFromMap(cloudcredentials.AmazonEC2CredentialConfigurationFileKey, config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey)), &awsCreds)
 
-	steveClient, err := l.client.Steve.ProxyDownstream(l.cluster.ID)
+	steveClient, err := l.standardUserClient.Steve.ProxyDownstream(l.cluster.ID)
 	require.NoError(l.T(), err)
 
 	key := make([]byte, 64)
@@ -273,7 +282,7 @@ func (l *LonghornTestSuite) TestVolumeEncryption() {
 		},
 	}
 
-	_, err = secrets.CreateSecretWithTemplate(l.client, l.cluster.ID, secret)
+	_, err = secrets.CreateSecretWithTemplate(l.standardUserClient, l.cluster.ID, secret)
 	require.NoError(l.T(), err)
 	l.T().Logf("Created %s secret containing crypto key", secretName)
 
@@ -299,7 +308,7 @@ func (l *LonghornTestSuite) TestVolumeEncryption() {
 	require.NoError(l.T(), err)
 
 	l.T().Logf("Create nginx deployment with %s PVC on default namespace", storageClassName)
-	nginxResponse := storage.CreatePVCWorkload(l.T(), l.client, l.cluster.ID, storageClassName)
+	nginxResponse := storage.CreatePVCWorkload(l.T(), l.standardUserClient, l.cluster.ID, storageClassName)
 
 	nginxSpec := &appv1.DeploymentSpec{}
 	err = steveV1.ConvertToK8sType(nginxResponse.Spec, nginxSpec)
@@ -309,7 +318,7 @@ func (l *LonghornTestSuite) TestVolumeEncryption() {
 	volumeName := nginxSpec.Template.Spec.Volumes[0].Name
 
 	l.T().Logf("Check 'encrypted' parameter on volume %s is set to 'true'", volumeName)
-	volume, err := storage.GetPersistentVolumeByName(l.client, l.cluster.ID, volumeName)
+	volume, err := storage.GetPersistentVolumeByName(l.standardUserClient, l.cluster.ID, volumeName)
 	require.NoError(l.T(), err)
 	require.Equal(l.T(), volume.Spec.CSI.VolumeAttributes["encrypted"], "true")
 
@@ -324,7 +333,7 @@ func (l *LonghornTestSuite) TestVolumeEncryption() {
 	err = steveV1.ConvertToK8sType(pods.Data[0], &pod)
 	require.NoError(l.T(), err)
 
-	kubeConfig, err := kubeconfig.GetKubeconfig(l.client, l.cluster.ID)
+	kubeConfig, err := kubeconfig.GetKubeconfig(l.standardUserClient, l.cluster.ID)
 	require.NoError(l.T(), err)
 
 	storage.CheckMountedVolume(l.T(), kubeConfig, l.cluster.ID, namespaces.Default, pod.Name, storage.MountPath)
@@ -346,7 +355,7 @@ func (l *LonghornTestSuite) TestVolumeEncryption() {
 	}
 	require.NoError(l.T(), err)
 
-	nodeCollection, err := l.client.Management.Node.List(&types.ListOpts{Filters: map[string]interface{}{
+	nodeCollection, err := l.standardUserClient.Management.Node.List(&types.ListOpts{Filters: map[string]interface{}{
 		"clusterId": l.cluster.ID,
 		"name":      pod.Spec.NodeName,
 	}})
@@ -357,7 +366,7 @@ func (l *LonghornTestSuite) TestVolumeEncryption() {
 	l.T().Logf("Searching for text plain salt %s node %s's filesystem", salt, nodeName)
 	// When running grep, return on first match, search recursively and negate the exit code.
 	checkPlainTextContent := fmt.Sprintf("stat /host/var/lib/longhorn/replicas/%s* && ! grep -qr /host/var/lib/longhorn/replicas/%s* -e '%s'", volumeName, volumeName, salt)
-	storage.CheckNodeFilesystem(l.T(), l.client, l.cluster.ID, nodeName, checkPlainTextContent, l.project)
+	storage.CheckNodeFilesystem(l.T(), l.standardUserClient, l.cluster.ID, nodeName, checkPlainTextContent, l.project)
 
 	region := awsCreds.DefaultRegion
 	if region == "" {
@@ -369,16 +378,16 @@ func (l *LonghornTestSuite) TestVolumeEncryption() {
 	require.NoError(l.T(), err)
 	l.T().Logf("Created S3 bucket %s to use as backup target", bucketName)
 
-	l.client.Session.RegisterCleanupFunc(func() error {
+	l.standardUserClient.Session.RegisterCleanupFunc(func() error {
 		return s3Actions.DeleteS3Bucket(bucketName, region, awsCreds.AccessKey, awsCreds.SecretKey)
 	})
 
-	target, err := longhornActions.CreateS3LonghornBackupTarget(l.client, l.cluster.ID, awsCreds, region, bucketName)
+	target, err := longhornActions.CreateS3LonghornBackupTarget(l.standardUserClient, l.cluster.ID, awsCreds, region, bucketName)
 	require.NoError(l.T(), err)
 	l.T().Logf("Created backup target %s on S3 bucket %s", target.Name, bucketName)
 
 	l.T().Logf("Backing up volume %s on S3 bucket %s", volumeName, bucketName)
-	backup, err := longhornActions.CreateLonghornVolumeBackup(l.client, l.cluster.ID, charts.LonghornNamespace, volumeName, target.Name)
+	backup, err := longhornActions.CreateLonghornVolumeBackup(l.standardUserClient, l.cluster.ID, charts.LonghornNamespace, volumeName, target.Name)
 	require.NoError(l.T(), err)
 
 	objectKey, err := s3Actions.FindBackupS3ObjectKey(awsCreds, region, bucketName, volumeName)
@@ -390,18 +399,18 @@ func (l *LonghornTestSuite) TestVolumeEncryption() {
 	require.False(l.T(), bytes.Contains(blockBytes, saltBytes))
 
 	l.T().Log("Restoring volume from backup")
-	err = longhornActions.RestoreLonghornVolumeFromBackup(l.client, l.cluster.ID, *backup)
+	err = longhornActions.RestoreLonghornVolumeFromBackup(l.standardUserClient, l.cluster.ID, *backup)
 	require.NoError(l.T(), err)
 
 	l.T().Logf("Updating secret %s with new key value", secretName)
 	rand.Read(key)
 	secret.StringData["CRYPTO_KEY_VALUE"] = string(key)
 
-	err = secrets.UpdateSecretWithTemplate(l.client, l.cluster.ID, secret)
+	err = secrets.UpdateSecretWithTemplate(l.standardUserClient, l.cluster.ID, secret)
 	require.NoError(l.T(), err)
 
 	l.T().Logf("Creating deployment with encrypted Longhorn PVC after updating encryption secret")
-	secondNginxResponse := storage.CreatePVCWorkload(l.T(), l.client, l.cluster.ID, storageClassName)
+	secondNginxResponse := storage.CreatePVCWorkload(l.T(), l.standardUserClient, l.cluster.ID, storageClassName)
 
 	secondNginxSpec := &appv1.DeploymentSpec{}
 	err = steveV1.ConvertToK8sType(secondNginxResponse.Spec, secondNginxSpec)
@@ -411,7 +420,7 @@ func (l *LonghornTestSuite) TestVolumeEncryption() {
 	secondVolumeName := secondNginxSpec.Template.Spec.Volumes[0].Name
 
 	l.T().Logf("Validating that the new volume %s is marked as 'encrypted'", secondVolumeName)
-	secondVolume, err := storage.GetPersistentVolumeByName(l.client, l.cluster.ID, secondVolumeName)
+	secondVolume, err := storage.GetPersistentVolumeByName(l.standardUserClient, l.cluster.ID, secondVolumeName)
 	require.NoError(l.T(), err)
 	require.Equal(l.T(), secondVolume.Spec.CSI.VolumeAttributes["encrypted"], "true")
 
@@ -433,16 +442,16 @@ func (l *LonghornTestSuite) TestVolumeEncryption() {
 
 func (l *LonghornTestSuite) TestMonitoringIntegration() {
 	l.T().Log("Checking if the monitoring chart is already installed")
-	initialMonitoringChart, err := shepherdCharts.GetChartStatus(l.client, l.cluster.ID, charts.RancherMonitoringNamespace, charts.RancherMonitoringName)
+	initialMonitoringChart, err := shepherdCharts.GetChartStatus(l.standardUserClient, l.cluster.ID, charts.RancherMonitoringNamespace, charts.RancherMonitoringName)
 	require.NoError(l.T(), err)
 
 	if !initialMonitoringChart.IsAlreadyInstalled {
 		// Get latest versions of the monitoring chart
-		latestMonitoringVersion, err := l.client.Catalog.GetLatestChartVersion(charts.RancherMonitoringName, catalog.RancherChartRepo)
+		latestMonitoringVersion, err := l.standardUserClient.Catalog.GetLatestChartVersion(charts.RancherMonitoringName, catalog.RancherChartRepo)
 		require.NoError(l.T(), err)
 
 		// Get project system projectId
-		monitoringProject, err := projects.GetProjectByName(l.client, l.cluster.ID, charts.SystemProject)
+		monitoringProject, err := projects.GetProjectByName(l.standardUserClient, l.cluster.ID, charts.SystemProject)
 		require.NoError(l.T(), err)
 
 		chartInstallOptions := &charts.InstallOptions{
@@ -452,7 +461,7 @@ func (l *LonghornTestSuite) TestMonitoringIntegration() {
 		}
 
 		l.T().Log("Installing monitoring chart")
-		err = charts.InstallRancherMonitoringChart(l.client, chartInstallOptions, &charts.RancherMonitoringOpts{
+		err = charts.InstallRancherMonitoringChart(l.standardUserClient, chartInstallOptions, &charts.RancherMonitoringOpts{
 			IngressNginx:      true,
 			ControllerManager: true,
 			Etcd:              true,
@@ -475,7 +484,7 @@ func (l *LonghornTestSuite) TestMonitoringIntegration() {
 	}
 
 	serviceMonitorName := namegenerator.AppendRandomString("longhorn-monitor")
-	_, err = monitoring.CreateServiceMonitor(l.client, l.cluster.ID, serviceMonitorName, charts.LonghornNamespace, serviceMonitorSpec)
+	_, err = monitoring.CreateServiceMonitor(l.standardUserClient, l.cluster.ID, serviceMonitorName, charts.LonghornNamespace, serviceMonitorSpec)
 	require.NoError(l.T(), err)
 	l.T().Logf("ServiceMonitor %s for Longhorn created", serviceMonitorName)
 
@@ -483,14 +492,14 @@ func (l *LonghornTestSuite) TestMonitoringIntegration() {
 	require.NoError(l.T(), err)
 
 	l.T().Logf("Checking number of volumes with Prometheus through Grafana API (%s)", numberVolumesPrometheusQuery)
-	previousNumberOfVolumes, err := longhornActions.GetNumberOfLonghornVolumes(l.client, l.cluster.ID)
+	previousNumberOfVolumes, err := longhornActions.GetNumberOfLonghornVolumes(l.standardUserClient, l.cluster.ID)
 	require.NoError(l.T(), err)
 
 	value, err := monitoring.PrometheusQueryInGrafana(loggedClient, l.client.RancherConfig.Host, l.cluster.ID, numberVolumesPrometheusQuery)
 	require.NoError(l.T(), err)
 	require.Equal(l.T(), previousNumberOfVolumes, value)
 
-	_, volumeName, err := storage.CreatePVC(l.client, l.cluster.ID, charts.LonghornStorageClass)
+	_, volumeName, err := storage.CreatePVC(l.standardUserClient, l.cluster.ID, charts.LonghornStorageClass)
 	require.NoError(l.T(), err)
 	l.T().Logf("Volume %s created using %s PVC", volumeName, charts.LonghornStorageClass)
 

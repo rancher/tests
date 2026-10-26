@@ -32,18 +32,21 @@ import (
 
 type AggregatedClusterRolesCrtbTestSuite struct {
 	suite.Suite
-	client  *rancher.Client
-	session *session.Session
-	cluster *management.Cluster
+	client                *rancher.Client
+	session               *session.Session
+	cluster               *management.Cluster
+	featureEnabledBySuite bool
 }
 
 func (acrc *AggregatedClusterRolesCrtbTestSuite) TearDownSuite() {
 	acrc.session.Cleanup()
 
-	log.Infof("Disabling the feature flag %s", rbacapi.AggregatedRoleTemplatesFeatureFlag)
-	err := extfeaturesapi.DisableFeatureFlag(acrc.client, rbacapi.AggregatedRoleTemplatesFeatureFlag)
-	if err != nil {
-		log.Warnf("Failed to disable the feature flag during teardown: %v", err)
+	if acrc.featureEnabledBySuite {
+		log.Infof("Disabling the feature flag %s", rbacapi.AggregatedRoleTemplatesFeatureFlag)
+		err := extfeaturesapi.DisableFeatureFlag(acrc.client, rbacapi.AggregatedRoleTemplatesFeatureFlag)
+		if err != nil {
+			log.Warnf("Failed to disable the feature flag during teardown: %v", err)
+		}
 	}
 }
 
@@ -62,19 +65,21 @@ func (acrc *AggregatedClusterRolesCrtbTestSuite) SetupSuite() {
 	acrc.cluster, err = acrc.client.Management.Cluster.ByID(clusterID)
 	require.NoError(acrc.T(), err)
 
-	log.Infof("Enabling the feature flag %s", rbacapi.AggregatedRoleTemplatesFeatureFlag)
-	featureEnabled, err := extfeaturesapi.IsFeatureEnabled(acrc.client, rbacapi.AggregatedRoleTemplatesFeatureFlag)
-	require.NoError(acrc.T(), err, "Failed to check if feature flag is enabled")
-	if !featureEnabled {
-		err := extfeaturesapi.EnableFeatureFlag(acrc.client, rbacapi.AggregatedRoleTemplatesFeatureFlag)
-		require.NoError(acrc.T(), err, "Failed to enable the feature flag")
-	} else {
-		log.Infof("Feature flag %s is already enabled.", rbacapi.AggregatedRoleTemplatesFeatureFlag)
+	featureDefault, err := rbacapi.GetAggregatedRoleTemplatesDefault(acrc.client)
+	require.NoError(acrc.T(), err, "Failed to get the feature flag default value")
+	if !featureDefault {
+		featureEnabled, err := extfeaturesapi.IsFeatureEnabled(acrc.client, rbacapi.AggregatedRoleTemplatesFeatureFlag)
+		require.NoError(acrc.T(), err, "Failed to check if feature flag is enabled")
+		if !featureEnabled {
+			log.Infof("Enabling the feature flag %s", rbacapi.AggregatedRoleTemplatesFeatureFlag)
+			err := extfeaturesapi.EnableFeatureFlag(acrc.client, rbacapi.AggregatedRoleTemplatesFeatureFlag)
+			require.NoError(acrc.T(), err, "Failed to enable the feature flag")
+			acrc.featureEnabledBySuite = true
+		}
 	}
 }
 
 func (acrc *AggregatedClusterRolesCrtbTestSuite) acrCreateTestResourcesForCrtb(client *rancher.Client, cluster *management.Cluster) (*v3.Project, []*corev1.Namespace, *v3.User, string, []*appsv1.Deployment, []string, []*corev1.Secret, error) {
-	log.Info("Creating the required resources for the test.")
 	createdProject, err := projectapi.CreateProject(client, cluster.ID)
 	require.NoError(acrc.T(), err, "Failed to create project")
 

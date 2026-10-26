@@ -2,8 +2,6 @@
 name: Upgraded Rancher ARM64 Cluster Provisioning
 
 on:
-  schedule:
-    - cron: "0 8 * * 2"
   workflow_dispatch:
     inputs:
       rancher_version:
