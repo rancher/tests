@@ -118,6 +118,11 @@ func (s *ObservabilityUpgradeTestSuite) TestObservabilityPreUpgrade() {
 		Version:   latestServerVersion,
 		ProjectID: serverSystemProjectID,
 	}, serverSystemProjectID, serverValues)
+	if err != nil {
+		// The install action answers bare internal errors whose cause only
+		// the Rancher server knows; capture its logs before failing.
+		logRancherPodTail(s.client, s.serverCluster.ID)
+	}
 	require.NoError(s.T(), err)
 
 	err = waitForChartWorkloads(s.client, s.serverCluster.ID, interoperableCharts.StackStateServerNamespace)

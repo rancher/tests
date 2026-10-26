@@ -22,10 +22,14 @@ import (
 	interoperableCharts "github.com/rancher/tests/interoperability/charts"
 	"github.com/rancher/tests/interoperability/fleet"
 	"github.com/rancher/tests/interoperability/observability"
+	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
+	corev1 "k8s.io/api/core/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/kubernetes"
+	rest "k8s.io/client-go/rest"
 )
 
 const (
@@ -60,6 +64,14 @@ const (
 	// by the catalog controller.
 	catalogIndexPollInterval = 10 * time.Second
 	catalogIndexPollTimeout  = 5 * time.Minute
+
+	// cattleSystemNamespace hosts the Rancher server pods on the local
+	// cluster; rancherPodLabel selects them; rancherLogTailLines bounds the
+	// server log capture on chart action failure, whose bare internal error
+	// carries no client-visible cause.
+	cattleSystemNamespace = "cattle-system"
+	rancherPodLabel       = "app=rancher"
+	rancherLogTailLines   = 300
 
 	// ingressProxyBodySizeAnnotation mirrors the ingress annotation used by
 	// validation/observability for the StackState server ingress.
@@ -227,4 +239,42 @@ func latestChartVersionAfterRepoCreate(catalogClient *catalog.Client, chartName,
 		return "", fmt.Errorf("chart %s from repo %s did not appear in the cluster-scoped catalog within %s: %w", chartName, repoName, catalogIndexPollTimeout, err)
 	}
 	return latestVersion, nil
+}
+
+// logRancherPodTail captures the tail of the Rancher server pod logs on the
+// local cluster. Chart action failures surface as bare internal errors with no
+// client-visible cause; the handler's failure reason lives in the server logs.
+// This is best-effort diagnostic evidence: capture failures are logged and
+// swallowed so they never mask the test's own failure.
+func logRancherPodTail(client *rancher.Client, clusterID string) {
+	restConfig := &rest.Config{
+		Host:        "https://" + client.RancherConfig.Host + "/k8s/clusters/" + clusterID,
+		BearerToken: client.RancherConfig.AdminToken,
+		TLSClientConfig: rest.TLSClientConfig{
+			Insecure: client.RancherConfig.Insecure != nil && *client.RancherConfig.Insecure,
+			CAFile:   client.RancherConfig.CAFile,
+			CAData:   []byte(client.RancherConfig.CACerts),
+		},
+	}
+	k8s, err := kubernetes.NewForConfig(restConfig)
+	if err != nil {
+		log.Warnf("diagnostics: building the local cluster k8s client failed: %v", err)
+		return
+	}
+	pods, err := k8s.CoreV1().Pods(cattleSystemNamespace).List(context.TODO(), meta.ListOptions{LabelSelector: rancherPodLabel})
+	if err != nil {
+		log.Warnf("diagnostics: listing pods with label %s in %s failed: %v", rancherPodLabel, cattleSystemNamespace, err)
+		return
+	}
+	if len(pods.Items) == 0 {
+		log.Warnf("diagnostics: no pods with label %s found in %s", rancherPodLabel, cattleSystemNamespace)
+		return
+	}
+	tailLines := int64(rancherLogTailLines)
+	serverLogs, err := k8s.CoreV1().Pods(cattleSystemNamespace).GetLogs(pods.Items[0].Name, &corev1.PodLogOptions{TailLines: &tailLines}).DoRaw(context.TODO())
+	if err != nil {
+		log.Warnf("diagnostics: fetching rancher logs from pod %s failed: %v", pods.Items[0].Name, err)
+		return
+	}
+	log.Infof("diagnostics: rancher server log tail from pod %s:\n%s", pods.Items[0].Name, string(serverLogs))
 }
