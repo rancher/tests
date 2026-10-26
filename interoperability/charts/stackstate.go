@@ -85,7 +85,12 @@ func retryChartAction(action string, fn func() error) error {
 		}
 		log.Warnf("%s attempt %d/%d failed: %v", action, attempt, chartActionRetryAttempts, lastErr)
 		if attempt < chartActionRetryAttempts {
-			_ = kwait.PollUntilContextTimeout(context.TODO(), chartActionRetryDelay, chartActionRetryDelay+time.Second, true, func(context.Context) (bool, error) {
+			// Spacing between attempts: with immediate=false the first condition
+			// check runs only after the interval, so this poll acts as the
+			// context-aware sleep. Its error is ignored because the condition
+			// succeeds at that first check (the timeout outlives the interval
+			// and the context is never cancelled).
+			_ = kwait.PollUntilContextTimeout(context.TODO(), chartActionRetryDelay, chartActionRetryDelay+time.Second, false, func(context.Context) (bool, error) {
 				return true, nil
 			})
 		}
@@ -550,7 +555,12 @@ func CreateClusterRepo(client *rancher.Client, catalogClient *catalog.Client, na
 		}
 		log.Warnf("ClusterRepo %s create attempt %d/%d failed: %v", name, attempt, clusterRepoCreateRetries, lastErr)
 		if attempt < clusterRepoCreateRetries {
-			_ = kwait.PollUntilContextTimeout(ctx, clusterRepoCreateRetryDelay, clusterRepoCreateRetryDelay+time.Second, true, func(context.Context) (bool, error) {
+			// Spacing between attempts: with immediate=false the first condition
+			// check runs only after the interval, so this poll acts as the
+			// context-aware sleep. Its error is ignored because the condition
+			// succeeds at that first check (the timeout outlives the interval
+			// and the context is never cancelled).
+			_ = kwait.PollUntilContextTimeout(ctx, clusterRepoCreateRetryDelay, clusterRepoCreateRetryDelay+time.Second, false, func(context.Context) (bool, error) {
 				return true, nil
 			})
 		}
