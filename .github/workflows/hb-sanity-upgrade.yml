@@ -200,6 +200,7 @@ jobs:
           region: "${{ vars.AWS_REGION }}"
 
       - name: Set up SSH Keys
+        id: setup-ssh-keys
         uses: ./.github/actions/setup-ssh-keys
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
@@ -274,7 +275,7 @@ jobs:
             host: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
             adminPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
             insecure: true
-            cleanup: true
+            cleanup: ${{ env.CLEANUP_ENABLED }}
           terraform:
             cni: "${{ vars.CNI }}"
             defaultClusterRoleForProjectMembers: "true"
@@ -284,6 +285,7 @@ jobs:
             provider: "${{ vars.PROVIDER_AMAZON }}"
             downstreamClusterProvider: "${{ vars.PROVIDER_AMAZON }}"
             privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
+            windowsPrivateKeyPath: "${{ steps.setup-ssh-keys.outputs.windows-ssh-private-key-path }}"
             privateFullChainPath: "${{ steps.setup-certs.outputs.private-full-chain-tfp-path }}"
             privateCertKeyPath: "${{ steps.setup-certs.outputs.private-cert-key-tfp-path }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
@@ -293,6 +295,7 @@ jobs:
             awsConfig:
               ami: "${{ secrets.AWS_AMI }}"
               awsKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}"
+              windowsKeyName: "${{ steps.setup-ssh-keys.outputs.windows-ssh-private-key-name }}"
               awsInstanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
               awsVolumeType: "${{ vars.AWS_VOLUME_TYPE }}"
               region: "${{ vars.AWS_REGION }}"

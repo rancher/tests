@@ -294,6 +294,7 @@ jobs:
         run: |
           cat > config.yaml <<EOF
           rancher:
+            cleanup: ${{ env.CLEANUP_ENABLED }}
             host: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
             adminPassword: "<HB_RANCHER_ADMIN_PASSWORD>"
             insecure: true

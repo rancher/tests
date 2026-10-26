@@ -6,6 +6,10 @@ on:
     - cron: "0 10 * * 3,5"
   workflow_dispatch:
     inputs:
+      qase_test_run_id:
+        description: "Optional Qase test run ID override"
+        required: false
+        type: string
       rancher_version:
         description: "Rancher tag version"
         required: false
@@ -245,7 +249,7 @@ jobs:
             host: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
             adminPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
             insecure: true
-            cleanup: true
+            cleanup: ${{ env.CLEANUP_ENABLED }}
           terraform:
             cni: "${{ vars.CNI }}"
             defaultClusterRoleForProjectMembers: "true"
@@ -355,7 +359,7 @@ jobs:
 
       - name: Run Provisioning tests
         env:
-          QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
+          QASE_TEST_RUN_ID: ${{ inputs.qase_test_run_id || steps.get-qase-id.outputs.id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_SCHEMA_PREFIX: hostbusters

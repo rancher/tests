@@ -22,6 +22,10 @@ on:
         required: false
         default: false
         type: boolean
+      qase_test_run_id:
+        description: "Optional Qase test run ID override"
+        required: false
+        type: string
       local_cluster_type:
         description: "Local cluster type to setup Rancher"
         required: true
@@ -258,7 +262,7 @@ jobs:
             host: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
             adminPassword: "<HB_RANCHER_ADMIN_PASSWORD>"
             insecure: true
-            cleanup: true
+            cleanup: ${{ env.CLEANUP_ENABLED }}
 
           awsCredentials:
             accessKey: "$AWS_ACCESS_KEY"
@@ -381,7 +385,7 @@ jobs:
 
       - name: Run Test Suites
         env:
-          QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
+          QASE_TEST_RUN_ID: ${{ inputs.qase_test_run_id || steps.get-qase-id.outputs.id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_SCHEMA_PREFIX: hostbusters

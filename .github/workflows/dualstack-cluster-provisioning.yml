@@ -6,6 +6,10 @@ on:
     - cron: "0 9 * * 1"
   workflow_dispatch:
     inputs:
+      qase_test_run_id:
+        description: "Optional Qase test run ID override"
+        required: false
+        type: string
       rancher_version:
         description: "Rancher tag version"
         required: false
@@ -256,6 +260,7 @@ jobs:
         run: |
           cat > config.yaml <<EOF
           rancher:
+            cleanup: ${{ env.CLEANUP_ENABLED }}
             host: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
 
           awsCredentials:
@@ -322,7 +327,7 @@ jobs:
 
       - name: Run Dualstack Provisioning tests
         env:
-          QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
+          QASE_TEST_RUN_ID: ${{ inputs.qase_test_run_id || steps.get-qase-id.outputs.id }}
           QASE_AUTOMATION_TOKEN: ${{ fromJSON(env.HB_QASE_AUTOMATION_TOKEN).value }}
           QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_SCHEMA_PREFIX: hostbusters

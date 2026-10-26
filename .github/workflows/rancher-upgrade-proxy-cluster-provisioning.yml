@@ -4,6 +4,10 @@ name: Upgraded Rancher Proxy Cluster Provisioning
 on:
   workflow_dispatch:
     inputs:
+      qase_test_run_id:
+        description: "Optional Qase test run ID override"
+        required: false
+        type: string
       rancher_version:
         description: "Rancher tag version"
         required: false
@@ -196,6 +200,7 @@ jobs:
           region: "${{ vars.AWS_REGION }}"
 
       - name: Set up SSH Keys
+        id: setup-ssh-keys
         uses: ./.github/actions/setup-ssh-keys
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
@@ -252,7 +257,7 @@ jobs:
             host: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
             adminPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
             insecure: true
-            cleanup: true
+            cleanup: ${{ env.CLEANUP_ENABLED }}
           terraform:
             cni: "${{ vars.CNI }}"
             defaultClusterRoleForProjectMembers: "true"
@@ -261,6 +266,7 @@ jobs:
             provider: "${{ vars.PROVIDER_AMAZON }}"
             downstreamClusterProvider: "${{ vars.PROVIDER_AMAZON }}"
             privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
+            windowsPrivateKeyPath: "${{ steps.setup-ssh-keys.outputs.windows-ssh-private-key-path }}"
             privateFullChainPath: "${{ steps.setup-certs.outputs.private-full-chain-tfp-path }}"
             privateCertKeyPath: "${{ steps.setup-certs.outputs.private-cert-key-tfp-path }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
@@ -270,6 +276,7 @@ jobs:
               awsAccessKey: "$AWS_ACCESS_KEY"
               awsSecretKey: "$AWS_SECRET_KEY"
             awsConfig:
+              windowsKeyName: "${{ steps.setup-ssh-keys.outputs.windows-ssh-private-key-name }}"
               ami: "${{ secrets.AWS_AMI }}"
               awsKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}"
               awsInstanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
@@ -426,7 +433,7 @@ jobs:
 
       - name: Run Provisioning tests
         env:
-          QASE_TEST_RUN_ID: ${{ steps.get-qase-id.outputs.id }}
+          QASE_TEST_RUN_ID: ${{ inputs.qase_test_run_id || steps.get-qase-id.outputs.id }}
           QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
           QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_SCHEMA_PREFIX: hostbusters
