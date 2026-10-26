@@ -29,9 +29,44 @@ const (
 	clusterRepoCreateRetries = 4
 	// clusterRepoCreateRetryDelay is the spacing between ClusterRepo create attempts.
 	clusterRepoCreateRetryDelay = 15 * time.Second
+
+	// chartActionRetryAttempts bounds the attempts for a chart install or
+	// upgrade action POST.
+	chartActionRetryAttempts = 3
+	// chartActionRetryDelay is the spacing between chart action attempts,
+	// giving the management cluster time to finish and cache a large chart's
+	// first render.
+	chartActionRetryDelay = 30 * time.Second
 )
 
 var timeoutSeconds = int64(defaults.TwoMinuteTimeout)
+
+// retryChartAction runs a chart install or upgrade action POST with bounded
+// retries. The suse-observability charts are large: their first action can
+// outlive the Rancher proxy's request timeout while templates render and
+// cache, answering with a bare internal error. An attempt that persisted
+// server-side despite its error surfaces as an already-exists conflict, which
+// satisfies the action.
+func retryChartAction(action string, fn func() error) error {
+	var lastErr error
+	for attempt := 1; attempt <= chartActionRetryAttempts; attempt++ {
+		lastErr = fn()
+		if lastErr == nil {
+			return nil
+		}
+		if k8sErrors.IsAlreadyExists(lastErr) || k8sErrors.IsConflict(lastErr) {
+			log.Infof("%s already exists after a failed attempt; treating as applied", action)
+			return nil
+		}
+		log.Warnf("%s attempt %d/%d failed: %v", action, attempt, chartActionRetryAttempts, lastErr)
+		if attempt < chartActionRetryAttempts {
+			_ = kwait.PollUntilContextTimeout(context.TODO(), chartActionRetryDelay, chartActionRetryDelay+time.Second, true, func(context.Context) (bool, error) {
+				return true, nil
+			})
+		}
+	}
+	return fmt.Errorf("%s: %w", action, lastErr)
+}
 
 // InstallStackStateServerChart installs the StackState chart into the specified Kubernetes cluster and namespace.
 // It uses Rancher client and configuration details, and waits for the chart deployment to complete successfully.
@@ -64,9 +99,10 @@ func InstallStackStateServerChart(client *rancher.Client, installOptions *charts
 		return err
 	}
 
-	err = catalogClient.InstallChart(chartInstallAction, StackStateServerChartRepo)
+	err = retryChartAction("suse-observability server chart install", func() error {
+		return catalogClient.InstallChart(chartInstallAction, StackStateServerChartRepo)
+	})
 	if err != nil {
-		log.Info("Error installing the StackState chart")
 		return err
 	}
 
@@ -194,9 +230,10 @@ func InstallStackstateAgentChart(client *rancher.Client, installOptions *charts.
 		})
 	})
 
-	err = catalogClient.InstallChart(chartInstallAction, RancherPartnerChartRepo)
+	err = retryChartAction("stackstate-k8s-agent chart install", func() error {
+		return catalogClient.InstallChart(chartInstallAction, RancherPartnerChartRepo)
+	})
 	if err != nil {
-		log.Info("Errored installing the chart")
 		return err
 	}
 
@@ -276,7 +313,9 @@ func UpgradeStackstateAgentChart(client *rancher.Client, installOptions *charts.
 		return err
 	}
 
-	err = catalogClient.UpgradeChart(chartUpgradeAction, RancherPartnerChartRepo)
+	err = retryChartAction("stackstate-k8s-agent chart upgrade", func() error {
+		return catalogClient.UpgradeChart(chartUpgradeAction, RancherPartnerChartRepo)
+	})
 	if err != nil {
 		return err
 	}
@@ -385,7 +424,9 @@ func UpgradeStackStateServerChart(client *rancher.Client, installOptions *charts
 		return err
 	}
 
-	err = catalogClient.UpgradeChart(chartUpgradeAction, StackStateServerChartRepo)
+	err = retryChartAction("suse-observability server chart upgrade", func() error {
+		return catalogClient.UpgradeChart(chartUpgradeAction, StackStateServerChartRepo)
+	})
 	if err != nil {
 		return err
 	}
