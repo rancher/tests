@@ -15,9 +15,7 @@ import (
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	extencharts "github.com/rancher/shepherd/extensions/charts"
 	extensionscluster "github.com/rancher/shepherd/extensions/clusters"
-	extnamespaceapi "github.com/rancher/shepherd/extensions/kubeapi/namespaces"
 	"github.com/rancher/shepherd/pkg/config"
-	"github.com/rancher/tests/actions/kubeapi/namespaces"
 	"github.com/rancher/tests/actions/projects"
 	interoperableCharts "github.com/rancher/tests/interoperability/charts"
 	"github.com/rancher/tests/interoperability/fleet"
@@ -25,7 +23,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
-	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
@@ -155,24 +152,6 @@ func stackstateServerValues(stackstateConfigs *observability.StackStateConfig, s
 	}
 
 	return interoperableCharts.MergeValues(ingressValues, baseValues, sizingValues), nil
-}
-
-// ensureNamespace is a no-op when namespaceName already exists on the cluster,
-// otherwise it creates the namespace inside projectName. It is idempotent
-// because the upgrade phases re-run as separate go test processes against
-// namespaces the pre-upgrade phase already created.
-func ensureNamespace(client *rancher.Client, clusterID, projectName, namespaceName string) error {
-	existing, err := extnamespaceapi.GetNamespaceByName(client, clusterID, namespaceName)
-	if existing != nil {
-		return nil
-	}
-	if !k8sErrors.IsNotFound(err) {
-		return err
-	}
-
-	_, err = namespaces.CreateNamespace(client, clusterID, projectName, namespaceName, "", map[string]string{}, map[string]string{})
-
-	return err
 }
 
 // systemProjectID returns the ID of the cluster's System project with the

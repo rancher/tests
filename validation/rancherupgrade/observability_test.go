@@ -101,8 +101,9 @@ func (s *ObservabilityUpgradeTestSuite) TestObservabilityPreUpgrade() {
 	// template is cached can outlive the request deadline.
 	require.NoError(s.T(), interoperableCharts.WaitForChartTemplate(serverCatalogClient, interoperableCharts.StackStateServerChartRepo, interoperableCharts.StackStateServerChartRepo, latestServerVersion))
 
-	err = ensureNamespace(s.client, s.serverCluster.ID, systemProjectName, interoperableCharts.StackStateServerNamespace)
-	require.NoError(s.T(), err)
+	// The install action creates and project-annotates the namespace itself;
+	// pre-creating it poisons the action's thirty-second watch for the
+	// InitialRolesPopulated event on an already-quiet namespace.
 
 	serverSystemProjectID, err := systemProjectID(s.client, s.serverCluster.ID)
 	require.NoError(s.T(), err)
@@ -140,8 +141,7 @@ func (s *ObservabilityUpgradeTestSuite) TestObservabilityPreUpgrade() {
 	latestAgentVersion, err := agentCatalogClient.GetLatestChartVersion(interoperableCharts.StackstateK8sAgent, interoperableCharts.RancherPartnerChartRepo)
 	require.NoError(s.T(), err)
 
-	err = ensureNamespace(s.client, s.agentCluster.ID, systemProjectName, interoperableCharts.StackstateNamespace)
-	require.NoError(s.T(), err)
+	// As above on the agent side: the install action owns namespace creation.
 
 	agentSystemProjectID, err := systemProjectID(s.client, s.agentCluster.ID)
 	require.NoError(s.T(), err)
