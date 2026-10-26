@@ -5,6 +5,7 @@ package rancherupgrade
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"time"
 
@@ -120,6 +121,11 @@ func stackstateServerValues(stackstateConfigs *observability.StackStateConfig, s
 		},
 	}
 
+	// An ingress host must be a bare DNS name: the configured URL doubles as
+	// the agent's reporting endpoint (scheme and port included), so strip
+	// those for the server chart's ingress host and TLS names.
+	ingressHost := ingressHostFromURL(stackstateConfigs.Url)
+
 	ingressConfig := observability.IngressConfig{
 		Ingress: observability.Ingress{
 			Enabled: true,
@@ -128,12 +134,12 @@ func stackstateServerValues(stackstateConfigs *observability.StackStateConfig, s
 			},
 			Hosts: []observability.Host{
 				{
-					Host: stackstateConfigs.Url,
+					Host: ingressHost,
 				},
 			},
 			TLS: []observability.TLSConfig{
 				{
-					Hosts:      []string{stackstateConfigs.Url},
+					Hosts:      []string{ingressHost},
 					SecretName: ingressTLSSecretName,
 				},
 			},
@@ -150,7 +156,27 @@ func stackstateServerValues(stackstateConfigs *observability.StackStateConfig, s
 		return nil, err
 	}
 
-	return interoperableCharts.MergeValues(ingressValues, baseValues, sizingValues), nil
+	mergedValues := interoperableCharts.MergeValues(ingressValues, baseValues, sizingValues)
+
+	// Chart 2.12.0 removed stackstate.experimental (the server split moved to
+	// per-component stackstate.components.*.split switches) and fails template
+	// validation on the key; the shared HA sizing profile still carries it,
+	// so prune it from the merged values.
+	if stackstateValues, ok := mergedValues["stackstate"].(map[string]interface{}); ok {
+		delete(stackstateValues, "experimental")
+	}
+
+	return mergedValues, nil
+}
+
+// ingressHostFromURL reduces a configured URL to its hostname for use as an
+// ingress host, falling back to the raw value when it carries no scheme.
+func ingressHostFromURL(configuredURL string) string {
+	parsed, err := url.Parse(configuredURL)
+	if err != nil || parsed.Hostname() == "" {
+		return configuredURL
+	}
+	return parsed.Hostname()
 }
 
 // systemProjectID returns the ID of the cluster's System project in the
@@ -245,11 +271,11 @@ func logInstallDiagnostics(client *rancher.Client, catalogClient *catalog.Client
 		return
 	}
 
+	tailLines := int64(rancherLogTailLines)
 	pods, err := k8s.CoreV1().Pods(cattleSystemNamespace).List(context.TODO(), meta.ListOptions{LabelSelector: rancherPodLabel})
 	if err != nil {
 		log.Warnf("diagnostics: listing pods with label %s in %s failed: %v", rancherPodLabel, cattleSystemNamespace, err)
 	} else {
-		tailLines := int64(rancherLogTailLines)
 		for i := range pods.Items {
 			serverLogs, err := k8s.CoreV1().Pods(cattleSystemNamespace).GetLogs(pods.Items[i].Name, &corev1.PodLogOptions{TailLines: &tailLines}).DoRaw(context.TODO())
 			if err != nil {
@@ -270,7 +296,18 @@ func logInstallDiagnostics(client *rancher.Client, catalogClient *catalog.Client
 		log.Warnf("diagnostics: listing catalog operations in %s failed: %v", namespace, err)
 	} else {
 		for i := range ops.Items {
-			log.Infof("diagnostics: operation %s status=%+v", ops.Items[i].Name, ops.Items[i].Status)
+			op := ops.Items[i]
+			log.Infof("diagnostics: operation %s status=%+v", op.Name, op.Status)
+			// The operation pod's helm container output names the chart-level
+			// failure directly; capture it when the operation has a pod.
+			if op.Status.PodName != "" {
+				helmLogs, err := k8s.CoreV1().Pods(op.Status.PodNamespace).GetLogs(op.Status.PodName, &corev1.PodLogOptions{Container: "helm", TailLines: &tailLines}).DoRaw(context.TODO())
+				if err != nil {
+					log.Warnf("diagnostics: fetching helm logs from operation pod %s failed: %v", op.Status.PodName, err)
+				} else {
+					log.Infof("diagnostics: operation %s helm log tail:\n%s", op.Name, string(helmLogs))
+				}
+			}
 		}
 	}
 
