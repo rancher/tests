@@ -37,9 +37,34 @@ const (
 	// giving the management cluster time to finish and cache a large chart's
 	// first render.
 	chartActionRetryDelay = 30 * time.Second
+
+	// chartTemplatePollInterval and chartTemplatePollTimeout bound the wait
+	// for a fresh ClusterRepo's chart template to be fetched and cached
+	// server-side; the template requires downloading the chart tarball, which
+	// can span several request windows for large prime charts.
+	chartTemplatePollInterval = 10 * time.Second
+	chartTemplatePollTimeout  = 10 * time.Minute
 )
 
 var timeoutSeconds = int64(defaults.TwoMinuteTimeout)
+
+// WaitForChartTemplate polls the chart template info link until the catalog
+// has fetched and cached the chart version template server-side. Fresh
+// ClusterRepos resolve their version list quickly, but the per-version
+// template needs the chart tarball, which large prime charts download across
+// several request windows; until the template is cached, chart action POSTs
+// resolve it synchronously and can outlive the request deadline, answering
+// with a bare internal error.
+func WaitForChartTemplate(catalogClient *catalog.Client, repoName, chartName, chartVersion string) error {
+	err := kwait.PollUntilContextTimeout(context.TODO(), chartTemplatePollInterval, chartTemplatePollTimeout, true, func(context.Context) (bool, error) {
+		_, err := catalogClient.GetChartValues(repoName, chartName, chartVersion)
+		return err == nil, nil
+	})
+	if err != nil {
+		return fmt.Errorf("chart template %s %s from repo %s did not become available within %s: %w", chartName, chartVersion, repoName, chartTemplatePollTimeout, err)
+	}
+	return nil
+}
 
 // retryChartAction runs a chart install or upgrade action POST with bounded
 // retries. The suse-observability charts are large: their first action can

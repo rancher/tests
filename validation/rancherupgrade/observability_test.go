@@ -96,6 +96,11 @@ func (s *ObservabilityUpgradeTestSuite) TestObservabilityPreUpgrade() {
 	latestServerVersion, err := latestChartVersionAfterRepoCreate(serverCatalogClient, interoperableCharts.StackStateServerChartRepo, interoperableCharts.StackStateServerChartRepo)
 	require.NoError(s.T(), err)
 
+	// Pre-warm the version's chart template: its first fetch downloads the
+	// chart tarball server-side, and an install action issued before the
+	// template is cached can outlive the request deadline.
+	require.NoError(s.T(), interoperableCharts.WaitForChartTemplate(serverCatalogClient, interoperableCharts.StackStateServerChartRepo, interoperableCharts.StackStateServerChartRepo, latestServerVersion))
+
 	err = ensureNamespace(s.client, s.serverCluster.ID, systemProjectName, interoperableCharts.StackStateServerNamespace)
 	require.NoError(s.T(), err)
 
@@ -214,6 +219,13 @@ func (s *ObservabilityUpgradeTestSuite) TestObservabilityChartUpgrade() {
 	require.NoError(s.T(), err)
 	latestAgentVersion, err := agentCatalogClient.GetLatestChartVersion(interoperableCharts.StackstateK8sAgent, interoperableCharts.RancherPartnerChartRepo)
 	require.NoError(s.T(), err)
+
+	// Pre-warm the newly offered versions' templates: a version's first
+	// template fetch downloads the chart tarball server-side, and an upgrade
+	// action issued before the template is cached can outlive the request
+	// deadline.
+	require.NoError(s.T(), interoperableCharts.WaitForChartTemplate(serverCatalogClient, interoperableCharts.StackStateServerChartRepo, interoperableCharts.StackStateServerChartRepo, latestServerVersion))
+	require.NoError(s.T(), interoperableCharts.WaitForChartTemplate(agentCatalogClient, interoperableCharts.RancherPartnerChartRepo, interoperableCharts.StackstateK8sAgent, latestAgentVersion))
 
 	installedServer, err := extencharts.GetChartStatus(s.client, s.serverCluster.ID, interoperableCharts.StackStateServerNamespace, interoperableCharts.StackStateServerChartRepo)
 	require.NoError(s.T(), err)
