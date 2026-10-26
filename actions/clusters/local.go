@@ -68,12 +68,8 @@ func WaitRancherVersion(client *rancher.Client, targetVersion string, timeout ti
 			return false, nil
 		}
 
-		if serverVersion.Equal(target) {
-			return true, nil
-		}
-
 		logrus.Debugf("Rancher server version is %q, waiting for %q", serverVersionRawValue.Value, targetVersion)
-		return false, nil
+		return serverVersion.Equal(target), nil
 	})
 }
 

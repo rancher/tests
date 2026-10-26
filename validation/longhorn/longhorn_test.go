@@ -69,7 +69,36 @@ type LonghornTestSuite struct {
 	project            *management.Project
 }
 
+// rancherUpgradePipelineConfigKey is the cattle-config key of the pipeline
+// marker; validation/rancherupgrade owns the canonical definition.
+const rancherUpgradePipelineConfigKey = "rancherUpgradePipeline"
+
+// upgradePipelineConfig mirrors validation/rancherupgrade's PipelineInput marker
+// section; declared locally so this suite does not depend on another validation
+// package for a single bool.
+type upgradePipelineConfig struct {
+	Enabled bool `json:"enabled" yaml:"enabled"`
+}
+
+// runningInUpgradePipeline reports whether the loaded test config carries the
+// rancherUpgradePipeline marker section.
+func runningInUpgradePipeline() bool {
+	pipeline := new(upgradePipelineConfig)
+	operations.LoadObjectFromMap(rancherUpgradePipelineConfigKey, config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey)), pipeline)
+
+	return pipeline.Enabled
+}
+
 func (l *LonghornTestSuite) TearDownSuite() {
+	if runningInUpgradePipeline() {
+		// The rancher-upgrade pipeline runs this suite as pre-upgrade functional
+		// coverage: its workloads must survive the in-place server upgrade so the
+		// post-upgrade phases assert against an environment carrying real load.
+		// The pipeline environment teardown is the cleanup.
+		l.T().Log("rancher-upgrade pipeline detected: skipping teardown so the suite's resources survive the server upgrade")
+		return
+	}
+
 	l.session.Cleanup()
 }
 

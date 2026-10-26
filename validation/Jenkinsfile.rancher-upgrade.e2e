@@ -2,17 +2,24 @@
 /**
  * Dedicated Rancher server upgrade validation pipeline (rancher/tests#968, PRD #946).
  *
- * Six-stage flow, community leg:
- *   1. Deploys a 2.14-latest environment via qa-infra-automation
- *      (make backend-s3, workspace-new, infra-up, cluster, rancher)
- *   2. Pre-upgrade phase: installs Longhorn + seeds a checksum workload
- *      (validation/rancherupgrade, TestLonghornUpgradeTestSuite/TestLonghornPreUpgrade)
- *   3. Upgrades the Rancher server in place via `make rancher-upgrade`
- *      and re-injects the rotated admin token into the test config
- *   4. Post-upgrade phase: asserts server version, Longhorn survival, workload data
- *   5. Chart-upgrade phase: upgrades Longhorn to the version offered by the
- *      upgraded Rancher's catalog and re-verifies the workload data
- *   6. Always destroys the environment (infra-down AUTO_APPROVE=yes)
+ * Three-stage flow (stages carry high-level phases, per-phase work is steps,
+ * per the Jenkins Pipeline Syntax Guide), community leg:
+ *   1. Setup: checks out tests + qa-infra-automation, builds the pinned
+ *      images, installs yq, detects the runner IP, and resolves the upgrade
+ *      window
+ *   2. Deploy Rancher Pre-Upgrade Environment: deploys a 2.14-latest
+ *      environment via qa-infra-automation (make backend-s3, workspace-new,
+ *      infra-up, cluster, rancher), then writes the test config and injects
+ *      the admin token
+ *   3. Rancher Upgrade Validation: seeds the upgrade state
+ *      (validation/rancherupgrade, TestLonghornPreUpgrade), optionally runs
+ *      the primary validation/longhorn suite as pre-upgrade functional
+ *      coverage with its teardown skipped, upgrades the Rancher server in
+ *      place via `make rancher-upgrade` and re-injects the rotated admin
+ *      token, asserts survival (post-upgrade), upgrades Longhorn to the
+ *      version offered by the upgraded Rancher's catalog (chart-upgrade),
+ *      and closes the shared Qase run
+ *   4. post always destroys the environment (infra-down AUTO_APPROVE=yes)
  *
  * Versions resolve at runtime when RANCHER_VERSION_FROM / RANCHER_VERSION_TO_UPGRADE
  * are empty (qa-infra-automation `make rancher-resolve-version`); pins override.
@@ -21,8 +28,8 @@
  * injection, Qase testrun lifecycle, destroy post) and validation/pipeline/
  * Jenkinsfile.airgap-rke2-tests (make.runTarget call shapes, teardown guard).
  * Unlike Jenkinsfile.e2e, this pipeline has no parallel downstream fan-out: the
- * three test phases run sequentially against one shared Qase test run because
- * each phase depends on the previous one's in-cluster state.
+ * test dispatches run sequentially against one shared Qase test run because
+ * each dispatch depends on the previous one's in-cluster state.
  *
  * Consumes shared functions from qa-jenkins-library:
  *   make.runTarget (backend-s3, workspace-new, infra-up, cluster, rancher,
@@ -56,6 +63,14 @@ def GO_TEST_IMAGE = "rancher-go-test:pitupgrade-${env.BUILD_NUMBER}"
 def PRE_UPGRADE_TESTCASE = '-run "TestLonghornUpgradeTestSuite/TestLonghornPreUpgrade"'
 def POST_UPGRADE_TESTCASE = '-run "TestLonghornUpgradeTestSuite/TestLonghornPostUpgrade"'
 def CHART_UPGRADE_TESTCASE = '-run "TestLonghornUpgradeTestSuite/TestLonghornChartUpgrade"'
+
+// Pre-upgrade functional coverage reuses the primary Longhorn suite
+// (validation/longhorn) instead of duplicating its cases here. The default
+// selector excludes TestVolumeEncryption, which needs cloud credentials the
+// pipeline's default config does not carry; override the
+// LONGHORN_FUNCTIONAL_TESTCASE parameter to include it when the dispatched
+// config provides them.
+def FUNCTIONAL_TEST_PACKAGE = './validation/longhorn/...'
 
 /**
  * Shared teardown helper: re-renders tfvars from params, tears down tofu workspace
@@ -143,16 +158,40 @@ def collectUpgradeDiagnostics() {
     }
 }
 
+/**
+ * Dispatches one upgrade phase to the downstream per-phase executor. Every
+ * phase is the same build-job call shape, differing only in its -run selector
+ * and package, so the validation stage stays a fixed list of steps as modules
+ * are added: stages carry high-level phases and per-phase dispatches are steps.
+ */
+def dispatchUpgradePhase(String phase, String testcase, String testRunID, String configYaml, String testPackage = params.TEST_PACKAGE) {
+    echo "Dispatching ${phase}: GOTEST_TESTCASE ${testcase} TEST_PACKAGE ${testPackage} (Qase run ${testRunID})"
+    build job: params.INDIVIDUAL_JOB, parameters: [
+        string(name: 'TIMEOUT', value: params.TEST_TIMEOUT),
+        text(name: 'CONFIG', value: configYaml),
+        string(name: 'REPO', value: params.TESTS_REPO_URL),
+        string(name: 'BRANCH', value: params.TESTS_BRANCH),
+        string(name: 'QASE_TEST_RUN_ID', value: testRunID),
+        string(name: 'QASE_SCHEMA_PREFIX', value: params.QASE_SCHEMA_PREFIX),
+        string(name: 'QASE_REPORTER_SCRIPT', value: params.QASE_REPORTER_SCRIPT),
+        string(name: 'TEST_PACKAGE', value: testPackage),
+        string(name: 'GOTEST_TESTCASE', value: testcase),
+        string(name: 'TAGS', value: 'validation'),
+        booleanParam(name: 'CAPTURE_IMAGES', value: false)
+    ]
+}
+
 pipeline {
     agent any
 
     options {
         ansiColor('xterm')
-        // Budget: three sequential test phases (TEST_TIMEOUT each, default 60m)
-        // plus deploy, server upgrade, and destroy (~90m overhead). Must exceed
-        // the sum of the stage budgets or a legitimately slow run aborts
+        // Budget: four sequential test dispatches (TEST_TIMEOUT each, default
+        // 60m: seed, functional coverage, post-upgrade, chart-upgrade) plus
+        // deploy, server upgrade, and destroy (~90m overhead). Must exceed
+        // the sum of the dispatch budgets or a legitimately slow run aborts
         // mid-phase; revisit when raising TEST_TIMEOUT.
-        timeout(time: 300, unit: 'MINUTES')
+        timeout(time: 360, unit: 'MINUTES')
         buildDiscarder(logRotator(numToKeepStr: '30'))
     }
 
@@ -361,6 +400,16 @@ rancherUpgradePipeline:
             defaultValue: '60m',
             description: 'Timeout for downstream test jobs'
         )
+        booleanParam(
+            name: 'LONGHORN_FUNCTIONAL_COVERAGE',
+            defaultValue: true,
+            description: 'Run the primary validation/longhorn suite pre-upgrade as functional coverage; the suite skips its teardown in this pipeline so its resources survive the server upgrade'
+        )
+        string(
+            name: 'LONGHORN_FUNCTIONAL_TESTCASE',
+            defaultValue: '-run "TestLonghornTestSuite/(TestRBACIntegration|TestScaleStatefulSetWithPVC|TestMonitoringIntegration)"',
+            description: '-run selector for the pre-upgrade functional coverage dispatch. Default excludes TestVolumeEncryption, which needs cloud credentials the default config does not carry'
+        )
         string(
             name: 'QASE_REPORTER_SCRIPT',
             defaultValue: 'build_qase_reporter_v2.sh',
@@ -383,7 +432,10 @@ rancherUpgradePipeline:
     }
 
     stages {
-        stage('Checkout') {
+        // ── High-level phase 1: everything the deploy needs ──
+        // Per the Jenkins Pipeline Syntax Guide, this stage carries the
+        // high-level setup phase; each task below is a step.
+        stage('Setup') {
             steps {
                 script {
                     def dirs = airgap.standardCheckout(
@@ -396,54 +448,37 @@ rancherUpgradePipeline:
                     def hostnamePrefix = params.HOSTNAME_PREFIX ?: 'unknown'
                     currentBuild.displayName = "#${env.BUILD_NUMBER} - ${hostnamePrefix}"
                     currentBuild.description = "Rancher server upgrade validation for ${hostnamePrefix}"
-                }
-            }
-        }
 
-        stage('Build Docker Images') {
-            steps {
-                // rancher-infra-tools — used by make.groovy / infra.* for all make
-                // targets (library resolves the :latest alias); direct invocations
-                // in this file use the build-pinned tag.
-                sh "docker build --no-cache --platform linux/amd64 -t ${INFRA_TOOLS_IMAGE} -t rancher-infra-tools:latest -f ${env.TESTS_DIR}/validation/pipeline/Dockerfile.infra ."
-                // rancher-go-test — used for the qase binary build, token playbook,
-                // and redaction step, always via the build-pinned tag.
-                sh "docker build --no-cache --platform linux/amd64 -t ${GO_TEST_IMAGE} -t rancher-go-test:latest -f ${env.TESTS_DIR}/validation/pipeline/Dockerfile.airgap-go-tests ."
-            }
-        }
+                    // ── Build Docker Images ──
+                    // rancher-infra-tools — used by make.groovy / infra.* for all make
+                    // targets (library resolves the :latest alias); direct invocations
+                    // in this file use the build-pinned tag.
+                    sh "docker build --no-cache --platform linux/amd64 -t ${INFRA_TOOLS_IMAGE} -t rancher-infra-tools:latest -f ${env.TESTS_DIR}/validation/pipeline/Dockerfile.infra ."
+                    // rancher-go-test — used for the qase binary build, token playbook,
+                    // and redaction step, always via the build-pinned tag.
+                    sh "docker build --no-cache --platform linux/amd64 -t ${GO_TEST_IMAGE} -t rancher-go-test:latest -f ${env.TESTS_DIR}/validation/pipeline/Dockerfile.airgap-go-tests ."
 
-        stage('Setup Tools') {
-            steps {
-                sh """
-                    wget -qO ./yq https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64
-                    wget -qO ./yq_checksums https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/checksums
-                    grep -q '^yq_linux_amd64 ' ./yq_checksums
-                    awk '/^yq_linux_amd64 / {print \$19 \"  ./yq\"}' ./yq_checksums | sha256sum -c -
-                    rm -f ./yq_checksums
-                    chmod +x ./yq
-                """
-            }
-        }
+                    // ── Setup Tools: checksum-verified yq ──
+                    sh """
+                        wget -qO ./yq https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64
+                        wget -qO ./yq_checksums https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/checksums
+                        grep -q '^yq_linux_amd64 ' ./yq_checksums
+                        awk '/^yq_linux_amd64 / {print \$19 \"  ./yq\"}' ./yq_checksums | sha256sum -c -
+                        rm -f ./yq_checksums
+                        chmod +x ./yq
+                    """
 
-        // Auto-detect this runner's public IP so the ephemeral security
-        // group's SSH/LB ingress rule (ephemeral_sg_ingress_cidrs) allows
-        // the IP that Ansible/SSH will actually originate from.
-        stage('Detect Public IP') {
-            steps {
-                script {
+                    // ── Detect Public IP ──
+                    // Auto-detect this runner's public IP so the ephemeral security
+                    // group's SSH/LB ingress rule (ephemeral_sg_ingress_cidrs) allows
+                    // the IP that Ansible/SSH will actually originate from.
                     env.RUNNER_PUBLIC_IP = infrastructure.detectPublicIp()
-                }
-            }
-        }
 
-        // ── Resolve the upgrade window ─────────────────────────
-        // Empty params resolve at runtime via qa-infra-automation's
-        // rancher-resolve-version target; explicit pins pass through.
-        // The chosen lines/regexes and resolved versions are echoed so CI
-        // logs show exactly which version each stage ran against.
-        stage('Resolve Rancher Versions') {
-            steps {
-                script {
+                    // ── Resolve Rancher Versions ──
+                    // Empty params resolve at runtime via qa-infra-automation's
+                    // rancher-resolve-version target; explicit pins pass through.
+                    // The chosen lines/regexes and resolved versions are echoed so CI
+                    // logs show exactly which version each phase ran against.
                     env.RANCHER_FROM_VERSION = params.RANCHER_VERSION_FROM?.trim() ?: ''
                     env.RANCHER_TO_VERSION = params.RANCHER_VERSION_TO_UPGRADE?.trim() ?: ''
 
@@ -507,6 +542,7 @@ rancherUpgradePipeline:
             }
         }
 
+        // ── High-level phase 2: deploy the pre-upgrade environment ──
         stage('Deploy Rancher Pre-Upgrade Environment') {
             steps {
                 script {
@@ -520,165 +556,142 @@ rancherUpgradePipeline:
                         def tofuModulePath = "${env.INFRA_DIR}/tofu/aws/modules/cluster_nodes"
                         def workspaceName = ''
 
-                        // ── SSH key setup ──────────────────────────
-                        stage('Configure SSH Key') {
-                            infrastructure.writeSshKey(
-                                keyContent: env.AWS_SSH_PEM_KEY,
-                                keyName:    env.AWS_SSH_PEM_KEY_NAME,
-                                dir:        '.ssh'
-                            )
-                            // Copy public key into the tofu module directory so
-                            // tofu's file() function can read it (restricted to
-                            // the module directory tree).
-                            sh "cp .ssh/*.pub ${tofuModulePath}/ssh_public_key.pub"
-                        }
+                        // ── Configure SSH Key ──
+                        infrastructure.writeSshKey(
+                            keyContent: env.AWS_SSH_PEM_KEY,
+                            keyName:    env.AWS_SSH_PEM_KEY_NAME,
+                            dir:        '.ssh'
+                        )
+                        // Copy public key into the tofu module directory so
+                        // tofu's file() function can read it (restricted to
+                        // the module directory tree).
+                        sh "cp .ssh/*.pub ${tofuModulePath}/ssh_public_key.pub"
 
-                        // ── Render terraform.tfvars ─────────────────
+                        // ── Configure Tofu Variables ──
                         // Must exist before any make target runs (check-tofu-dir validates it).
-                        stage('Configure Tofu Variables') {
-                            def terraformConfig = infrastructure.parseAndSubstituteVars(
-                                content: params.TERRAFORM_CONFIG,
-                                envVars: [
-                                    'AWS_ACCESS_KEY_ID':     env.AWS_ACCESS_KEY_ID,
-                                    'AWS_SECRET_ACCESS_KEY': env.AWS_SECRET_ACCESS_KEY,
-                                    'HOSTNAME_PREFIX':       params.HOSTNAME_PREFIX,
-                                    'AWS_SSH_PEM_KEY_NAME':  env.AWS_SSH_PEM_KEY_NAME,
-                                    'RUNNER_PUBLIC_IP':      env.RUNNER_PUBLIC_IP
-                                ]
-                            )
-                            infrastructure.writeConfig(
-                                path:    "${tofuModulePath}/terraform.tfvars",
-                                content: terraformConfig
-                            )
-                        }
+                        def terraformConfig = infrastructure.parseAndSubstituteVars(
+                            content: params.TERRAFORM_CONFIG,
+                            envVars: [
+                                'AWS_ACCESS_KEY_ID':     env.AWS_ACCESS_KEY_ID,
+                                'AWS_SECRET_ACCESS_KEY': env.AWS_SECRET_ACCESS_KEY,
+                                'HOSTNAME_PREFIX':       params.HOSTNAME_PREFIX,
+                                'AWS_SSH_PEM_KEY_NAME':  env.AWS_SSH_PEM_KEY_NAME,
+                                'RUNNER_PUBLIC_IP':      env.RUNNER_PUBLIC_IP
+                            ]
+                        )
+                        infrastructure.writeConfig(
+                            path:    "${tofuModulePath}/terraform.tfvars",
+                            content: terraformConfig
+                        )
 
-                        // ── Initialize S3 backend ───────────────────
-                        stage('Initialize Tofu Backend') {
-                            make.runTarget(
-                                target:   'backend-s3',
-                                dir:      env.INFRA_DIR,
-                                makeArgs: [
-                                    "BUCKET=${params.S3_BUCKET_NAME}",
-                                    "KEY=${params.S3_KEY_PREFIX}",
-                                    "REGION=${params.S3_BUCKET_REGION}"
-                                ]
-                            )
-                        }
+                        // ── Initialize Tofu Backend ──
+                        make.runTarget(
+                            target:   'backend-s3',
+                            dir:      env.INFRA_DIR,
+                            makeArgs: [
+                                "BUCKET=${params.S3_BUCKET_NAME}",
+                                "KEY=${params.S3_KEY_PREFIX}",
+                                "REGION=${params.S3_BUCKET_REGION}"
+                            ]
+                        )
 
-                        // ── Create tofu workspace ───────────────────
-                        stage('Create Workspace') {
-                            workspaceName = infrastructure.generateWorkspaceName(
-                                prefix:           'jenkins_rancher_upgrade_workspace',
-                                suffix:           params.HOSTNAME_PREFIX,
-                                includeTimestamp: false
-                            )
-                            make.runTarget(
-                                target:   'workspace-new',
-                                dir:      env.INFRA_DIR,
-                                makeArgs: "WORKSPACE=${workspaceName}"
-                            )
-                            infrastructure.archiveWorkspaceName(workspaceName: workspaceName)
-                            env.WORKSPACE_NAME = workspaceName
-                        }
+                        // ── Create Workspace ──
+                        workspaceName = infrastructure.generateWorkspaceName(
+                            prefix:           'jenkins_rancher_upgrade_workspace',
+                            suffix:           params.HOSTNAME_PREFIX,
+                            includeTimestamp: false
+                        )
+                        make.runTarget(
+                            target:   'workspace-new',
+                            dir:      env.INFRA_DIR,
+                            makeArgs: "WORKSPACE=${workspaceName}"
+                        )
+                        infrastructure.archiveWorkspaceName(workspaceName: workspaceName)
+                        env.WORKSPACE_NAME = workspaceName
 
-                        // ── Provision infra + generate inventory ────
-                        stage('Provision Infrastructure') {
-                            make.runTarget(
-                                target:   'infra-up',
-                                dir:      env.INFRA_DIR,
-                                makeArgs: "WORKSPACE=${workspaceName}"
-                            )
-                        }
+                        // ── Provision Infrastructure ──
+                        make.runTarget(
+                            target:   'infra-up',
+                            dir:      env.INFRA_DIR,
+                            makeArgs: "WORKSPACE=${workspaceName}"
+                        )
 
-                        // ── Write group_vars/all.yml ────────────────
+                        // ── Configure Ansible Variables ──
                         // Must exist before make cluster (make infra-up generates
                         // inventory.yml but not the group_vars subdirectory).
                         // Rancher version keys carry the resolved FROM version;
                         // the *_upgrade keys carry the resolved TO version the
-                        // later `make rancher-upgrade` stage targets.
-                        stage('Configure Ansible Variables') {
-                            sh "mkdir -p ${ansiblePath}/inventory/group_vars"
+                        // later `make rancher-upgrade` step targets.
+                        sh "mkdir -p ${ansiblePath}/inventory/group_vars"
 
-                            // Flavor selects the deploy-side repo too: the prime
-                            // leg installs the FROM version from the prime index
-                            // (community stops the 2.14 line at 2.14.3 while prime
-                            // continues it), keeping resolve, deploy, and upgrade
-                            // all on the same artifact line.
-                            def fromChartRepoUrl = params.RANCHER_CHART_REPO_FLAVOR == 'prime' ? 'https://charts.rancher.com/server-charts/prime' : 'https://releases.rancher.com/server-charts/latest'
-                            def upgradeRepoName = params.RANCHER_CHART_REPO_FLAVOR == 'prime' ? 'rancher-prime-upgrade' : 'rancher-upgrade'
+                        // Flavor selects the deploy-side repo too: the prime
+                        // leg installs the FROM version from the prime index
+                        // (community stops the 2.14 line at 2.14.3 while prime
+                        // continues it), keeping resolve, deploy, and upgrade
+                        // all on the same artifact line.
+                        def fromChartRepoUrl = params.RANCHER_CHART_REPO_FLAVOR == 'prime' ? 'https://charts.rancher.com/server-charts/prime' : 'https://releases.rancher.com/server-charts/latest'
+                        def upgradeRepoName = params.RANCHER_CHART_REPO_FLAVOR == 'prime' ? 'rancher-prime-upgrade' : 'rancher-upgrade'
 
-                            def ansibleVars = infrastructure.parseAndSubstituteVars(
-                                content: params.ANSIBLE_VARIABLES,
-                                envVars: [
-                                    'RKE2_VERSION':               params.RKE2_VERSION,
-                                    'INFRA_DIR':                  env.INFRA_DIR,
-                                    'RANCHER_BOOTSTRAP_PASSWORD': params.RANCHER_BOOTSTRAP_PASSWORD ?: DEFAULT_RANCHER_PASSWORD,
-                                    'RANCHER_ADMIN_PASSWORD':     params.RANCHER_ADMIN_PASSWORD ?: DEFAULT_RANCHER_PASSWORD,
-                                    'RANCHER_VERSION':            env.RANCHER_FROM_VERSION,
-                                    'RANCHER_IMAGE_TAG':          env.RANCHER_FROM_IMAGE_TAG,
-                                    'RANCHER_CHART_REPO_URL':     fromChartRepoUrl,
-                                    'RANCHER_VERSION_UPGRADE':    env.RANCHER_TO_VERSION,
-                                    'RANCHER_IMAGE_TAG_UPGRADE':  env.RANCHER_TO_IMAGE_TAG,
-                                    'RANCHER_UPGRADE_REPO_NAME':  upgradeRepoName
-                                ]
-                            )
+                        def ansibleVars = infrastructure.parseAndSubstituteVars(
+                            content: params.ANSIBLE_VARIABLES,
+                            envVars: [
+                                'RKE2_VERSION':               params.RKE2_VERSION,
+                                'INFRA_DIR':                  env.INFRA_DIR,
+                                'RANCHER_BOOTSTRAP_PASSWORD': params.RANCHER_BOOTSTRAP_PASSWORD ?: DEFAULT_RANCHER_PASSWORD,
+                                'RANCHER_ADMIN_PASSWORD':     params.RANCHER_ADMIN_PASSWORD ?: DEFAULT_RANCHER_PASSWORD,
+                                'RANCHER_VERSION':            env.RANCHER_FROM_VERSION,
+                                'RANCHER_IMAGE_TAG':          env.RANCHER_FROM_IMAGE_TAG,
+                                'RANCHER_CHART_REPO_URL':     fromChartRepoUrl,
+                                'RANCHER_VERSION_UPGRADE':    env.RANCHER_TO_VERSION,
+                                'RANCHER_IMAGE_TAG_UPGRADE':  env.RANCHER_TO_IMAGE_TAG,
+                                'RANCHER_UPGRADE_REPO_NAME':  upgradeRepoName
+                            ]
+                        )
 
-                            def rancherVars = infrastructure.parseAndSubstituteVars(
-                                content: '''deploy_rancher: true
+                        def rancherVars = infrastructure.parseAndSubstituteVars(
+                            content: '''deploy_rancher: true
 install_helm: true
 rancher_hostname: "${HOSTNAME_PREFIX}.qa.rancher.space"
 rancher_bootstrap_password: "${RANCHER_BOOTSTRAP_PASSWORD}"
 rancher_admin_password: "${RANCHER_ADMIN_PASSWORD}"
 rancher_use_bundled_system_charts: true
 ''',
-                                envVars: [
-                                    'HOSTNAME_PREFIX':            params.HOSTNAME_PREFIX,
-                                    'RANCHER_BOOTSTRAP_PASSWORD': params.RANCHER_BOOTSTRAP_PASSWORD ?: DEFAULT_RANCHER_PASSWORD,
-                                    'RANCHER_ADMIN_PASSWORD':     params.RANCHER_ADMIN_PASSWORD ?: DEFAULT_RANCHER_PASSWORD
-                                ]
-                            )
+                            envVars: [
+                                'HOSTNAME_PREFIX':            params.HOSTNAME_PREFIX,
+                                'RANCHER_BOOTSTRAP_PASSWORD': params.RANCHER_BOOTSTRAP_PASSWORD ?: DEFAULT_RANCHER_PASSWORD,
+                                'RANCHER_ADMIN_PASSWORD':     params.RANCHER_ADMIN_PASSWORD ?: DEFAULT_RANCHER_PASSWORD
+                            ]
+                        )
 
-                            // Merge ANSIBLE_VARIABLES + Rancher vars into a single group_vars/all.yml
-                            infrastructure.writeConfig(
-                                path:    "${ansiblePath}/inventory/group_vars/all.yml",
-                                content: ansibleVars + '\n' + rancherVars
-                            )
-                        }
+                        // Merge ANSIBLE_VARIABLES + Rancher vars into a single group_vars/all.yml
+                        infrastructure.writeConfig(
+                            path:    "${ansiblePath}/inventory/group_vars/all.yml",
+                            content: ansibleVars + '\n' + rancherVars
+                        )
 
-                        // ── Deploy RKE2 cluster (ansible; no AWS creds) ──
-                        stage('Deploy RKE2 Cluster') {
-                            make.runTarget(
-                                target:        'cluster',
-                                dir:           env.INFRA_DIR,
-                                passAwsCreds: false
-                            )
-                        }
+                        // ── Deploy RKE2 Cluster (ansible; no AWS creds) ──
+                        make.runTarget(
+                            target:        'cluster',
+                            dir:           env.INFRA_DIR,
+                            passAwsCreds: false
+                        )
 
-                        // ── Deploy pre-upgrade Rancher (helm; no AWS creds) ──
-                        stage('Deploy Rancher') {
-                            make.runTarget(
-                                target:        'rancher',
-                                dir:           env.INFRA_DIR,
-                                passAwsCreds: false
-                            )
-                        }
+                        // ── Deploy Rancher (helm; no AWS creds) ──
+                        make.runTarget(
+                            target:        'rancher',
+                            dir:           env.INFRA_DIR,
+                            passAwsCreds: false
+                        )
 
-                        // ── Capture Rancher hostname ────────────────
-                        stage('Output Infrastructure Details') {
-                            // Rancher hostname is deterministically constructed from HOSTNAME_PREFIX
-                            // matching the value set in rancherVars (rancher_hostname).
-                            def rancherHostname = "${params.HOSTNAME_PREFIX}.qa.rancher.space"
-                            echo "Rancher Hostname: https://${rancherHostname}"
-                            env.RANCHER_HOSTNAME = rancherHostname
-                        }
+                        // ── Output Infrastructure Details ──
+                        // Rancher hostname is deterministically constructed from HOSTNAME_PREFIX
+                        // matching the value set in rancherVars (rancher_hostname).
+                        def rancherHostname = "${params.HOSTNAME_PREFIX}.qa.rancher.space"
+                        echo "Rancher Hostname: https://${rancherHostname}"
+                        env.RANCHER_HOSTNAME = rancherHostname
                     }
-                }
-            }
-        }
 
-        stage('Create Test Config and Inject Admin Token') {
-            steps {
-                script {
+                    // ── Create Test Config and Inject Admin Token ──
                     def workspace = pwd()
                     def cattleConfigPath = "${env.TESTS_DIR}/cattle-config.yaml"
 
@@ -758,14 +771,18 @@ rancher_use_bundled_system_charts: true
             }
         }
 
-        // ── Phase 1: pre-upgrade Longhorn install + workload seed ──
-        // Starts the shared Qase run once; all three phases report into it.
-        stage('Pre-Upgrade Longhorn Tests') {
+        // ── High-level phase 3: the upgrade itself ──
+        // One stage; each dispatch and the server upgrade are steps, so the
+        // stage list stays constant as modules are added. Starts the shared
+        // Qase run once; all dispatches report into it and the final step
+        // closes it.
+        stage('Rancher Upgrade Validation') {
             steps {
                 script {
+                    // Start the shared qase test run (completed after the final phase)
+                    def testRunID = ''
                     property.useWithProperties(['QASE_AUTOMATION_TOKEN']) {
                         def workspace = pwd()
-                        def cattleConfigPath = "${env.TESTS_DIR}/cattle-config.yaml"
                         def testRunConfig = "${workspace}/testrunconfig.yaml"
                         def qaseBinary = "${workspace}/testrun"
 
@@ -780,11 +797,9 @@ rancher_use_bundled_system_charts: true
                                 sh -c 'env GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o /workspace/testrun ./validation/pipeline/qase/testrun'
                         """
 
-                        // Start the shared qase test run (completed after the final phase)
                         sh "${qaseBinary} --startRun=true"
 
                         // Read test run ID
-                        def testRunID = ''
                         if (fileExists(testRunConfig)) {
                             testRunID = sh(
                                 script: "./yq '.id' ${testRunConfig}",
@@ -795,40 +810,34 @@ rancher_use_bundled_system_charts: true
                         if (params.REPORT_ARTIFACTS && fileExists(testRunConfig)) {
                             archiveArtifacts artifacts: 'testrunconfig.yaml', allowEmptyArchive: true
                         }
-
-                        // NOTE: unlike Jenkinsfile.e2e, rancher.cleanup is NOT set to
-                        // true and no desiredflags are forced here — the upgrade suite's
-                        // cross-phase state must survive, and the pipeline environment
-                        // teardown is the cleanup.
-                        def configYaml = readFile(file: cattleConfigPath)
-
-                        echo "Dispatching pre-upgrade phase: GOTEST_TESTCASE ${PRE_UPGRADE_TESTCASE}"
-                        build job: params.INDIVIDUAL_JOB, parameters: [
-                            string(name: 'TIMEOUT', value: params.TEST_TIMEOUT),
-                            text(name: 'CONFIG', value: configYaml),
-                            string(name: 'REPO', value: params.TESTS_REPO_URL),
-                            string(name: 'BRANCH', value: params.TESTS_BRANCH),
-                            string(name: 'QASE_TEST_RUN_ID', value: testRunID),
-                            string(name: 'QASE_SCHEMA_PREFIX', value: params.QASE_SCHEMA_PREFIX),
-                            string(name: 'QASE_REPORTER_SCRIPT', value: params.QASE_REPORTER_SCRIPT),
-                            string(name: 'TEST_PACKAGE', value: params.TEST_PACKAGE),
-                            string(name: 'GOTEST_TESTCASE', value: PRE_UPGRADE_TESTCASE),
-                            string(name: 'TAGS', value: 'validation'),
-                            booleanParam(name: 'CAPTURE_IMAGES', value: false)
-                        ]
                     }
-                }
-            }
-        }
 
-        // ── Phase 2: in-place Rancher server upgrade ──
-        // `make rancher-upgrade` rotates the Rancher admin token and writes the
-        // new one to ansible/rancher/default-ha/generated.tfvars; the old token
-        // is revoked, so the test config MUST be re-injected before the
-        // post-upgrade phases dispatch (verified live: old token 401s).
-        stage('Upgrade Rancher Server') {
-            steps {
-                script {
+                    // NOTE: unlike Jenkinsfile.e2e, rancher.cleanup is NOT set to
+                    // true and no desiredflags are forced here — the upgrade suite's
+                    // cross-phase state must survive, and the pipeline environment
+                    // teardown is the cleanup.
+                    def configYaml = readFile(file: "${env.TESTS_DIR}/cattle-config.yaml")
+
+                    property.useWithProperties(['QASE_AUTOMATION_TOKEN']) {
+                        // ── Pre-upgrade seed: Longhorn install + deterministic workload ──
+                        dispatchUpgradePhase('pre-upgrade seed', PRE_UPGRADE_TESTCASE, testRunID, configYaml)
+
+                        // ── Pre-upgrade functional coverage: primary Longhorn suite ──
+                        // The dispatched config carries the rancherUpgradePipeline marker,
+                        // so the suite skips its own teardown and its resources survive
+                        // the server upgrade as extra post-upgrade state.
+                        if (params.LONGHORN_FUNCTIONAL_COVERAGE) {
+                            dispatchUpgradePhase('pre-upgrade functional coverage', params.LONGHORN_FUNCTIONAL_TESTCASE, testRunID, configYaml, FUNCTIONAL_TEST_PACKAGE)
+                        } else {
+                            echo 'Skipping pre-upgrade functional coverage (LONGHORN_FUNCTIONAL_COVERAGE=false)'
+                        }
+                    }
+
+                    // ── In-place Rancher server upgrade ──
+                    // `make rancher-upgrade` rotates the Rancher admin token and writes the
+                    // new one to ansible/rancher/default-ha/generated.tfvars; the old token
+                    // is revoked, so the test config MUST be re-injected before the
+                    // post-upgrade dispatches (verified live: old token 401s).
                     echo "Upgrading Rancher server: ${env.RANCHER_FROM_VERSION} -> ${env.RANCHER_TO_VERSION} (flavor ${params.RANCHER_CHART_REPO_FLAVOR})"
                     make.runTarget(
                         target: 'rancher-upgrade',
@@ -876,21 +885,13 @@ rancher_use_bundled_system_charts: true
                         echo "Rotated token smoke-check: HTTP 200 from the upgraded Rancher API"
                     """
                     echo "Test config now carries the post-upgrade admin token; rancherUpgradeInput.targetVersion=${env.RANCHER_TO_VERSION}"
-                }
-            }
-        }
 
-        // ── Phase 3: post-upgrade assertions ──
-        stage('Post-Upgrade Longhorn Tests') {
-            steps {
-                script {
+                    // Re-read the config: the injection above mutated it, so the
+                    // post-upgrade dispatches must carry the rotated token.
+                    configYaml = readFile(file: "${env.TESTS_DIR}/cattle-config.yaml")
+
                     property.useWithProperties(['QASE_AUTOMATION_TOKEN']) {
-                        def testRunID = sh(
-                            script: "./yq '.id' testrunconfig.yaml",
-                            returnStdout: true
-                        ).trim()
-                        def configYaml = readFile(file: "${env.TESTS_DIR}/cattle-config.yaml")
-
+                        // ── Post-upgrade assertions ──
                         // Fail fast (without printing the token) if the config
                         // about to be dispatched does not carry the rotated one.
                         sh """
@@ -904,54 +905,14 @@ rancher_use_bundled_system_charts: true
                             echo "Dispatched config carries the rotated admin token (length \${#expected})"
                         """
 
-                        echo "Dispatching post-upgrade phase: GOTEST_TESTCASE ${POST_UPGRADE_TESTCASE} (Qase run ${testRunID})"
-                        build job: params.INDIVIDUAL_JOB, parameters: [
-                            string(name: 'TIMEOUT', value: params.TEST_TIMEOUT),
-                            text(name: 'CONFIG', value: configYaml),
-                            string(name: 'REPO', value: params.TESTS_REPO_URL),
-                            string(name: 'BRANCH', value: params.TESTS_BRANCH),
-                            string(name: 'QASE_TEST_RUN_ID', value: testRunID),
-                            string(name: 'QASE_SCHEMA_PREFIX', value: params.QASE_SCHEMA_PREFIX),
-                            string(name: 'QASE_REPORTER_SCRIPT', value: params.QASE_REPORTER_SCRIPT),
-                            string(name: 'TEST_PACKAGE', value: params.TEST_PACKAGE),
-                            string(name: 'GOTEST_TESTCASE', value: POST_UPGRADE_TESTCASE),
-                            string(name: 'TAGS', value: 'validation'),
-                            booleanParam(name: 'CAPTURE_IMAGES', value: false)
-                        ]
-                    }
-                }
-            }
-        }
+                        dispatchUpgradePhase('post-upgrade assertions', POST_UPGRADE_TESTCASE, testRunID, configYaml)
 
-        // ── Phase 4: Longhorn chart upgrade through the upgraded catalog ──
-        // Completes the shared Qase run after this final phase; do not rely on
-        // the downstream job's own QASE_TEST_RUN_COMPLETE for the shared run.
-        stage('Longhorn Chart Upgrade Tests') {
-            steps {
-                script {
-                    property.useWithProperties(['QASE_AUTOMATION_TOKEN']) {
-                        def testRunID = sh(
-                            script: "./yq '.id' testrunconfig.yaml",
-                            returnStdout: true
-                        ).trim()
-                        def configYaml = readFile(file: "${env.TESTS_DIR}/cattle-config.yaml")
+                        // ── Chart upgrade through the upgraded catalog ──
+                        dispatchUpgradePhase('chart-upgrade', CHART_UPGRADE_TESTCASE, testRunID, configYaml)
 
-                        echo "Dispatching chart-upgrade phase: GOTEST_TESTCASE ${CHART_UPGRADE_TESTCASE} (Qase run ${testRunID})"
-                        build job: params.INDIVIDUAL_JOB, parameters: [
-                            string(name: 'TIMEOUT', value: params.TEST_TIMEOUT),
-                            text(name: 'CONFIG', value: configYaml),
-                            string(name: 'REPO', value: params.TESTS_REPO_URL),
-                            string(name: 'BRANCH', value: params.TESTS_BRANCH),
-                            string(name: 'QASE_TEST_RUN_ID', value: testRunID),
-                            string(name: 'QASE_SCHEMA_PREFIX', value: params.QASE_SCHEMA_PREFIX),
-                            string(name: 'QASE_REPORTER_SCRIPT', value: params.QASE_REPORTER_SCRIPT),
-                            string(name: 'TEST_PACKAGE', value: params.TEST_PACKAGE),
-                            string(name: 'GOTEST_TESTCASE', value: CHART_UPGRADE_TESTCASE),
-                            string(name: 'TAGS', value: 'validation'),
-                            booleanParam(name: 'CAPTURE_IMAGES', value: false)
-                        ]
-
-                        // Complete the shared qase test run
+                        // Complete the shared qase test run; do not rely on the
+                        // downstream job's own QASE_TEST_RUN_COMPLETE for the
+                        // shared run.
                         sh "./testrun --startRun=false"
                         env.QASE_RUN_COMPLETED = 'true'
                         echo "Shared Qase test run ${testRunID} completed"

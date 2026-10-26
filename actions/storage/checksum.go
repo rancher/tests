@@ -111,7 +111,7 @@ func CreateChecksumWorkload(client *rancher.Client, clusterID string, storageCla
 		return err
 	}
 
-	writeCommand := []string{"sh", "-c", "printf '%s' '" + content + "' > " + MountPath + "/" + ChecksumDataFile}
+	writeCommand := []string{"sh", "-c", fmt.Sprintf("printf '%%s' '%s' > %s/%s", content, MountPath, ChecksumDataFile)}
 	logrus.Debugf("Writing %s/%s on pod %s", MountPath, ChecksumDataFile, pod.Name)
 	_, err = kubeconfig.KubectlExec(restConfig, pod.Name, namespaces.Default, writeCommand)
 
@@ -146,7 +146,7 @@ func VerifyChecksumWorkload(client *rancher.Client, clusterID string, name strin
 		return err
 	}
 
-	checksumCommand := []string{"sha256sum", MountPath + "/" + ChecksumDataFile}
+	checksumCommand := []string{"sha256sum", fmt.Sprintf("%s/%s", MountPath, ChecksumDataFile)}
 	output, err := kubeconfig.KubectlExec(restConfig, pod.Name, namespaces.Default, checksumCommand)
 	if err != nil {
 		return err
