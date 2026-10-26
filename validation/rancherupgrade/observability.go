@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	provv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
@@ -154,8 +153,12 @@ func stackstateServerValues(stackstateConfigs *observability.StackStateConfig, s
 	return interoperableCharts.MergeValues(ingressValues, baseValues, sizingValues), nil
 }
 
-// systemProjectID returns the ID of the cluster's System project with the
-// cluster prefix stripped, as required by the chart payload helpers.
+// systemProjectID returns the ID of the cluster's System project in the
+// cluster-prefixed form the chart actions require: the install action derives
+// the target namespace's field.cattle.io/projectId annotation from this value
+// (cluster:p-xxx). A bare p-xxx resolves to no project, the namespace's
+// project roles never populate, and the action's thirty-second wait for them
+// fails; builds 28 through 33 failed exactly there.
 func systemProjectID(client *rancher.Client, clusterID string) (string, error) {
 	systemProject, err := projects.GetProjectByName(client, clusterID, systemProjectName)
 	if err != nil {
@@ -165,7 +168,7 @@ func systemProjectID(client *rancher.Client, clusterID string) (string, error) {
 		return "", fmt.Errorf("system project not found on cluster %s", clusterID)
 	}
 
-	return strings.Split(systemProject.ID, ":")[1], nil
+	return systemProject.ID, nil
 }
 
 // waitForChartWorkloads waits until every deployment and daemonset in the
