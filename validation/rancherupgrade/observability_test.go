@@ -121,8 +121,9 @@ func (s *ObservabilityUpgradeTestSuite) TestObservabilityPreUpgrade() {
 	}, serverSystemProjectID, serverValues)
 	if err != nil {
 		// The install action answers bare internal errors whose cause only
-		// the Rancher server knows; capture its logs before failing.
-		logRancherPodTail(s.client, s.serverCluster.ID)
+		// the Rancher server knows; capture its logs, the namespace state and
+		// the helm operation's status before failing.
+		logInstallDiagnostics(s.client, serverCatalogClient, s.serverCluster.ID, interoperableCharts.StackStateServerNamespace, interoperableCharts.StackStateServerChartRepo)
 	}
 	require.NoError(s.T(), err)
 

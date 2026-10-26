@@ -220,12 +220,13 @@ func latestChartVersionAfterRepoCreate(catalogClient *catalog.Client, chartName,
 	return latestVersion, nil
 }
 
-// logRancherPodTail captures the tail of the Rancher server pod logs on the
-// local cluster. Chart action failures surface as bare internal errors with no
-// client-visible cause; the handler's failure reason lives in the server logs.
-// This is best-effort diagnostic evidence: capture failures are logged and
-// swallowed so they never mask the test's own failure.
-func logRancherPodTail(client *rancher.Client, clusterID string) {
+// logInstallDiagnostics captures evidence when a chart action fails. The
+// action may land on any Rancher server replica, so every replica's log tail
+// is captured; the target namespace's conditions (InitialRolesPopulated) and
+// the catalog Operation and App resources' statuses carry the helm
+// operation's actual error. This is best-effort diagnostic evidence: capture
+// failures are logged and swallowed so they never mask the test's own failure.
+func logInstallDiagnostics(client *rancher.Client, catalogClient *catalog.Client, clusterID, namespace, appName string) {
 	restConfig := &rest.Config{
 		Host:        "https://" + client.RancherConfig.Host + "/k8s/clusters/" + clusterID,
 		BearerToken: client.RancherConfig.AdminToken,
@@ -240,20 +241,39 @@ func logRancherPodTail(client *rancher.Client, clusterID string) {
 		log.Warnf("diagnostics: building the local cluster k8s client failed: %v", err)
 		return
 	}
+
 	pods, err := k8s.CoreV1().Pods(cattleSystemNamespace).List(context.TODO(), meta.ListOptions{LabelSelector: rancherPodLabel})
 	if err != nil {
 		log.Warnf("diagnostics: listing pods with label %s in %s failed: %v", rancherPodLabel, cattleSystemNamespace, err)
-		return
+	} else {
+		tailLines := int64(rancherLogTailLines)
+		for i := range pods.Items {
+			serverLogs, err := k8s.CoreV1().Pods(cattleSystemNamespace).GetLogs(pods.Items[i].Name, &corev1.PodLogOptions{TailLines: &tailLines}).DoRaw(context.TODO())
+			if err != nil {
+				log.Warnf("diagnostics: fetching rancher logs from pod %s failed: %v", pods.Items[i].Name, err)
+				continue
+			}
+			log.Infof("diagnostics: rancher server log tail from pod %s:\n%s", pods.Items[i].Name, string(serverLogs))
+		}
 	}
-	if len(pods.Items) == 0 {
-		log.Warnf("diagnostics: no pods with label %s found in %s", rancherPodLabel, cattleSystemNamespace)
-		return
+
+	if ns, err := k8s.CoreV1().Namespaces().Get(context.TODO(), namespace, meta.GetOptions{}); err != nil {
+		log.Warnf("diagnostics: fetching namespace %s failed: %v", namespace, err)
+	} else {
+		log.Infof("diagnostics: namespace %s annotations=%v conditions=%v", namespace, ns.Annotations, ns.Status.Conditions)
 	}
-	tailLines := int64(rancherLogTailLines)
-	serverLogs, err := k8s.CoreV1().Pods(cattleSystemNamespace).GetLogs(pods.Items[0].Name, &corev1.PodLogOptions{TailLines: &tailLines}).DoRaw(context.TODO())
-	if err != nil {
-		log.Warnf("diagnostics: fetching rancher logs from pod %s failed: %v", pods.Items[0].Name, err)
-		return
+
+	if ops, err := catalogClient.Operations(namespace).List(context.TODO(), meta.ListOptions{}); err != nil {
+		log.Warnf("diagnostics: listing catalog operations in %s failed: %v", namespace, err)
+	} else {
+		for i := range ops.Items {
+			log.Infof("diagnostics: operation %s status=%+v", ops.Items[i].Name, ops.Items[i].Status)
+		}
 	}
-	log.Infof("diagnostics: rancher server log tail from pod %s:\n%s", pods.Items[0].Name, string(serverLogs))
+
+	if app, err := catalogClient.Apps(namespace).Get(context.TODO(), appName, meta.GetOptions{}); err != nil {
+		log.Warnf("diagnostics: fetching app %s in %s failed: %v", appName, namespace, err)
+	} else {
+		log.Infof("diagnostics: app %s status=%+v", appName, app.Status)
+	}
 }
