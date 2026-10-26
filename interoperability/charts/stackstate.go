@@ -40,8 +40,11 @@ const (
 	// stackstateHelmActionTimeout is the helm timeout carried by the chart
 	// actions. The default ten minutes does not cover a cold cluster pulling
 	// the full SUSE Observability image set: build 35's install hit the helm
-	// deadline with workloads still pulling, and the app failed.
-	stackstateHelmActionTimeout = 30 * time.Minute
+	// deadline with workloads still pulling, and the app failed. Forty-five
+	// minutes covers cold pulls with room to spare while keeping a
+	// deadline-exceeded failure, which dumps its diagnostics, inside the
+	// pipeline's per-phase test timeout.
+	stackstateHelmActionTimeout = 45 * time.Minute
 	// chartTemplatePollInterval and chartTemplatePollTimeout bound the wait
 	// for a fresh ClusterRepo's chart template to be fetched and cached
 	// server-side; the template requires downloading the chart tarball, which
