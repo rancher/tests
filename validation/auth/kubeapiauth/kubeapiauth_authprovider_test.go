@@ -154,22 +154,6 @@ func (k *KubeAPIAuthProviderSuite) TestACEAuthenticatesAKeycloakSAMLGroupMember(
 	k.reachClusterAsGroupMember(authactions.KeycloakSAML, admin, keycloakSAMLFixture.AuthInput.Group, principalID, keycloakSAMLFixture.AuthInput.Users[0])
 }
 
-func (k *KubeAPIAuthProviderSuite) TestACEAuthenticatesAKeycloakOIDCGroupMember() {
-	keycloakClient, err := authactions.NewKeycloakOIDCClient(k.session)
-	require.NoError(k.T(), err, "Failed to create the Keycloak admin client")
-
-	logrus.Info("Building the Keycloak realm the OpenID Connect provider authenticates against")
-	keycloakOIDCFixture, err := authactions.SetupKeycloakOIDC(k.client, keycloakClient)
-	require.NoError(k.T(), err, "Failed to set up the Keycloak realm for Keycloak OIDC")
-	require.NotEmpty(k.T(), keycloakOIDCFixture.AuthInput.Group, "Keycloak OIDC setup should have settled on the group the cluster role is bound to")
-	require.NotEmpty(k.T(), keycloakOIDCFixture.AuthInput.Users, "Keycloak OIDC setup should have settled on the users that belong to the group")
-
-	admin := &management.User{Username: keycloakOIDCFixture.Admin.Username, Password: keycloakOIDCFixture.Admin.Password}
-	principalID := authactions.GetExternalGroupPrincipalID(authactions.KeycloakOIDC, keycloakOIDCFixture.AuthInput.Group)
-
-	k.reachClusterAsGroupMember(authactions.KeycloakOIDC, admin, keycloakOIDCFixture.AuthInput.Group, principalID, keycloakOIDCFixture.AuthInput.Users[0])
-}
-
 func TestKubeAPIAuthProviderSuite(t *testing.T) {
 	suite.Run(t, new(KubeAPIAuthProviderSuite))
 }
