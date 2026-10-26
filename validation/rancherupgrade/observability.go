@@ -466,10 +466,11 @@ func applyManifest(restConfig *rest.Config, manifest []byte) error {
 }
 
 // logNamespaceWorkloadState dumps the readiness of every workload object in
-// the chart namespace: pods with their container waiting reasons and restart
-// counts, jobs, PVCs, deployments and statefulsets. helm --wait failing with
-// "context deadline exceeded" names no culprit; this does. Best-effort like
-// logInstallDiagnostics: capture failures are logged and swallowed.
+// the chart namespace: pods with their container waiting reasons, restart
+// counts, last termination (exit code, reason) and previous-container log
+// tails, plus jobs, PVCs, deployments and statefulsets. helm --wait failing
+// with "context deadline exceeded" names no culprit; this does. Best-effort
+// like logInstallDiagnostics: capture failures are logged and swallowed.
 func logNamespaceWorkloadState(k8s *kubernetes.Clientset, namespace string) {
 	if pods, err := k8s.CoreV1().Pods(namespace).List(context.TODO(), meta.ListOptions{}); err != nil {
 		log.Warnf("diagnostics: listing pods in %s failed: %v", namespace, err)
@@ -477,12 +478,28 @@ func logNamespaceWorkloadState(k8s *kubernetes.Clientset, namespace string) {
 		for i := range pods.Items {
 			pod := pods.Items[i]
 			waitStates := make([]string, 0, len(pod.Status.ContainerStatuses))
+			crashed := make([]string, 0, len(pod.Status.ContainerStatuses))
 			for _, cs := range pod.Status.ContainerStatuses {
 				if cs.State.Waiting != nil {
 					waitStates = append(waitStates, fmt.Sprintf("%s:%s(%s)", cs.Name, cs.State.Waiting.Reason, cs.State.Waiting.Message))
 				}
+				if cs.RestartCount > 0 {
+					crashed = append(crashed, cs.Name)
+					if t := cs.LastTerminationState.Terminated; t != nil {
+						log.Infof("diagnostics: pod %s container %s last terminated: exitCode=%d reason=%s finished=%s", pod.Name, cs.Name, t.ExitCode, t.Reason, t.FinishedAt.String())
+					}
+					// The previous instance's log tail names the crash cause
+					// (OOM stack trace, failed dependency, bad config).
+					tail := int64(40)
+					previousLogs, logErr := k8s.CoreV1().Pods(namespace).GetLogs(pod.Name, &corev1.PodLogOptions{Container: cs.Name, Previous: true, TailLines: &tail}).DoRaw(context.TODO())
+					if logErr != nil {
+						log.Warnf("diagnostics: fetching previous logs of %s/%s failed: %v", pod.Name, cs.Name, logErr)
+					} else {
+						log.Infof("diagnostics: pod %s container %s previous log tail:\n%s", pod.Name, cs.Name, string(previousLogs))
+					}
+				}
 			}
-			log.Infof("diagnostics: pod %s phase=%s restarts=%v waiting=%v", pod.Name, pod.Status.Phase, containerRestarts(pod.Status.ContainerStatuses), waitStates)
+			log.Infof("diagnostics: pod %s phase=%s restarts=%v waiting=%v crashedContainers=%v", pod.Name, pod.Status.Phase, containerRestarts(pod.Status.ContainerStatuses), waitStates, crashed)
 		}
 	}
 
