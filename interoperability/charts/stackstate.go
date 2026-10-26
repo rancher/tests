@@ -157,6 +157,9 @@ func InstallStackStateServerChart(client *rancher.Client, installOptions *charts
 		app := event.Object.(*catalogv1.App)
 
 		state := app.Status.Summary.State
+		if state == string(catalogv1.StatusFailed) {
+			return false, fmt.Errorf("app %s entered failed state", app.Name)
+		}
 		if state == string(catalogv1.StatusDeployed) {
 			return true, nil
 		}
@@ -289,6 +292,9 @@ func InstallStackstateAgentChart(client *rancher.Client, installOptions *charts.
 		app := event.Object.(*catalogv1.App)
 
 		state := app.Status.Summary.State
+		if state == string(catalogv1.StatusFailed) {
+			return false, fmt.Errorf("app %s entered failed state", app.Name)
+		}
 		if state == string(catalogv1.StatusDeployed) {
 			return true, nil
 		}
@@ -383,6 +389,9 @@ func UpgradeStackstateAgentChart(client *rancher.Client, installOptions *charts.
 		app := event.Object.(*catalogv1.App)
 
 		state := app.Status.Summary.State
+		if state == string(catalogv1.StatusFailed) {
+			return false, fmt.Errorf("app %s entered failed state", app.Name)
+		}
 		if state == string(catalogv1.StatusPendingUpgrade) {
 			return true, nil
 		}
@@ -404,6 +413,9 @@ func UpgradeStackstateAgentChart(client *rancher.Client, installOptions *charts.
 		app := event.Object.(*catalogv1.App)
 
 		state := app.Status.Summary.State
+		if state == string(catalogv1.StatusFailed) {
+			return false, fmt.Errorf("app %s entered failed state", app.Name)
+		}
 		if state == string(catalogv1.StatusDeployed) {
 			return true, nil
 		}
@@ -434,6 +446,33 @@ func newStackstateAgentChartUpgradeAction(p *charts.PayloadOpts, stackstateConfi
 	chartUpgradeAction.Timeout = &metav1.Duration{Duration: stackstateHelmActionTimeout}
 
 	return chartUpgradeAction
+}
+
+// UninstallStackStateApp removes the app and its helm release from the
+// cluster. A partial install leaves the release name taken and helm refuses
+// every later install with "cannot re-use a name that is still in use", so
+// re-entrant suites uninstall a stale app before installing again. Waits
+// until the app object is gone.
+func UninstallStackStateApp(client *rancher.Client, clusterID, namespace, appName string) error {
+	uninstallAction := &types.ChartUninstallAction{
+		Timeout: &metav1.Duration{Duration: stackstateHelmActionTimeout},
+	}
+
+	catalogClient, err := client.GetClusterCatalogClient(clusterID)
+	if err != nil {
+		return err
+	}
+
+	if err := retryChartAction(fmt.Sprintf("%s chart uninstall", appName), func() error {
+		return catalogClient.UninstallChart(appName, namespace, uninstallAction)
+	}); err != nil {
+		return err
+	}
+
+	return kwait.PollUntilContextTimeout(context.TODO(), chartTemplatePollInterval, chartTemplatePollTimeout, true, func(context.Context) (bool, error) {
+		_, err := catalogClient.Apps(namespace).Get(context.TODO(), appName, metav1.GetOptions{})
+		return k8sErrors.IsNotFound(err), nil
+	})
 }
 
 // UpgradeStackStateServerChart upgrades the suse-observability server chart on the cluster
@@ -495,6 +534,9 @@ func UpgradeStackStateServerChart(client *rancher.Client, installOptions *charts
 		app := event.Object.(*catalogv1.App)
 
 		state := app.Status.Summary.State
+		if state == string(catalogv1.StatusFailed) {
+			return false, fmt.Errorf("app %s entered failed state", app.Name)
+		}
 		if state == string(catalogv1.StatusPendingUpgrade) {
 			return true, nil
 		}
@@ -516,6 +558,9 @@ func UpgradeStackStateServerChart(client *rancher.Client, installOptions *charts
 		app := event.Object.(*catalogv1.App)
 
 		state := app.Status.Summary.State
+		if state == string(catalogv1.StatusFailed) {
+			return false, fmt.Errorf("app %s entered failed state", app.Name)
+		}
 		if state == string(catalogv1.StatusDeployed) {
 			return true, nil
 		}

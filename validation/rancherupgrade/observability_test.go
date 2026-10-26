@@ -6,6 +6,7 @@ import (
 	"context"
 	"testing"
 
+	catalogv1 "github.com/rancher/rancher/pkg/apis/catalog.cattle.io/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -113,19 +114,35 @@ func (s *ObservabilityUpgradeTestSuite) TestObservabilityPreUpgrade() {
 	serverValues, err := stackstateServerValues(stackstateConfigs, sizingValues)
 	require.NoError(s.T(), err)
 
-	logrus.Infof("pre-upgrade phase: installing suse-observability server %s in the System project on the local cluster", latestServerVersion)
-	err = interoperableCharts.InstallStackStateServerChart(s.client, &charts.InstallOptions{
-		Cluster:   s.serverCluster,
-		Version:   latestServerVersion,
-		ProjectID: serverSystemProjectID,
-	}, serverSystemProjectID, serverValues)
-	if err != nil {
-		// The install action answers bare internal errors whose cause only
-		// the Rancher server knows; capture its logs, the namespace state and
-		// the helm operation's status before failing.
-		logInstallDiagnostics(s.client, serverCatalogClient, s.serverCluster.ID, interoperableCharts.StackStateServerNamespace, interoperableCharts.StackStateServerChartRepo)
+	// Re-entrant install: a partial install from an earlier attempt leaves the
+	// helm release name taken ("cannot re-use a name that is still in use").
+	// A deployed app already satisfies the phase; a stale partial one is
+	// uninstalled first.
+	serverInstalled := false
+	if existing, statusErr := extencharts.GetChartStatus(s.client, s.serverCluster.ID, interoperableCharts.StackStateServerNamespace, interoperableCharts.StackStateServerChartRepo); statusErr == nil && existing != nil && existing.ChartDetails != nil {
+		if existing.ChartDetails.Status.Summary.State == string(catalogv1.StatusDeployed) {
+			logrus.Infof("pre-upgrade phase: suse-observability server already deployed at %s; skipping install", existing.ChartDetails.Spec.Chart.Metadata.Version)
+			serverInstalled = true
+		} else {
+			logrus.Infof("pre-upgrade phase: stale suse-observability app in state %s; uninstalling before install", existing.ChartDetails.Status.Summary.State)
+			require.NoError(s.T(), interoperableCharts.UninstallStackStateApp(s.client, s.serverCluster.ID, interoperableCharts.StackStateServerNamespace, interoperableCharts.StackStateServerChartRepo))
+		}
 	}
-	require.NoError(s.T(), err)
+	if !serverInstalled {
+		logrus.Infof("pre-upgrade phase: installing suse-observability server %s in the System project on the local cluster", latestServerVersion)
+		err = interoperableCharts.InstallStackStateServerChart(s.client, &charts.InstallOptions{
+			Cluster:   s.serverCluster,
+			Version:   latestServerVersion,
+			ProjectID: serverSystemProjectID,
+		}, serverSystemProjectID, serverValues)
+		if err != nil {
+			// The install action answers bare internal errors whose cause only
+			// the Rancher server knows; capture its logs, the namespace state and
+			// the helm operation's status before failing.
+			logInstallDiagnostics(s.client, serverCatalogClient, s.serverCluster.ID, interoperableCharts.StackStateServerNamespace, interoperableCharts.StackStateServerChartRepo)
+		}
+		require.NoError(s.T(), err)
+	}
 
 	err = waitForChartWorkloads(s.client, s.serverCluster.ID, interoperableCharts.StackStateServerNamespace)
 	require.NoError(s.T(), err)
