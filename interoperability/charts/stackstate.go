@@ -369,6 +369,15 @@ func UpgradeStackstateAgentChart(client *rancher.Client, installOptions *charts.
 		return err
 	}
 
+	// Gate on pending-upgrade before waiting for the new deployed state: the
+	// app starts this flow already deployed, so the deployed watch alone
+	// returns immediately on the old state (build 45). Pending-upgrade spans
+	// the whole helm operation, so a re-established watch cannot miss it.
+	err = watchAppUntilState(adminCatalogClient, StackstateNamespace, StackstateK8sAgent, string(catalogv1.StatusPendingUpgrade))
+	if err != nil {
+		return err
+	}
+
 	err = watchAppUntilState(adminCatalogClient, StackstateNamespace, StackstateK8sAgent, string(catalogv1.StatusDeployed))
 	if err != nil {
 		return err
@@ -466,6 +475,15 @@ func UpgradeStackStateServerChart(client *rancher.Client, installOptions *charts
 	}
 
 	adminCatalogClient, err := adminClient.GetClusterCatalogClient(installOptions.Cluster.ID)
+	if err != nil {
+		return err
+	}
+
+	// Gate on pending-upgrade before waiting for the new deployed state: the
+	// app starts this flow already deployed, so the deployed watch alone
+	// returns immediately on the old state (build 45). Pending-upgrade spans
+	// the whole helm operation, so a re-established watch cannot miss it.
+	err = watchAppUntilState(adminCatalogClient, StackStateServerNamespace, StackStateServerChartRepo, string(catalogv1.StatusPendingUpgrade))
 	if err != nil {
 		return err
 	}
