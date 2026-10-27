@@ -28,24 +28,6 @@ type LonghornUpgradeTestSuite struct {
 	cluster *clusters.ClusterMeta
 }
 
-const (
-	// checksumWorkloadName is the deterministic name shared by the PVC and the nginx
-	// deployment created in the pre-upgrade phase and relocated by later phases.
-	checksumWorkloadName = "rancher-upgrade-longhorn"
-
-	// checksumContent is the shell-safe data written to the checksum file on the
-	// Longhorn-backed volume before the Rancher upgrade and verified after it.
-	checksumContent = "rancher-upgrade-longhorn-checksum-v1"
-)
-
-// loadUpgradeInput returns the rancherUpgradeInput section of the test config.
-func loadUpgradeInput() *UpgradeInput {
-	upgradeInput := new(UpgradeInput)
-	config.LoadConfig(UpgradeInputConfigKey, upgradeInput)
-
-	return upgradeInput
-}
-
 func (s *LonghornUpgradeTestSuite) SetupSuite() {
 	cfg := loadUpgradeInput()
 	pipeline := new(PipelineInput)

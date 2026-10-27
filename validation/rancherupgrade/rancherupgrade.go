@@ -5,6 +5,8 @@
 // deterministic names defined here.
 package rancherupgrade
 
+import "github.com/rancher/shepherd/pkg/config"
+
 const (
 	// UpgradeInputConfigKey is the cattle-config key holding upgrade-phase inputs.
 	UpgradeInputConfigKey = "rancherUpgradeInput"
@@ -12,6 +14,16 @@ const (
 	// PipelineConfigKey marks a config as authored by the rancher-upgrade
 	// pipeline; generic PIT legs never set it.
 	PipelineConfigKey = "rancherUpgradePipeline"
+)
+
+const (
+	// checksumWorkloadName is the deterministic name shared by the PVC and the nginx
+	// deployment created in the pre-upgrade phase and relocated by later phases.
+	checksumWorkloadName = "rancher-upgrade-longhorn"
+
+	// checksumContent is the shell-safe data written to the checksum file on the
+	// Longhorn-backed volume before the Rancher upgrade and verified after it.
+	checksumContent = "rancher-upgrade-longhorn-checksum-v1"
 )
 
 // UpgradeInput holds per-run upgrade parameters. TargetVersion is the Rancher
@@ -26,4 +38,12 @@ type UpgradeInput struct {
 // the upgrade target is missing (pipeline bug, not a generic PIT leg).
 type PipelineInput struct {
 	Enabled bool `json:"enabled" yaml:"enabled"`
+}
+
+// loadUpgradeInput returns the rancherUpgradeInput section of the test config.
+func loadUpgradeInput() *UpgradeInput {
+	upgradeInput := new(UpgradeInput)
+	config.LoadConfig(UpgradeInputConfigKey, upgradeInput)
+
+	return upgradeInput
 }
