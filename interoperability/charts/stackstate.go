@@ -322,7 +322,7 @@ func newStackstateAgentChartInstallAction(p *charts.PayloadOpts, stackstateConfi
 		},
 	}
 
-	chartInstall := charts.NewChartInstall(p.Name, p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, rancherPartnerCharts, systemProjectID, p.DefaultRegistry, stackstateValues)
+	chartInstall := charts.NewChartInstall(p.Name, p.Version, p.Cluster.ID, p.Cluster.Name, p.Host, StackStateServerChartRepo, systemProjectID, p.DefaultRegistry, stackstateValues)
 
 	chartInstalls := []types.ChartInstall{*chartInstall}
 	chartInstallAction := charts.NewChartInstallAction(p.Namespace, p.ProjectID, chartInstalls)
@@ -363,7 +363,7 @@ func UpgradeStackstateAgentChart(client *rancher.Client, installOptions *charts.
 	}
 
 	err = retryChartAction("stackstate-k8s-agent chart upgrade", func() error {
-		return catalogClient.UpgradeChart(chartUpgradeAction, RancherPartnerChartRepo)
+		return catalogClient.UpgradeChart(chartUpgradeAction, StackStateServerChartRepo)
 	})
 	if err != nil {
 		return err

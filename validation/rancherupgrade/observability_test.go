@@ -159,7 +159,7 @@ func (s *ObservabilityUpgradeTestSuite) TestObservabilityPreUpgrade() {
 	agentCatalogClient, err := s.client.GetClusterCatalogClient(s.agentCluster.ID)
 	require.NoError(s.T(), err)
 
-	latestAgentVersion, err := agentCatalogClient.GetLatestChartVersion(interoperableCharts.StackstateK8sAgent, interoperableCharts.RancherPartnerChartRepo)
+	latestAgentVersion, err := agentCatalogClient.GetLatestChartVersion(interoperableCharts.StackstateK8sAgent, interoperableCharts.StackStateServerChartRepo)
 	require.NoError(s.T(), err)
 
 	// As above on the agent side: the install action owns namespace creation.
@@ -243,7 +243,7 @@ func (s *ObservabilityUpgradeTestSuite) TestObservabilityChartUpgrade() {
 
 	agentCatalogClient, err := s.client.GetClusterCatalogClient(s.agentCluster.ID)
 	require.NoError(s.T(), err)
-	latestAgentVersion, err := agentCatalogClient.GetLatestChartVersion(interoperableCharts.StackstateK8sAgent, interoperableCharts.RancherPartnerChartRepo)
+	latestAgentVersion, err := agentCatalogClient.GetLatestChartVersion(interoperableCharts.StackstateK8sAgent, interoperableCharts.StackStateServerChartRepo)
 	require.NoError(s.T(), err)
 
 	// Pre-warm the newly offered versions' templates: a version's first
@@ -251,7 +251,7 @@ func (s *ObservabilityUpgradeTestSuite) TestObservabilityChartUpgrade() {
 	// action issued before the template is cached can outlive the request
 	// deadline.
 	require.NoError(s.T(), interoperableCharts.WaitForChartTemplate(serverCatalogClient, interoperableCharts.StackStateServerChartRepo, interoperableCharts.StackStateServerChartRepo, latestServerVersion))
-	require.NoError(s.T(), interoperableCharts.WaitForChartTemplate(agentCatalogClient, interoperableCharts.RancherPartnerChartRepo, interoperableCharts.StackstateK8sAgent, latestAgentVersion))
+	require.NoError(s.T(), interoperableCharts.WaitForChartTemplate(agentCatalogClient, interoperableCharts.StackStateServerChartRepo, interoperableCharts.StackstateK8sAgent, latestAgentVersion))
 
 	installedServer, err := extencharts.GetChartStatus(s.client, s.serverCluster.ID, interoperableCharts.StackStateServerNamespace, interoperableCharts.StackStateServerChartRepo)
 	require.NoError(s.T(), err)
