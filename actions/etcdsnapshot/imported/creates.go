@@ -11,6 +11,7 @@ import (
 	rancherv1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/tests/actions/etcdsnapshot"
+	"github.com/rancher/tests/actions/storage/s3"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
@@ -71,7 +72,7 @@ func CreateImportedETCDSnapshot(client *rancher.Client, clusterName string) (str
 	}
 
 	var createdSnapshotIDs []string
-	var createdSnapshotNames []string
+	var selectedSnapshotName string
 	err = kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, defaults.FifteenMinuteTimeout, true, func(ctx context.Context) (bool, error) {
 		snapshots, err := snapshotClient.List(snapshotQuery)
 		if err != nil {
@@ -79,7 +80,6 @@ func CreateImportedETCDSnapshot(client *rancher.Client, clusterName string) (str
 		}
 
 		createdSnapshotIDs = createdSnapshotIDs[:0]
-		createdSnapshotNames = createdSnapshotNames[:0]
 		for _, snapshot := range snapshots.Data {
 			if snapshot.Labels[etcdsnapshot.SnapshotClusterNameLabel] != clusterName {
 				continue
@@ -91,7 +91,9 @@ func CreateImportedETCDSnapshot(client *rancher.Client, clusterName string) (str
 
 			if _, exists := existingSnapshotIDs[snapshot.ID]; !exists {
 				createdSnapshotIDs = append(createdSnapshotIDs, snapshot.ID)
-				createdSnapshotNames = append(createdSnapshotNames, snapshot.Name)
+				if selectedSnapshotName == "" || s3.CheckS3SnapshotLocation(snapshot) {
+					selectedSnapshotName = snapshot.Name
+				}
 			}
 		}
 
@@ -105,7 +107,7 @@ func CreateImportedETCDSnapshot(client *rancher.Client, clusterName string) (str
 		return "", err
 	}
 
-	return createdSnapshotNames[0], nil
+	return selectedSnapshotName, nil
 }
 
 // RestoreImportedETCDSnapshot restores the named snapshot on an imported cluster with an optional restore mode.

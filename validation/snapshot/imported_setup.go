@@ -1,20 +1,24 @@
 package snapshot
 
 import (
+	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/gruntwork-io/terratest/modules/terraform"
 	"github.com/rancher/shepherd/clients/rancher"
 	v1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
+	"github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/etcdsnapshot"
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
+	"github.com/rancher/tests/actions/storage/s3"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
@@ -37,9 +41,13 @@ type importedSnapshotTest struct {
 	Cluster            *v1.SteveAPIObject
 	NestedModuleDir    string
 	TerraformOptions   *terraform.Options
+	S3BucketName       string
+	S3Region           string
+	AWSAccessKey       string
+	AWSSecretKey       string
 }
 
-func ImportedSetup(t *testing.T, clusterType string) *importedSnapshotTest {
+func ImportedSetup(t *testing.T, clusterType string, s3Enabled bool) *importedSnapshotTest {
 	s := &importedSnapshotTest{}
 
 	testSession := session.NewSession()
@@ -76,10 +84,23 @@ func ImportedSetup(t *testing.T, clusterType string) *importedSnapshotTest {
 
 	s.SnapshotConfig = snapshotConfig
 
+	rancherConfig, terraformConfig, terratestConfig, _ := tfpConfig.LoadTFPConfigs(s.CattleConfig)
+
+	if s3Enabled {
+		terraformConfig.Standalone.S3Enabled = true
+		terraformConfig.AWSConfig.EtcdSnapshotBucket = fmt.Sprintf("snapshot-restore-s3-%d-%s", time.Now().Unix(), namegenerator.RandStringLower(5))
+
+		s.S3BucketName = terraformConfig.AWSConfig.EtcdSnapshotBucket
+		s.S3Region = terraformConfig.AWSConfig.Region
+		s.AWSAccessKey = terraformConfig.AWSCredentials.AWSAccessKey
+		s.AWSSecretKey = terraformConfig.AWSCredentials.AWSSecretKey
+
+		err = s3.CreateS3Bucket(s.S3BucketName, s.S3Region, s.AWSAccessKey, s.AWSSecretKey)
+		require.NoError(t, err)
+	}
+
 	if rancherConfig.ClusterName == "" {
 		nodeRolesStandard := []tfpConfig.Nodepool{{Quantity: 3, Etcd: true}, {Quantity: 2, Controlplane: true}, {Quantity: 3, Worker: true}}
-
-		rancherConfig, terraformConfig, terratestConfig, _ := tfpConfig.LoadTFPConfigs(s.CattleConfig)
 		terratestConfig.Nodepools = nodeRolesStandard
 
 		logrus.Info("Provisioning imported cluster")

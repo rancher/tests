@@ -80,7 +80,7 @@ The snapshot restore test validates that snapshots can be created and restored w
 1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestSnapshotRestoreUpgradeStrategy -timeout=1h -v`
 
 
-### Snapshot Restore Etcd Imported Test
+### Snapshot Restore Imported Tests
 
 #### Description:
 The snapshot restore test validates that snapshots can be created and restored without any failures or longterm disruption to workloads on imported clusters.
@@ -91,10 +91,12 @@ The snapshot restore test validates that snapshots can be created and restored w
 #### Table Tests:
 1. `RKE2_Imported_Restore_ETCD`
 2. `RKE2_Imported_Restore_ETCD_K8sVersion`
+3. `RKE2_Imported_S3_Restore`
 
 #### Run Commands:
 1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestSnapshotRestoreEtcdImported -timeout=1h -v`
 2. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestSnapshotRestoreK8sUpgradeImported -timeout=1h -v`
+3. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestS3SnapshotRestoreImported -timeout=1h -v`
 
 
 ### Snapshot Retention Test

@@ -21,7 +21,7 @@ import (
 func TestSnapshotRestoreEtcdImported(t *testing.T) {
 	t.Parallel()
 
-	s := snapshot.ImportedSetup(t, defaults.K3S)
+	s := snapshot.ImportedSetup(t, defaults.K3S, false)
 
 	snapshotRestore := &etcdsnapshot.Config{
 		RestoreMode: "none",

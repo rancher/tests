@@ -160,6 +160,7 @@ jobs:
             HB_SLACK_WEBHOOK_URL, HB_SLACK_WEBHOOK_URL
             HB_AWS_ROUTE_53_ZONE, HB_AWS_ROUTE_53_ZONE
             HB_TFP_SSH_PRIVATE_KEY_PATH, HB_TFP_SSH_PRIVATE_KEY_PATH
+            HB_S3_ENDPOINT, HB_S3_ENDPOINT
 
       - name: Fetch and Set DockerHub Credentials
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 #v3
@@ -265,6 +266,7 @@ jobs:
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
             awsConfig:
               awsSubnetID: "<HB_AWS_IPV4_ONLY_SUBNET_ID>"
+              etcdSnapshotEndpoint: "<HB_S3_ENDPOINT>"
 
             standalone:
               chartVersion: "${{ env.RANCHER_CHART_VERSION }}"

@@ -171,7 +171,7 @@ func VerifyClusterReadyV3(client *rancher.Client, clusterID string) error {
 		return err
 	}
 
-	err = allNodesReadyV3(client, clusterID, defaults.FiveMinuteTimeout)
+	err = allNodesReadyV3(client, clusterID, defaults.TenMinuteTimeout)
 	if err != nil {
 		logrus.Errorf("Cluster (%s) nodes failed readiness: %v", clusterID, err)
 		dumpClusterStateV3(ctx, client, clusterID, lastErr)

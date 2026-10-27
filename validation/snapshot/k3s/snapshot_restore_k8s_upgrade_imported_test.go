@@ -24,7 +24,7 @@ func TestSnapshotRestoreK8sUpgradeImported(t *testing.T) {
 	t.Skip("Skipped due to https://github.com/rancher/rancher/issues/56077")
 	t.Parallel()
 
-	s := snapshot.ImportedSetup(t, defaults.K3S)
+	s := snapshot.ImportedSetup(t, defaults.K3S, false)
 
 	snapshotRestore := &etcdsnapshot.Config{
 		RestoreMode: "kubernetesVersion",
