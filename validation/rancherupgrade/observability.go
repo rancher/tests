@@ -107,6 +107,36 @@ const (
 	fieldManager = "rancher-tests-rancherupgrade"
 )
 
+// splitComponentMemoryLimits raises the memory of the chart 2.12.0 split
+// server components whose default limits cannot hold the JVM flags derived
+// from them (see stackstateServerValues). Whole Gi units only: the chart's
+// memory parser yields zero for decimal quantities like 2.5Gi, which renders
+// empty JVM flags.
+var splitComponentMemoryLimits = map[string]string{
+	"api":               "3Gi",
+	"authorizationSync": "2Gi",
+	"checks":            "5Gi",
+	"healthSync":        "4Gi",
+	"notification":      "2Gi",
+	"slicing":           "3Gi",
+	"state":             "3Gi",
+	"sync":              "5Gi",
+}
+
+// resourceQuantities are the resource quantity kinds carrying the memory
+// override on each split component.
+var resourceQuantities = []string{"limits", "requests"}
+
+// splitComponentBaseMemory is the sizing.baseMemoryConsumption pinned on
+// each overridden split component; the chart's JVM flag formula subtracts
+// it from the memory limit, guaranteeing headroom inside the limit.
+const splitComponentBaseMemory = "768Mi"
+
+// splitComponentHeapFraction is the sizing.javaHeapMemoryFraction pinned on
+// each overridden split component; the chart sizes the heap as this fraction
+// of (limit - base consumption) and gives the remainder to direct memory.
+const splitComponentHeapFraction = "45"
+
 // loadStackStateConfig returns the stackstateConfigs section of the test config.
 func loadStackStateConfig() *observability.StackStateConfig {
 	stackstateConfigs := new(observability.StackStateConfig)
@@ -193,6 +223,54 @@ func stackstateServerValues(stackstateConfigs *observability.StackStateConfig, s
 	// so prune it from the merged values.
 	if stackstateValues, ok := mergedValues["stackstate"].(map[string]interface{}); ok {
 		delete(stackstateValues, "experimental")
+
+		// Chart 2.12.0's default per-component memory limits sit within a few
+		// percent of the JVM flags it derives from them (authorizationSync:
+		// heap 732m + direct 315m against a 1Gi limit), so the split server
+		// components OOM and crash-loop through every install; build 38's
+		// diagnostics caught the whole family in CrashLoopBackOff. Raise each
+		// crashing component's limit (camelCase keys, matching the chart) to
+		// heap + direct memory + ~800Mi of JVM overhead headroom.
+		components, ok := stackstateValues["components"].(map[string]interface{})
+		if !ok {
+			components = make(map[string]interface{})
+			stackstateValues["components"] = components
+		}
+		for component, limit := range splitComponentMemoryLimits {
+			entry, ok := components[component].(map[string]interface{})
+			if !ok {
+				entry = make(map[string]interface{})
+				components[component] = entry
+			}
+			resources, ok := entry["resources"].(map[string]interface{})
+			if !ok {
+				resources = make(map[string]interface{})
+				entry["resources"] = resources
+			}
+			for _, kind := range resourceQuantities {
+				quantities, ok := resources[kind].(map[string]interface{})
+				if !ok {
+					quantities = make(map[string]interface{})
+					resources[kind] = quantities
+				}
+				quantities["memory"] = limit
+			}
+
+			// The chart computes each component's JVM flags as
+			// heap + direct = limit - sizing.baseMemoryConsumption; pinning
+			// the base consumption keeps the flags well inside the raised
+			// limits instead of letting the profile rescale them right up
+			// to the edge again. The heap fraction is pinned because only
+			// some components carry a default; without it the chart renders
+			// empty JVM flags and the JVM falls back to its own defaults.
+			sizing, ok := entry["sizing"].(map[string]interface{})
+			if !ok {
+				sizing = make(map[string]interface{})
+				entry["sizing"] = sizing
+			}
+			sizing["baseMemoryConsumption"] = splitComponentBaseMemory
+			sizing["javaHeapMemoryFraction"] = splitComponentHeapFraction
+		}
 	}
 
 	return mergedValues, nil
