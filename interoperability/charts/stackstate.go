@@ -283,7 +283,7 @@ func InstallStackstateAgentChart(client *rancher.Client, installOptions *charts.
 		})
 	})
 
-	err = retryChartAction("stackstate-k8s-agent chart install", func() error {
+	err = retryChartAction("suse-observability-agent chart install", func() error {
 		return catalogClient.InstallChart(chartInstallAction, StackStateServerChartRepo)
 	})
 	if err != nil {
@@ -351,7 +351,7 @@ func UpgradeStackstateAgentChart(client *rancher.Client, installOptions *charts.
 		return err
 	}
 
-	err = retryChartAction("stackstate-k8s-agent chart upgrade", func() error {
+	err = retryChartAction("suse-observability-agent chart upgrade", func() error {
 		return catalogClient.UpgradeChart(chartUpgradeAction, StackStateServerChartRepo)
 	})
 	if err != nil {
