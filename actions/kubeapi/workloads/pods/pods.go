@@ -2,6 +2,7 @@ package pods
 
 import (
 	"errors"
+	"fmt"
 	"regexp"
 	"strings"
 	"time"
@@ -187,6 +188,37 @@ func GetPodsByLabelSelector(client *rancher.Client, clusterID, namespace, labelS
 	return podList.Items, nil
 }
 
+// GetPodLogsFromDeployment returns the current logs for every pod selected by a deployment.
+func GetPodLogsFromDeployment(client *rancher.Client, clusterID, namespace, deploymentName string) (map[string]string, error) {
+	deployment, err := extdeploymentsapi.GetDeploymentByName(client, clusterID, namespace, deploymentName)
+	if err != nil {
+		return nil, err
+	}
+	if deployment.Spec.Selector == nil || len(deployment.Spec.Selector.MatchLabels) == 0 {
+		return nil, fmt.Errorf("deployment %s/%s has no pod selector labels", namespace, deploymentName)
+	}
+
+	labelSelector := metav1.FormatLabelSelector(deployment.Spec.Selector)
+	podList, err := GetPodsByLabelSelector(client, clusterID, namespace, labelSelector)
+	if err != nil {
+		return nil, err
+	}
+	if len(podList) == 0 {
+		return nil, fmt.Errorf("no pods found for deployment %s/%s", namespace, deploymentName)
+	}
+
+	logsByPod := make(map[string]string, len(podList))
+	for _, pod := range podList {
+		logs, err := kubeconfig.GetPodLogs(client, clusterID, pod.Name, namespace, "")
+		if err != nil {
+			return nil, err
+		}
+		logsByPod[pod.Name] = logs
+	}
+
+	return logsByPod, nil
+}
+
 // GetPodNamesFromDeployment returns the names of the pods created by a deployment
 func GetPodNamesFromDeployment(client *rancher.Client, clusterID, namespaceName, deploymentName string) ([]string, error) {
 	deployment, err := extdeploymentsapi.GetDeploymentByName(client, clusterID, namespaceName, deploymentName)
@@ -208,4 +240,42 @@ func GetPodNamesFromDeployment(client *rancher.Client, clusterID, namespaceName,
 	}
 
 	return podNames, nil
+}
+
+// VerifyNoForbiddenLogSubstringsSinceBaseline checks new deployment pod logs for forbidden substrings.
+func VerifyNoForbiddenLogSubstringsSinceBaseline(client *rancher.Client, clusterID, namespace, deploymentName string, baseline map[string]string, forbiddenText ...string) error {
+	currentLogs, err := GetPodLogsFromDeployment(client, clusterID, namespace, deploymentName)
+	if err != nil {
+		return err
+	}
+
+	for podName, logs := range currentLogs {
+		newLogs := logsAfterBaseline(baseline[podName], logs)
+		for _, forbidden := range forbiddenText {
+			if strings.Contains(newLogs, forbidden) {
+				return fmt.Errorf("pod %s/%s logs contain %q after baseline", namespace, podName, forbidden)
+			}
+		}
+	}
+
+	return nil
+}
+
+func logsAfterBaseline(baseline, current string) string {
+	if baseline == "" {
+		return current
+	}
+	if strings.HasPrefix(current, baseline) {
+		return strings.TrimPrefix(current, baseline)
+	}
+
+	trimmedBaseline := strings.TrimRight(baseline, "\n")
+	lastLine := trimmedBaseline[strings.LastIndex(trimmedBaseline, "\n")+1:]
+	if lastLine != "" {
+		if marker := strings.LastIndex(current, lastLine); marker >= 0 {
+			return current[marker+len(lastLine):]
+		}
+	}
+
+	return current
 }

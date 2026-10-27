@@ -6,15 +6,21 @@ import (
 	"fmt"
 	"testing"
 
+	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
 	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	extnamespaceapi "github.com/rancher/shepherd/extensions/kubeapi/namespaces"
 	extprojectapi "github.com/rancher/shepherd/extensions/kubeapi/projects"
+	extrbacapi "github.com/rancher/shepherd/extensions/kubeapi/rbac"
+	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
+	"github.com/rancher/tests/actions/charts"
 	namespaceapi "github.com/rancher/tests/actions/kubeapi/namespaces"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
+	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
+	userapi "github.com/rancher/tests/actions/kubeapi/users"
 	deploymentapi "github.com/rancher/tests/actions/kubeapi/workloads/deployments"
 	podapi "github.com/rancher/tests/actions/kubeapi/workloads/pods"
 	"github.com/rancher/tests/actions/rbac"
@@ -242,6 +248,53 @@ func (pr *ProjectsTestSuite) TestProjectWithResourceQuotaAndContainerDefaultReso
 	log.Info("Verify that the resource limits and requests for the container in the pod spec is accurate.")
 	err = podapi.VerifyPodContainerResources(standardUserClient, pr.cluster.ID, createdNamespace.Name, createdDeployment.Name, cpuLimit, cpuReservation, memoryLimit, memoryReservation)
 	require.NoError(pr.T(), err)
+}
+
+func (pr *ProjectsTestSuite) TestDeleteProjectWithOrphanedPrtb() {
+	subSession := pr.session.NewSession()
+	defer subSession.Cleanup()
+
+	baselineLogs, err := podapi.GetPodLogsFromDeployment(pr.client, extclusterapi.LocalCluster, charts.RancherWebhookNamespace, charts.RancherWebhookName)
+	require.NoError(pr.T(), err)
+
+	project, _, err := projectapi.CreateProjectAndNamespace(pr.client, pr.cluster.ID)
+	require.NoError(pr.T(), err)
+
+	user, _, err := userapi.CreateUserWithRolesAndClient(pr.client, rbac.StandardUser.String())
+	require.NoError(pr.T(), err)
+
+	roleTemplate, err := extrbacapi.CreateRoleTemplate(pr.client, &v3.RoleTemplate{
+		ObjectMeta: metav1.ObjectMeta{Name: namegen.AppendRandomString("orphan-rt")},
+		Context:    rbacapi.ProjectContext,
+		Rules:      rbacapi.PolicyRules["readConfigMaps"],
+	})
+	require.NoError(pr.T(), err)
+
+	prtb, err := rbacapi.CreateProjectRoleTemplateBinding(pr.client, user.Name, project, roleTemplate.Name)
+	require.NoError(pr.T(), err)
+
+	projectBackingNamespace := prtb.Namespace
+	require.NotEmpty(pr.T(), projectBackingNamespace, "project backing namespace should be set")
+
+	err = extrbacapi.DeleteRoleTemplate(pr.client, roleTemplate.Name, true)
+	require.NoError(pr.T(), err)
+
+	err = extprojectapi.DeleteProject(pr.client, pr.cluster.ID, project.Name, true)
+	require.NoError(pr.T(), err)
+
+	err = extnamespaceapi.WaitForNamespaceDeletion(pr.client, extclusterapi.LocalCluster, projectBackingNamespace)
+	require.NoError(pr.T(), err, "project backing namespace should be removed from the local cluster")
+
+	webhookLogErr := podapi.VerifyNoForbiddenLogSubstringsSinceBaseline(
+		pr.client,
+		extclusterapi.LocalCluster,
+		charts.RancherWebhookNamespace,
+		charts.RancherWebhookName,
+		baselineLogs,
+		"panic",
+		"nil pointer dereference",
+	)
+	require.NoError(pr.T(), webhookLogErr, "webhook logs should not contain a panic after project deletion")
 }
 
 func TestProjectsTestSuite(t *testing.T) {
