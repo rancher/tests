@@ -173,6 +173,12 @@ func (s *ObservabilityUpgradeTestSuite) TestObservabilityPreUpgrade() {
 		Version:   latestAgentVersion,
 		ProjectID: agentSystemProjectID,
 	}, stackstateConfigs, agentSystemProjectID)
+	if err != nil {
+		// The install action answers bare internal errors whose cause only
+		// the Rancher server knows; capture the same evidence the server
+		// install path collects.
+		logInstallDiagnostics(s.client, agentCatalogClient, s.agentCluster.ID, interoperableCharts.StackstateNamespace, interoperableCharts.StackstateK8sAgent)
+	}
 	require.NoError(s.T(), err)
 
 	// Agent reporting is verified the way validation/observability does it: the
