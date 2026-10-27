@@ -109,9 +109,7 @@ func (s *ObservabilityUpgradeTestSuite) TestObservabilityPreUpgrade() {
 	serverSystemProjectID, err := systemProjectID(s.client, s.serverCluster.ID)
 	require.NoError(s.T(), err)
 
-	sizingValues, err := loadSizingValues()
-	require.NoError(s.T(), err)
-	serverValues, err := stackstateServerValues(stackstateConfigs, sizingValues)
+	serverValues, err := stackstateServerValues(stackstateConfigs)
 	require.NoError(s.T(), err)
 
 	// The chart's PVCs request the cluster default storage class; the
@@ -279,9 +277,7 @@ func (s *ObservabilityUpgradeTestSuite) TestObservabilityChartUpgrade() {
 	// upgrading on chart defaults would drop the sizing profile and the
 	// stackstate service credentials (rancher/tests#946 Further Notes on
 	// per-product values migration).
-	sizingValues, err := loadSizingValues()
-	require.NoError(s.T(), err)
-	serverValues, err := stackstateServerValues(stackstateConfigs, sizingValues)
+	serverValues, err := stackstateServerValues(stackstateConfigs)
 	require.NoError(s.T(), err)
 
 	serverSystemProjectID, err := systemProjectID(s.client, s.serverCluster.ID)

@@ -9,8 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/url"
-	"os"
 	"strings"
 	"time"
 
@@ -26,7 +24,6 @@ import (
 	"github.com/rancher/tests/interoperability/fleet"
 	"github.com/rancher/tests/interoperability/observability"
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/yaml.v2"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -57,18 +54,14 @@ const (
 	// connection settings (url, api key, license, admin password).
 	stackstateConfigFileKey = "stackstateConfigs"
 
-	// sizingValuesPath points at the observability package's 10-nonha
-	// sizing profile. It is read from the sibling package instead of being
-	// forked into this one so both suites stay pinned to a single source of
-	// truth for sizing; `go test` always runs with the package directory as
-	// CWD. The HA profile is not an option here: it requests ~27 cores,
-	// which can never schedule on the pipeline's 3-node t3a.2xlarge cluster
-	// (~22 allocatable cores), leaving pods Pending until the helm deadline.
-	sizingValuesPath = "../observability/resources/10-nonha_sizing_values.yaml"
-
 	// primeImageRegistry is the prime registry the suse-observability server
 	// images pull from, matching validation/observability.
 	primeImageRegistry = "registry.rancher.com"
+
+	// observabilitySizingProfile is the chart-native sizing profile for the
+	// server install; 10-nonha fits the upgrade pipeline's three-node
+	// cluster.
+	observabilitySizingProfile = "10-nonha"
 
 	// catalogIndexPollInterval and catalogIndexPollTimeout bound the wait for
 	// a freshly created ClusterRepo's chart index to be fetched and indexed
@@ -90,14 +83,6 @@ const (
 	previousLogWindowLines = 2000
 	previousLogTailLines   = 15
 	previousLogErrorLimit  = 40
-
-	// ingressProxyBodySizeAnnotation mirrors the ingress annotation used by
-	// validation/observability for the StackState server ingress.
-	ingressProxyBodySizeAnnotation = "nginx.ingress.kubernetes.io/proxy-body-size"
-
-	// ingressTLSSecretName mirrors the TLS secret name used by
-	// validation/observability for the StackState server ingress.
-	ingressTLSSecretName = "tls-secret"
 )
 
 const (
@@ -115,36 +100,6 @@ const (
 	fieldManager = "rancher-tests-rancherupgrade"
 )
 
-// splitComponentMemoryLimits raises the memory of the chart 2.12.0 split
-// server components whose default limits cannot hold the JVM flags derived
-// from them (see stackstateServerValues). Whole Gi units only: the chart's
-// memory parser yields zero for decimal quantities like 2.5Gi, which renders
-// empty JVM flags.
-var splitComponentMemoryLimits = map[string]string{
-	"api":               "3Gi",
-	"authorizationSync": "2Gi",
-	"checks":            "5Gi",
-	"healthSync":        "4Gi",
-	"notification":      "2Gi",
-	"slicing":           "3Gi",
-	"state":             "3Gi",
-	"sync":              "5Gi",
-}
-
-// resourceQuantities are the resource quantity kinds carrying the memory
-// override on each split component.
-var resourceQuantities = []string{"limits", "requests"}
-
-// splitComponentBaseMemory is the sizing.baseMemoryConsumption pinned on
-// each overridden split component; the chart's JVM flag formula subtracts
-// it from the memory limit, guaranteeing headroom inside the limit.
-const splitComponentBaseMemory = "768Mi"
-
-// splitComponentHeapFraction is the sizing.javaHeapMemoryFraction pinned on
-// each overridden split component; the chart sizes the heap as this fraction
-// of (limit - base consumption) and gives the remainder to direct memory.
-const splitComponentHeapFraction = "45"
-
 // loadStackStateConfig returns the stackstateConfigs section of the test config.
 func loadStackStateConfig() *observability.StackStateConfig {
 	stackstateConfigs := new(observability.StackStateConfig)
@@ -153,145 +108,29 @@ func loadStackStateConfig() *observability.StackStateConfig {
 	return stackstateConfigs
 }
 
-// loadSizingValues reads the observability package's 10-nonha sizing profile
-// and returns it as suse-observability chart values. This suite validates
-// continuity across a Rancher upgrade, not fleet-scale throughput, and runs
-// against the pipeline's 3-node cluster, where the nonha profile is the only
-// one whose resource requests fit.
-func loadSizingValues() (map[string]interface{}, error) {
-	sizingData, err := os.ReadFile(sizingValuesPath)
-	if err != nil {
-		return nil, err
-	}
-
-	var sizingConfig observability.SizingConfigNonHA
-	if err = yaml.Unmarshal(sizingData, &sizingConfig); err != nil {
-		return nil, err
-	}
-
-	return interoperableCharts.StructToMap(sizingConfig)
-}
-
-// stackstateServerValues builds the suse-observability server chart values:
-// base config (prime registry, url, admin password, api key, license) plus
-// ingress config, merged over the 10-nonha sizing profile.
-func stackstateServerValues(stackstateConfigs *observability.StackStateConfig, sizingValues map[string]interface{}) (map[string]interface{}, error) {
-	baseConfig := observability.BaseConfig{
-		Global: observability.GlobalConfig{
-			ImageRegistry: primeImageRegistry,
-		},
-		Stackstate: observability.StackstateServerConfig{
-			BaseUrl:        stackstateConfigs.Url,
-			Authentication: observability.AuthenticationConfig{AdminPassword: stackstateConfigs.AdminPassword},
-			ApiKey:         observability.ApiKeyConfig{Key: stackstateConfigs.ClusterApiKey},
-			License:        observability.LicenseConfig{Key: stackstateConfigs.License},
-		},
-	}
-
-	// An ingress host must be a bare DNS name: the configured URL doubles as
-	// the agent's reporting endpoint (scheme and port included), so strip
-	// those for the server chart's ingress host and TLS names.
-	ingressHost := ingressHostFromURL(stackstateConfigs.Url)
-
-	ingressConfig := observability.IngressConfig{
-		Ingress: observability.Ingress{
-			Enabled: true,
-			Annotations: map[string]string{
-				ingressProxyBodySizeAnnotation: "50m",
-			},
-			Hosts: []observability.Host{
-				{
-					Host: ingressHost,
-				},
-			},
-			TLS: []observability.TLSConfig{
-				{
-					Hosts:      []string{ingressHost},
-					SecretName: ingressTLSSecretName,
-				},
+// stackstateServerValues builds the suse-observability server chart values
+// in the chart's global configuration mode (global.suseObservability), the
+// mode the 2.12.0 documentation installs with: license, baseUrl, admin
+// password, receiver API key and the native 10-nonha sizing profile, which
+// fits the pipeline's three-node cluster (about 7 cores and 27 GiB of
+// requests). The legacy stackstate.* sizing path proved unusable there: its
+// no-profile fallback sizes the split server components past their own
+// memory limits, and a license installed through it never initializes the
+// tenant subscription (build 39: every component exiting with
+// TenantSubscriptionService$SubscriptionInitializationProhibited).
+func stackstateServerValues(stackstateConfigs *observability.StackStateConfig) (map[string]interface{}, error) {
+	return interoperableCharts.StructToMap(map[string]interface{}{
+		"global": map[string]interface{}{
+			"imageRegistry": primeImageRegistry,
+			"suseObservability": map[string]interface{}{
+				"license":        stackstateConfigs.License,
+				"baseUrl":        stackstateConfigs.Url,
+				"adminPassword":  stackstateConfigs.AdminPassword,
+				"receiverApiKey": stackstateConfigs.ClusterApiKey,
+				"sizing":         map[string]interface{}{"profile": observabilitySizingProfile},
 			},
 		},
-	}
-
-	ingressValues, err := interoperableCharts.StructToMap(ingressConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	baseValues, err := interoperableCharts.StructToMap(baseConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	mergedValues := interoperableCharts.MergeValues(ingressValues, baseValues, sizingValues)
-
-	// Chart 2.12.0 removed stackstate.experimental (the server split moved to
-	// per-component stackstate.components.*.split switches) and fails template
-	// validation on the key; the shared HA sizing profile still carries it,
-	// so prune it from the merged values.
-	if stackstateValues, ok := mergedValues["stackstate"].(map[string]interface{}); ok {
-		delete(stackstateValues, "experimental")
-
-		// Chart 2.12.0's default per-component memory limits sit within a few
-		// percent of the JVM flags it derives from them (authorizationSync:
-		// heap 732m + direct 315m against a 1Gi limit), so the split server
-		// components OOM and crash-loop through every install; build 38's
-		// diagnostics caught the whole family in CrashLoopBackOff. Raise each
-		// crashing component's limit (camelCase keys, matching the chart) to
-		// heap + direct memory + ~800Mi of JVM overhead headroom.
-		components, ok := stackstateValues["components"].(map[string]interface{})
-		if !ok {
-			components = make(map[string]interface{})
-			stackstateValues["components"] = components
-		}
-		for component, limit := range splitComponentMemoryLimits {
-			entry, ok := components[component].(map[string]interface{})
-			if !ok {
-				entry = make(map[string]interface{})
-				components[component] = entry
-			}
-			resources, ok := entry["resources"].(map[string]interface{})
-			if !ok {
-				resources = make(map[string]interface{})
-				entry["resources"] = resources
-			}
-			for _, kind := range resourceQuantities {
-				quantities, ok := resources[kind].(map[string]interface{})
-				if !ok {
-					quantities = make(map[string]interface{})
-					resources[kind] = quantities
-				}
-				quantities["memory"] = limit
-			}
-
-			// The chart computes each component's JVM flags as
-			// heap + direct = limit - sizing.baseMemoryConsumption; pinning
-			// the base consumption keeps the flags well inside the raised
-			// limits instead of letting the profile rescale them right up
-			// to the edge again. The heap fraction is pinned because only
-			// some components carry a default; without it the chart renders
-			// empty JVM flags and the JVM falls back to its own defaults.
-			sizing, ok := entry["sizing"].(map[string]interface{})
-			if !ok {
-				sizing = make(map[string]interface{})
-				entry["sizing"] = sizing
-			}
-			sizing["baseMemoryConsumption"] = splitComponentBaseMemory
-			sizing["javaHeapMemoryFraction"] = splitComponentHeapFraction
-		}
-	}
-
-	return mergedValues, nil
-}
-
-// ingressHostFromURL reduces a configured URL to its hostname for use as an
-// ingress host, falling back to the raw value when it carries no scheme.
-func ingressHostFromURL(configuredURL string) string {
-	parsed, err := url.Parse(configuredURL)
-	if err != nil || parsed.Hostname() == "" {
-		return configuredURL
-	}
-	return parsed.Hostname()
+	})
 }
 
 // systemProjectID returns the ID of the cluster's System project in the
