@@ -92,14 +92,13 @@ func (s *ObservabilityUpgradeTestSuite) TestObservabilityPreUpgrade() {
 	require.NoError(s.T(), err)
 
 	// The ClusterRepo above may have been created seconds ago; its chart index
-	// is fetched and indexed asynchronously, so poll for the version instead
-	// of a single lookup.
-	// Seed the previous stable version, not the latest: the prime repo's
+	// is fetched and indexed asynchronously, so poll for index readiness first.
+	// Then seed the previous stable version, not the latest: the prime repo's
 	// index does not change across the Rancher server upgrade, so a
 	// latest-seeded install leaves the chart-upgrade phase without a delta.
-	seedServerVersion, err := latestChartVersionAfterRepoCreate(serverCatalogClient, interoperableCharts.StackStateServerChartRepo, interoperableCharts.StackStateServerChartRepo)
+	_, err = latestChartVersionAfterRepoCreate(serverCatalogClient, interoperableCharts.StackStateServerChartRepo, interoperableCharts.StackStateServerChartRepo)
 	require.NoError(s.T(), err)
-	seedServerVersion, err = previousStableChartVersion(serverCatalogClient, interoperableCharts.StackStateServerChartRepo, interoperableCharts.StackStateServerChartRepo)
+	seedServerVersion, err := previousStableChartVersion(serverCatalogClient, interoperableCharts.StackStateServerChartRepo, interoperableCharts.StackStateServerChartRepo)
 	require.NoError(s.T(), err)
 
 	// Pre-warm the version's chart template: its first fetch downloads the
