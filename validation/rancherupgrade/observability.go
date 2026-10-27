@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	provv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
@@ -81,7 +82,14 @@ const (
 	// carries no client-visible cause.
 	cattleSystemNamespace = "cattle-system"
 	rancherPodLabel       = "app=rancher"
-	rancherLogTailLines   = 300
+	// previousLogWindowLines, previousLogTailLines and previousLogErrorLimit
+	// bound the crash-evidence capture from a restarted container's previous
+	// instance: a wide window is filtered down to error-marker lines, with a
+	// short raw tail kept for sequencing context.
+	rancherLogTailLines    = 300
+	previousLogWindowLines = 2000
+	previousLogTailLines   = 15
+	previousLogErrorLimit  = 40
 
 	// ingressProxyBodySizeAnnotation mirrors the ingress annotation used by
 	// validation/observability for the StackState server ingress.
@@ -566,14 +574,31 @@ func logNamespaceWorkloadState(k8s *kubernetes.Clientset, namespace string) {
 					if t := cs.LastTerminationState.Terminated; t != nil {
 						log.Infof("diagnostics: pod %s container %s last terminated: exitCode=%d reason=%s finished=%s", pod.Name, cs.Name, t.ExitCode, t.Reason, t.FinishedAt.String())
 					}
-					// The previous instance's log tail names the crash cause
-					// (OOM stack trace, failed dependency, bad config).
-					tail := int64(40)
+					// The previous instance's log names the crash cause (OOM
+					// stack trace, failed dependency, bad config); JVM boots
+					// are verbose, so error-marker lines are surfaced from a
+					// wide window alongside a short raw tail for context.
+					tail := int64(previousLogWindowLines)
 					previousLogs, logErr := k8s.CoreV1().Pods(namespace).GetLogs(pod.Name, &corev1.PodLogOptions{Container: cs.Name, Previous: true, TailLines: &tail}).DoRaw(context.TODO())
 					if logErr != nil {
 						log.Warnf("diagnostics: fetching previous logs of %s/%s failed: %v", pod.Name, cs.Name, logErr)
 					} else {
-						log.Infof("diagnostics: pod %s container %s previous log tail:\n%s", pod.Name, cs.Name, string(previousLogs))
+						lines := strings.Split(string(previousLogs), "\n")
+						errorLines := make([]string, 0, previousLogErrorLimit)
+						for _, line := range lines {
+							if strings.Contains(line, "ERROR") || strings.Contains(line, "FATAL") || strings.Contains(line, "Exception") || strings.Contains(line, "Caused by") {
+								errorLines = append(errorLines, line)
+							}
+						}
+						if len(errorLines) > previousLogErrorLimit {
+							errorLines = errorLines[len(errorLines)-previousLogErrorLimit:]
+						}
+						log.Infof("diagnostics: pod %s container %s previous-log errors:\n%s", pod.Name, cs.Name, strings.Join(errorLines, "\n"))
+						raw := lines
+						if len(raw) > previousLogTailLines {
+							raw = raw[len(raw)-previousLogTailLines:]
+						}
+						log.Infof("diagnostics: pod %s container %s previous log tail:\n%s", pod.Name, cs.Name, strings.Join(raw, "\n"))
 					}
 				}
 			}
