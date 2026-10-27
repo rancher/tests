@@ -8,6 +8,10 @@ ARG AWSCLI_VERSION=1.44.44
 ARG KUBECTL_VERSION=1.32.3
 ARG HELM_VERSION=3.17.3
 
+# qa-infra-automation ref whose requirements.yml Ansible collection pins this
+# image installs (single source of truth; the build context has no checkout)
+ARG QA_INFRA_REF=main
+
 # Install runtime dependencies
 RUN apk add --no-cache \
     bash \
@@ -35,8 +39,21 @@ RUN cd /tmp && \
     rm "${TOFU_TAR}" tofu_SHA256SUMS && \
     chmod +x /usr/local/bin/tofu
 
-# Install AWS CLI + Kubernetes Python library (required by ansible kubernetes.core collection)
-RUN pip3 install --no-cache-dir --break-system-packages awscli==${AWSCLI_VERSION} kubernetes
+# The cloud.terraform tf_output lookup (used by qa-infra playbooks with a local
+# tfstate) requires a `terraform` binary on PATH; this image ships OpenTofu
+RUN ln -sf /usr/local/bin/tofu /usr/local/bin/terraform
+
+# Install AWS CLI + Python libraries required by the Ansible collections
+# (kubernetes for kubernetes.core, boto3 for amazon.aws e.g. s3_object)
+RUN pip3 install --no-cache-dir --break-system-packages awscli==${AWSCLI_VERSION} kubernetes boto3
+
+# Install the Ansible collections pinned by qa-infra-automation. Fetched from
+# the repo instead of duplicating pins: cloud.terraform is absent from the
+# alpine ansible bundle and bundled versions drift from the pins.
+RUN curl -fsSL -o /tmp/requirements.yml \
+      "https://raw.githubusercontent.com/rancher/qa-infra-automation/${QA_INFRA_REF}/requirements.yml" \
+    && ansible-galaxy collection install -r /tmp/requirements.yml \
+    && rm -f /tmp/requirements.yml
 
 # Install kubectl
 RUN curl -Lo /usr/local/bin/kubectl "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl" \
@@ -55,6 +72,7 @@ WORKDIR /workspace
 RUN tofu version && \
     make --version && \
     ansible --version && \
+    ansible-galaxy collection list | grep -q cloud.terraform && \
     aws --version && \
     kubectl version --client && \
     helm version
