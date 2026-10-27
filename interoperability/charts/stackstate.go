@@ -118,6 +118,36 @@ func retryChartAction(action string, fn func() error) error {
 // - systemProjectID: the ID of the system project where the chart is deployed.
 // - additionalValues: additional Helm chart values as a map for custom configurations.
 // Returns an error if the chart installation fails or its status cannot be confirmed.
+// watchAppUntilState watches an app until it reaches the target state,
+// retrying the watch on transient watch-stream drops: helm keeps operating
+// server-side, so only the watch is re-established, never the chart action
+// (build 44 lost a healthy install to a single dropped stream). StatusFailed
+// always errors immediately so failures surface fast.
+func watchAppUntilState(catalogClient *catalog.Client, namespace, appName, targetState string) error {
+	return charts.RetryOnWatchError(charts.DefaultWatchRetries, func() error {
+		watchAppInterface, err := catalogClient.Apps(namespace).Watch(context.TODO(), metav1.ListOptions{
+			FieldSelector:  "metadata.name=" + appName,
+			TimeoutSeconds: &appWatchSeconds,
+		})
+		if err != nil {
+			return err
+		}
+
+		return wait.WatchWait(watchAppInterface, func(event watch.Event) (ready bool, err error) {
+			app := event.Object.(*catalogv1.App)
+
+			state := app.Status.Summary.State
+			if state == string(catalogv1.StatusFailed) {
+				return false, fmt.Errorf("app %s entered failed state", app.Name)
+			}
+			if state == targetState {
+				return true, nil
+			}
+			return false, nil
+		})
+	})
+}
+
 func InstallStackStateServerChart(client *rancher.Client, installOptions *charts.InstallOptions, systemProjectID string, additionalValues map[string]interface{}) error {
 	serverSetting, err := client.Management.Setting.ByID(serverURLSettingID)
 	if err != nil {
@@ -147,27 +177,7 @@ func InstallStackStateServerChart(client *rancher.Client, installOptions *charts
 		return err
 	}
 
-	watchAppInterface, err := catalogClient.Apps(StackStateServerNamespace).Watch(context.TODO(), metav1.ListOptions{
-		FieldSelector:  "metadata.name=" + StackStateServerChartRepo,
-		TimeoutSeconds: &appWatchSeconds,
-	})
-	if err != nil {
-		log.Info("StackState App failed to install")
-		return err
-	}
-
-	err = wait.WatchWait(watchAppInterface, func(event watch.Event) (ready bool, err error) {
-		app := event.Object.(*catalogv1.App)
-
-		state := app.Status.Summary.State
-		if state == string(catalogv1.StatusFailed) {
-			return false, fmt.Errorf("app %s entered failed state", app.Name)
-		}
-		if state == string(catalogv1.StatusDeployed) {
-			return true, nil
-		}
-		return false, nil
-	})
+	err = watchAppUntilState(catalogClient, StackStateServerNamespace, StackStateServerChartRepo, string(catalogv1.StatusDeployed))
 	if err != nil {
 		log.Info("Unable to obtain the status of the installed app ")
 		return err
@@ -282,27 +292,7 @@ func InstallStackstateAgentChart(client *rancher.Client, installOptions *charts.
 	}
 
 	// wait for chart to be fully deployed
-	watchAppInterface, err := catalogClient.Apps(StackstateNamespace).Watch(context.TODO(), metav1.ListOptions{
-		FieldSelector:  "metadata.name=" + StackstateK8sAgent,
-		TimeoutSeconds: &appWatchSeconds,
-	})
-	if err != nil {
-		log.Info("Unable to obtain the installed app ")
-		return err
-	}
-
-	err = wait.WatchWait(watchAppInterface, func(event watch.Event) (ready bool, err error) {
-		app := event.Object.(*catalogv1.App)
-
-		state := app.Status.Summary.State
-		if state == string(catalogv1.StatusFailed) {
-			return false, fmt.Errorf("app %s entered failed state", app.Name)
-		}
-		if state == string(catalogv1.StatusDeployed) {
-			return true, nil
-		}
-		return false, nil
-	})
+	err = watchAppUntilState(catalogClient, StackstateNamespace, StackstateK8sAgent, string(catalogv1.StatusDeployed))
 	if err != nil {
 		log.Info("Unable to obtain the status of the installed app ")
 		return err
@@ -379,51 +369,7 @@ func UpgradeStackstateAgentChart(client *rancher.Client, installOptions *charts.
 		return err
 	}
 
-	// wait for chart to be in status pending upgrade
-	watchAppInterface, err := adminCatalogClient.Apps(StackstateNamespace).Watch(context.TODO(), metav1.ListOptions{
-		FieldSelector:  "metadata.name=" + StackstateK8sAgent,
-		TimeoutSeconds: &appWatchSeconds,
-	})
-	if err != nil {
-		return err
-	}
-
-	err = wait.WatchWait(watchAppInterface, func(event watch.Event) (ready bool, err error) {
-		app := event.Object.(*catalogv1.App)
-
-		state := app.Status.Summary.State
-		if state == string(catalogv1.StatusFailed) {
-			return false, fmt.Errorf("app %s entered failed state", app.Name)
-		}
-		if state == string(catalogv1.StatusPendingUpgrade) {
-			return true, nil
-		}
-		return false, nil
-	})
-	if err != nil {
-		return err
-	}
-
-	watchAppInterface, err = adminCatalogClient.Apps(StackstateNamespace).Watch(context.TODO(), metav1.ListOptions{
-		FieldSelector:  "metadata.name=" + StackstateK8sAgent,
-		TimeoutSeconds: &appWatchSeconds,
-	})
-	if err != nil {
-		return err
-	}
-
-	err = wait.WatchWait(watchAppInterface, func(event watch.Event) (ready bool, err error) {
-		app := event.Object.(*catalogv1.App)
-
-		state := app.Status.Summary.State
-		if state == string(catalogv1.StatusFailed) {
-			return false, fmt.Errorf("app %s entered failed state", app.Name)
-		}
-		if state == string(catalogv1.StatusDeployed) {
-			return true, nil
-		}
-		return false, nil
-	})
+	err = watchAppUntilState(adminCatalogClient, StackstateNamespace, StackstateK8sAgent, string(catalogv1.StatusDeployed))
 	if err != nil {
 		return err
 	}
@@ -524,51 +470,7 @@ func UpgradeStackStateServerChart(client *rancher.Client, installOptions *charts
 		return err
 	}
 
-	// wait for chart to be in status pending upgrade
-	watchAppInterface, err := adminCatalogClient.Apps(StackStateServerNamespace).Watch(context.TODO(), metav1.ListOptions{
-		FieldSelector:  "metadata.name=" + StackStateServerChartRepo,
-		TimeoutSeconds: &appWatchSeconds,
-	})
-	if err != nil {
-		return err
-	}
-
-	err = wait.WatchWait(watchAppInterface, func(event watch.Event) (ready bool, err error) {
-		app := event.Object.(*catalogv1.App)
-
-		state := app.Status.Summary.State
-		if state == string(catalogv1.StatusFailed) {
-			return false, fmt.Errorf("app %s entered failed state", app.Name)
-		}
-		if state == string(catalogv1.StatusPendingUpgrade) {
-			return true, nil
-		}
-		return false, nil
-	})
-	if err != nil {
-		return err
-	}
-
-	watchAppInterface, err = adminCatalogClient.Apps(StackStateServerNamespace).Watch(context.TODO(), metav1.ListOptions{
-		FieldSelector:  "metadata.name=" + StackStateServerChartRepo,
-		TimeoutSeconds: &appWatchSeconds,
-	})
-	if err != nil {
-		return err
-	}
-
-	err = wait.WatchWait(watchAppInterface, func(event watch.Event) (ready bool, err error) {
-		app := event.Object.(*catalogv1.App)
-
-		state := app.Status.Summary.State
-		if state == string(catalogv1.StatusFailed) {
-			return false, fmt.Errorf("app %s entered failed state", app.Name)
-		}
-		if state == string(catalogv1.StatusDeployed) {
-			return true, nil
-		}
-		return false, nil
-	})
+	err = watchAppUntilState(adminCatalogClient, StackStateServerNamespace, StackStateServerChartRepo, string(catalogv1.StatusDeployed))
 	if err != nil {
 		return err
 	}
