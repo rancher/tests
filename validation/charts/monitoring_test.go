@@ -133,15 +133,10 @@ func (m *MonitoringTestSuite) TestMonitoringChart() {
 	require.NoError(m.T(), err)
 
 	if !initialMonitoringChart.IsAlreadyInstalled {
+		charts.UpdateClusterRepo(m.client, catalog.RancherChartRepo)
+
 		m.T().Log("Installing monitoring chart")
-		err = charts.RetryOnWatchError(charts.DefaultWatchRetries, func() error {
-			// Check if chart was already installed by a previous retry attempt
-			status, statusErr := extencharts.GetChartStatus(client, m.project.ClusterID, charts.RancherMonitoringNamespace, charts.RancherMonitoringName)
-			if statusErr == nil && status.IsAlreadyInstalled {
-				return nil
-			}
-			return charts.InstallRancherMonitoringChart(client, m.chartInstallOptions, m.chartFeatureOptions)
-		})
+		err = charts.InstallRancherMonitoringChart(client, m.chartInstallOptions, m.chartFeatureOptions)
 		require.NoError(m.T(), err)
 
 		m.T().Log("Waiting monitoring chart deployments to have expected number of available replicas")
@@ -213,10 +208,8 @@ func (m *MonitoringTestSuite) TestMonitoringChart() {
 
 	m.T().Log("Creating node port service for webhook receiver deployment")
 	webhookServiceTemplate := corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      webhookReceiverServiceName,
-			Namespace: webhookReceiverNamespace.Name,
-		},
+		Name:      webhookReceiverServiceName,
+		Namespace: webhookReceiverNamespace.Name,
 		Spec: corev1.ServiceSpec{
 			Type: corev1.ServiceTypeNodePort,
 			Ports: []corev1.ServicePort{
@@ -345,6 +338,8 @@ func (m *MonitoringTestSuite) TestUpgradeMonitoringChart() {
 	}
 
 	if !initialMonitoringChart.IsAlreadyInstalled {
+		charts.UpdateClusterRepo(m.client, catalog.RancherChartRepo)
+
 		m.T().Log("Installing monitoring chart with the last but one version")
 		err = charts.RetryOnWatchError(charts.DefaultWatchRetries, func() error {
 			status, statusErr := extencharts.GetChartStatus(client, m.project.ClusterID, charts.RancherMonitoringNamespace, charts.RancherMonitoringName)

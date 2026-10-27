@@ -110,6 +110,8 @@ func (l *LonghornTestSuite) SetupSuite() {
 
 	l.longhornPreInstalled = chart.IsAlreadyInstalled
 	if !chart.IsAlreadyInstalled {
+		charts.UpdateClusterRepo(l.client, catalog.RancherChartRepo)
+
 		// Get latest versions of longhorn
 		latestLonghornVersion, err := l.standardUserClient.Catalog.GetLatestChartVersion(charts.LonghornChartName, catalog.RancherChartRepo)
 		require.NoError(l.T(), err)
@@ -446,6 +448,10 @@ func (l *LonghornTestSuite) TestMonitoringIntegration() {
 	require.NoError(l.T(), err)
 
 	if !initialMonitoringChart.IsAlreadyInstalled {
+		if l.longhornPreInstalled {
+			charts.UpdateClusterRepo(l.client, catalog.RancherChartRepo)
+		}
+
 		// Get latest versions of the monitoring chart
 		latestMonitoringVersion, err := l.standardUserClient.Catalog.GetLatestChartVersion(charts.RancherMonitoringName, catalog.RancherChartRepo)
 		require.NoError(l.T(), err)
