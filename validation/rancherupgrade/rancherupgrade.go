@@ -1,3 +1,5 @@
+//go:build (validation || pit.weekly) && !2.8 && !2.9 && !2.10 && !2.11 && !2.12 && !2.13
+
 // Package rancherupgrade validates the Rancher server upgrade path (2.14.x -> latest)
 // with interoperability products installed. Each phase (pre-upgrade, post-upgrade,
 // chart-upgrade) is a suite test method selected via the -run regex and runs as its
