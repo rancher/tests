@@ -203,6 +203,31 @@ func latestChartVersionAfterRepoCreate(catalogClient *catalog.Client, chartName,
 	return latestVersion, nil
 }
 
+// previousStableChartVersion returns the newest stable chart version
+// strictly below the repo's latest. The chart-upgrade phase needs a real
+// delta: the prime repo's index is identical before and after the Rancher
+// server upgrade, so seeding the pre-upgrade phase with the latest version
+// leaves the phase nothing to upgrade to (build 43's guard fired exactly
+// there). The version list arrives newest-first with -pre entries interleaved.
+func previousStableChartVersion(catalogClient *catalog.Client, chartName, repoName string) (string, error) {
+	versions, err := catalogClient.GetListChartVersions(chartName, repoName)
+	if err != nil {
+		return "", err
+	}
+
+	stable := make([]string, 0, len(versions))
+	for _, version := range versions {
+		if !strings.Contains(version, "-pre") {
+			stable = append(stable, version)
+		}
+	}
+	if len(stable) < 2 {
+		return "", fmt.Errorf("chart %s from repo %s has no stable version below %s", chartName, repoName, stable[0])
+	}
+
+	return stable[1], nil
+}
+
 // logInstallDiagnostics captures evidence when a chart action fails. The
 // action may land on any Rancher server replica, so every replica's log tail
 // is captured; the target namespace's conditions (InitialRolesPopulated) and

@@ -94,13 +94,18 @@ func (s *ObservabilityUpgradeTestSuite) TestObservabilityPreUpgrade() {
 	// The ClusterRepo above may have been created seconds ago; its chart index
 	// is fetched and indexed asynchronously, so poll for the version instead
 	// of a single lookup.
-	latestServerVersion, err := latestChartVersionAfterRepoCreate(serverCatalogClient, interoperableCharts.StackStateServerChartRepo, interoperableCharts.StackStateServerChartRepo)
+	// Seed the previous stable version, not the latest: the prime repo's
+	// index does not change across the Rancher server upgrade, so a
+	// latest-seeded install leaves the chart-upgrade phase without a delta.
+	seedServerVersion, err := latestChartVersionAfterRepoCreate(serverCatalogClient, interoperableCharts.StackStateServerChartRepo, interoperableCharts.StackStateServerChartRepo)
+	require.NoError(s.T(), err)
+	seedServerVersion, err = previousStableChartVersion(serverCatalogClient, interoperableCharts.StackStateServerChartRepo, interoperableCharts.StackStateServerChartRepo)
 	require.NoError(s.T(), err)
 
 	// Pre-warm the version's chart template: its first fetch downloads the
 	// chart tarball server-side, and an install action issued before the
 	// template is cached can outlive the request deadline.
-	require.NoError(s.T(), interoperableCharts.WaitForChartTemplate(serverCatalogClient, interoperableCharts.StackStateServerChartRepo, interoperableCharts.StackStateServerChartRepo, latestServerVersion))
+	require.NoError(s.T(), interoperableCharts.WaitForChartTemplate(serverCatalogClient, interoperableCharts.StackStateServerChartRepo, interoperableCharts.StackStateServerChartRepo, seedServerVersion))
 
 	// The install action creates and project-annotates the namespace itself;
 	// pre-creating it poisons the action's thirty-second watch for the
@@ -132,10 +137,10 @@ func (s *ObservabilityUpgradeTestSuite) TestObservabilityPreUpgrade() {
 		}
 	}
 	if !serverInstalled {
-		logrus.Infof("pre-upgrade phase: installing suse-observability server %s in the System project on the local cluster", latestServerVersion)
+		logrus.Infof("pre-upgrade phase: installing suse-observability server %s in the System project on the local cluster", seedServerVersion)
 		err = interoperableCharts.InstallStackStateServerChart(s.client, &charts.InstallOptions{
 			Cluster:   s.serverCluster,
-			Version:   latestServerVersion,
+			Version:   seedServerVersion,
 			ProjectID: serverSystemProjectID,
 		}, serverSystemProjectID, serverValues)
 		if err != nil {
@@ -153,13 +158,13 @@ func (s *ObservabilityUpgradeTestSuite) TestObservabilityPreUpgrade() {
 	serverPodClusterName, err := podStatusClusterName(s.client, localClusterName)
 	require.NoError(s.T(), err)
 	require.Empty(s.T(), pods.StatusPods(s.client, serverPodClusterName), "suse-observability server pods must be healthy after install")
-	logrus.Infof("pre-upgrade phase: suse-observability server %s healthy; installing the agent", latestServerVersion)
+	logrus.Infof("pre-upgrade phase: suse-observability server %s healthy; installing the agent", seedServerVersion)
 
 	// Agent side, on the shared downstream cluster selected by rancher.clusterName.
 	agentCatalogClient, err := s.client.GetClusterCatalogClient(s.agentCluster.ID)
 	require.NoError(s.T(), err)
 
-	latestAgentVersion, err := agentCatalogClient.GetLatestChartVersion(interoperableCharts.StackstateK8sAgent, interoperableCharts.StackStateServerChartRepo)
+	seedAgentVersion, err := previousStableChartVersion(agentCatalogClient, interoperableCharts.StackstateK8sAgent, interoperableCharts.StackStateServerChartRepo)
 	require.NoError(s.T(), err)
 
 	// As above on the agent side: the install action owns namespace creation.
@@ -167,10 +172,10 @@ func (s *ObservabilityUpgradeTestSuite) TestObservabilityPreUpgrade() {
 	agentSystemProjectID, err := systemProjectID(s.client, s.agentCluster.ID)
 	require.NoError(s.T(), err)
 
-	logrus.Infof("pre-upgrade phase: installing stackstate agent %s on cluster %s", latestAgentVersion, s.agentCluster.ID)
+	logrus.Infof("pre-upgrade phase: installing stackstate agent %s on cluster %s", seedAgentVersion, s.agentCluster.ID)
 	err = interoperableCharts.InstallStackstateAgentChart(s.client, &charts.InstallOptions{
 		Cluster:   s.agentCluster,
-		Version:   latestAgentVersion,
+		Version:   seedAgentVersion,
 		ProjectID: agentSystemProjectID,
 	}, stackstateConfigs, agentSystemProjectID)
 	if err != nil {
@@ -190,7 +195,7 @@ func (s *ObservabilityUpgradeTestSuite) TestObservabilityPreUpgrade() {
 	agentPodClusterName, err := podStatusClusterName(s.client, s.client.RancherConfig.ClusterName)
 	require.NoError(s.T(), err)
 	require.Empty(s.T(), pods.StatusPods(s.client, agentPodClusterName), "stackstate agent pods must be healthy and reporting after install")
-	logrus.Infof("pre-upgrade phase: stackstate agent %s reporting to %s; pre-upgrade state seeded", latestAgentVersion, stackstateConfigs.Url)
+	logrus.Infof("pre-upgrade phase: stackstate agent %s reporting to %s; pre-upgrade state seeded", seedAgentVersion, stackstateConfigs.Url)
 }
 
 func (s *ObservabilityUpgradeTestSuite) TestObservabilityPostUpgrade() {
