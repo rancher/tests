@@ -306,6 +306,13 @@ func (s *ObservabilityUpgradeTestSuite) TestObservabilityChartUpgrade() {
 	err = charts.RetryOnWatchError(charts.DefaultWatchRetries, func() error {
 		return interoperableCharts.UpgradeStackStateServerChart(s.client, serverInstallOptions, serverValues)
 	})
+	if err != nil {
+		// Upgrade failures surface the same bare internal errors as installs;
+		// capture the helm operation, app state, workload state and rancher
+		// tails before failing (build 49's all-module run timed out here
+		// with no in-band evidence).
+		logInstallDiagnostics(s.client, serverCatalogClient, s.serverCluster.ID, interoperableCharts.StackStateServerNamespace, interoperableCharts.StackStateServerChartRepo)
+	}
 	require.NoError(s.T(), err)
 
 	upgradedServer, err := extencharts.GetChartStatus(s.client, s.serverCluster.ID, interoperableCharts.StackStateServerNamespace, interoperableCharts.StackStateServerChartRepo)
@@ -326,6 +333,10 @@ func (s *ObservabilityUpgradeTestSuite) TestObservabilityChartUpgrade() {
 	err = charts.RetryOnWatchError(charts.DefaultWatchRetries, func() error {
 		return interoperableCharts.UpgradeStackstateAgentChart(s.client, agentInstallOptions, stackstateConfigs, agentSystemProjectID)
 	})
+	if err != nil {
+		// Same evidence capture as the server upgrade path above.
+		logInstallDiagnostics(s.client, agentCatalogClient, s.agentCluster.ID, interoperableCharts.StackstateNamespace, interoperableCharts.StackstateK8sAgent)
+	}
 	require.NoError(s.T(), err)
 
 	upgradedAgent, err := extencharts.GetChartStatus(s.client, s.agentCluster.ID, interoperableCharts.StackstateNamespace, interoperableCharts.StackstateK8sAgent)
