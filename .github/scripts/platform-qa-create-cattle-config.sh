@@ -10,6 +10,10 @@ rancher:
   insecure: true
   clusterName: "${CLUSTER_NAME}"
   adminPassword: "${RANCHER_ADMIN_PASSWORD}"
+  caFile: ""
+  caCerts: ""
+  shellImage: ""
+  rancherCLI: false
 
 registryInput:
   name: "${QUAY_REGISTRY_NAME}"
@@ -113,6 +117,7 @@ awsEC2Configs:
 sshPath: 
   sshPath: "${SSH_PRIVATE_KEY_PATH}"
 
+# OpenLDAP configuration
 openLDAP:
   hostname: "${OPENLDAP_HOSTNAME}"
   insecure: true
@@ -157,16 +162,19 @@ openLdapAuthInput:
     - username: "nestedtestuser3"
       password: "${OPENLDAP_USER_PASSWORD}"
 
+# Active Directory configuration
 activeDirectory:
   hostname: "${AD_HOSTNAME}"
-  port: ${AD_PORT}
+  port: ${AD_HOSTPORT}
   tls: false
   startTLS: false
+  accessMode: "unrestricted"
   users:
     searchBase: "${AD_USERS_SEARCHBASE}"
     objectClass: "person"
     usernameAttribute: "name"
     loginAttribute: "sAMAccountName"
+    memberAttribute: "memberOf"
     searchAttribute: "sAMAccountName|sn|givenName"
     searchFilter: ""
     loginFilter: ""
@@ -188,33 +196,13 @@ activeDirectory:
     memberUserAttribute: "distinguishedName"
     dnAttribute: "distinguishedName"
     nestedGroupMembershipEnabled: true
-  accessMode: "unrestricted"
 
 activeDirectoryAuthInput:
-  standardUser: "testautouser"
   group: "testautogroup1"
   users:
     - username: "testauto1"
       password: "${AD_USER_PASSWORD}"
     - username: "testauto2"
-      password: "${AD_USER_PASSWORD}"
-  projectGroup: "testautogroup2"
-  projectUsers:
-    - username: "testauto3"
-      password: "${AD_USER_PASSWORD}"
-    - username: "testauto4"
-      password: "${AD_USER_PASSWORD}"
-  allowedGroup: "testautogroup3"
-  allowedGroupUsers:
-    - username: "testauto5"
-      password: "${AD_USER_PASSWORD}"
-    - username: "testauto6"
-      password: "${AD_USER_PASSWORD}"
-  disallowedGroup: "testautogroup4"
-  disallowedGroupUsers:
-    - username: "testauto7"
-      password: "${AD_USER_PASSWORD}"
-    - username: "testauto8"
       password: "${AD_USER_PASSWORD}"
   nestedGroup: "nestgroup1"
   nestedUsers:
@@ -228,18 +216,63 @@ activeDirectoryAuthInput:
   tripleNestedUsers:
     - username: "nestedtestuser3"
       password: "${AD_USER_PASSWORD}"
-  clusterUsers:
-    - username: "testauto5"
-      password: "${AD_USER_PASSWORD}"
-  projectDirectUsers:
-    - username: "testauto6"
-      password: "${AD_USER_PASSWORD}"
-  allowedUsers:
-    - username: "testauto2"
-      password: "${AD_USER_PASSWORD}"
-  disallowedUsers:
-    - username: "testauto3"
-      password: "${AD_USER_PASSWORD}"
-    - username: "testauto4"
-      password: "${AD_USER_PASSWORD}"
+
+# Keycloak SAML configuration
+keycloaksaml:
+  keycloakHost: "${PQA_KC_HOST}"
+  keycloakRealm: "rancherauto"
+  keycloakAdminUser: "${PQA_ADMIN_USERNAME}"
+  keycloakAdminPassword: "${PQA_KC_ADMIN_PASSWORD}"
+  keycloakInsecure: true
+  keycloakAdminRealm: "master"          
+  keycloakAdminClientID: "admin-cli"    
+  keycloakUserEmailDomain: "rancher.test" 
+
+# Keycloak OIDC configuration
+keycloakoidc:
+  keycloakHost: "${PQA_KC_HOST}"
+  keycloakRealm: "rancherauto"
+  keycloakAdminUser: "${PQA_ADMIN_USERNAME}"
+  keycloakAdminPassword: "${PQA_KC_ADMIN_PASSWORD}"
+  keycloakInsecure: true
+  keycloakAdminRealm: "master"
+  keycloakAdminClientID: "admin-cli"
+  keycloakUserEmailDomain: "rancher.test"
+  
+genericsaml:
+  keycloakHost: "${PQA_KC_HOST}"
+  keycloakRealm: "rancherauto"
+  keycloakAdminUser: "${PQA_ADMIN_USERNAME}"
+  keycloakAdminPassword: "${PQA_KC_ADMIN_PASSWORD}"
+  keycloakInsecure: true
+
+# Suite-specific input - validation/auth/kubeapiauth
+kubeAPIAuthInput:
+  tokenReviewEcho: ""
+
+# Suite-specific input - validation/auth/metaproxy
+metaProxyInput:
+  echoHost: "httpbin.org"
+  echoPath: ""              # defaults to the echo host's header path
+  echoScheme: ""            
+  digestPath: ""            
+  postPath: ""              
+
+# Suite-specific input - validation/auth/scim
+scimInput:
+  buildType: ""
+
+# Suite-specific input - validation/auth/oidc
+oidc:
+  clientName: "automation-oidc-client"
+  redirectURI: "http://127.0.0.1:5556/auth/rancher/callback"
+  adminUsername: "${PQA_ADMIN_USERNAME}"
+  adminPassword: "${RANCHER_ADMIN_PASSWORD}"
+
+# Terraform-specific input
+terraform:
+  generateV3Token: true 
+
+terratest:
+  pathToRepo: ""
 EOF

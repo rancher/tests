@@ -59,7 +59,7 @@ jobs:
       OPENLDAP_SA_DN_NAME: ${{ vars.OPENLDAP_SA_DN_NAME }}
       OPENLDAP_USERS_SEARCHBASE: ${{ vars.OPENLDAP_USERS_SEARCHBASE }}
       OPENLDAP_GROUPS_SEARCHBASE: ${{ vars.OPENLDAP_GROUPS_SEARCHBASE }}
-      AD_PORT: ${{ vars.AD_PORT }}
+      AD_HOSTPORT: ${{ vars.AD_HOSTPORT }}
       AD_SA_DN_NAME: ${{ vars.AD_SA_DN_NAME }}
       AD_USERS_SEARCHBASE: ${{ vars.AD_USERS_SEARCHBASE }}
       AD_GROUPS_SEARCHBASE: ${{ vars.AD_GROUPS_SEARCHBASE }}
@@ -167,6 +167,9 @@ jobs:
           AD_ADMIN_PASSWORD: ${{ secrets.AD_ADMIN_PASSWORD }}
           AD_USER_PASSWORD: ${{ secrets.AD_USER_PASSWORD }}
           AD_SA_PASSWORD: ${{ secrets.AD_SA_PASSWORD }}
+          PQA_ADMIN_USERNAME: ${{ secrets.PQA_ADMIN_USERNAME }}
+          PQA_KC_ADMIN_PASSWORD: ${{ secrets.PQA_KC_ADMIN_PASSWORD }}
+          PQA_KC_HOST: ${{ secrets.PQA_KC_HOST }}
         run: bash .github/scripts/platform-qa-create-cattle-config.sh
 
       - name: Run all tests in package
