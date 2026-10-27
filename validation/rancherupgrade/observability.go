@@ -35,6 +35,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
+	"sort"
 )
 
 const (
@@ -83,6 +84,7 @@ const (
 	previousLogWindowLines = 2000
 	previousLogTailLines   = 15
 	previousLogErrorLimit  = 40
+	eventsDiagnosticsLimit = 40
 )
 
 const (
@@ -503,6 +505,25 @@ func logNamespaceWorkloadState(k8s *kubernetes.Clientset, namespace string) {
 		for i := range sts.Items {
 			st := sts.Items[i]
 			log.Infof("diagnostics: statefulset %s desired=%d ready=%d current=%d", st.Name, *st.Spec.Replicas, st.Status.ReadyReplicas, st.Status.CurrentReplicas)
+		}
+	}
+
+	if events, err := k8s.CoreV1().Events(namespace).List(context.TODO(), meta.ListOptions{}); err != nil {
+		log.Warnf("diagnostics: listing events in %s failed: %v", namespace, err)
+	} else {
+		// Volume-attach stalls and scheduling refusals appear only here:
+		// the pod sits in ContainerCreating with no container-level evidence
+		// (build 52's zookeeper stall would have been named by
+		// FailedAttachVolume). Newest first, capped.
+		sort.Slice(events.Items, func(i, j int) bool {
+			return events.Items[i].LastTimestamp.After(events.Items[j].LastTimestamp.Time)
+		})
+		if len(events.Items) > eventsDiagnosticsLimit {
+			events.Items = events.Items[:eventsDiagnosticsLimit]
+		}
+		for i := range events.Items {
+			e := events.Items[i]
+			log.Infof("diagnostics: event %s %s/%s %s: %s", e.LastTimestamp.String(), e.InvolvedObject.Kind, e.InvolvedObject.Name, e.Reason, e.Message)
 		}
 	}
 }
