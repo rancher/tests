@@ -72,11 +72,11 @@
       expectedresult: "The ClusterRepo is available to the cluster-scoped catalog"
       position: 1
     - action: "Install the suse-observability server chart in the System project on the local cluster"
-      data: "Chart: suse-observability at the latest cluster-scoped version with base, ingress and 150-ha sizing values"
+      data: "Chart: suse-observability at the previous stable cluster-scoped version (one below latest, leaving a delta for the chart-upgrade phase) with global base values and the 10-nonha sizing profile"
       expectedresult: "The chart reaches Deployed state, its deployments and daemonsets become Ready, and its pods are healthy"
       position: 2
     - action: "Install the stackstate agent chart on the shared downstream cluster"
-      data: "Chart: stackstate-k8s-agent from rancher-partner-charts with cluster, apiKey and url values from stackstateConfigs"
+      data: "Chart: suse-observability-agent from the suse-observability repo, at the previous stable version, with cluster, apiKey and url values from stackstateConfigs"
       expectedresult: "The chart reaches Deployed state, its deployments and daemonsets become Ready, and its pods are healthy"
       position: 3
     - action: "Verify the agent is reporting to the server"
@@ -102,7 +102,7 @@
       expectedresult: "All deployments and daemonsets reach their expected replicas and the server pods are healthy"
       position: 3
     - action: "Verify monitoring continuity via the agent"
-      data: "Chart: stackstate-k8s-agent in the stackstate namespace on the downstream cluster"
+      data: "Chart: suse-observability-agent in the stackstate namespace on the downstream cluster"
       expectedresult: "The agent chart is still installed, its workloads are Ready, and its pods are healthy and reporting"
       position: 4
     custom_field:
@@ -116,15 +116,15 @@
       expectedresult: "The server-version setting equals the target version"
       position: 1
     - action: "Resolve the latest server and agent chart versions from the cluster-scoped catalogs"
-      data: "suse-observability from the prime server-charts ClusterRepo on the local cluster; stackstate-k8s-agent from rancher-partner-charts on the downstream cluster"
+      data: "suse-observability from the prime server-charts ClusterRepo on the local cluster; suse-observability-agent from the suse-observability repo on the downstream cluster"
       expectedresult: "The latest cluster-scoped versions are resolved and differ from the installed pre-upgrade versions"
       position: 2
     - action: "Upgrade the suse-observability server chart with the install-time values"
-      data: "Base, ingress and 150-ha sizing values re-applied to avoid dropping the HA profile and service credentials"
+      data: "Global base values and the 10-nonha sizing profile re-applied to avoid dropping the configuration mode and service credentials"
       expectedresult: "The server chart reaches Deployed state at the latest version and its workloads become Ready"
       position: 3
     - action: "Upgrade the stackstate agent chart"
-      data: "stackstate-k8s-agent upgraded to the latest version with cluster, apiKey and url values"
+      data: "suse-observability-agent upgraded to the latest version with cluster, apiKey and url values"
       expectedresult: "The agent chart reaches Deployed state at the latest version and its workloads become Ready"
       position: 4
     - action: "Verify post-upgrade health and reporting"

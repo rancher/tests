@@ -245,7 +245,7 @@ func (s *ObservabilityUpgradeTestSuite) TestObservabilityChartUpgrade() {
 	// management view: the management view can report versions absent from the
 	// cluster-scoped index (rancher-2.15-catalog-sharding-issue.md). The server
 	// resolves via the prime server-charts ClusterRepo on the local cluster, the
-	// agent via rancher-partner-charts on the downstream cluster.
+	// agent via the suse-observability repo on the downstream cluster.
 	serverCatalogClient, err := s.client.GetClusterCatalogClient(s.serverCluster.ID)
 	require.NoError(s.T(), err)
 	latestServerVersion, err := serverCatalogClient.GetLatestChartVersion(interoperableCharts.StackStateServerChartRepo, interoperableCharts.StackStateServerChartRepo)

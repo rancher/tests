@@ -109,15 +109,6 @@ func retryChartAction(action string, fn func() error) error {
 	return fmt.Errorf("%s: %w", action, lastErr)
 }
 
-// InstallStackStateServerChart installs the StackState chart into the specified Kubernetes cluster and namespace.
-// It uses Rancher client and configuration details, and waits for the chart deployment to complete successfully.
-// Parameters:
-// - client: the Rancher client used for connecting to the Kubernetes cluster.
-// - installOptions: the installation options including cluster info and chart version.
-// - stackstateConfigs: configuration details for StackState such as the service token and URL.
-// - systemProjectID: the ID of the system project where the chart is deployed.
-// - additionalValues: additional Helm chart values as a map for custom configurations.
-// Returns an error if the chart installation fails or its status cannot be confirmed.
 // watchAppUntilState watches an app until it reaches the target state,
 // retrying the watch on transient watch-stream drops: helm keeps operating
 // server-side, so only the watch is re-established, never the chart action
@@ -148,6 +139,14 @@ func watchAppUntilState(catalogClient *catalog.Client, namespace, appName, targe
 	})
 }
 
+// InstallStackStateServerChart installs the StackState chart into the specified Kubernetes cluster and namespace.
+// It uses Rancher client and configuration details, and waits for the chart deployment to complete successfully.
+// Parameters:
+// - client: the Rancher client used for connecting to the Kubernetes cluster.
+// - installOptions: the installation options including cluster info and chart version.
+// - systemProjectID: the ID of the system project where the chart is deployed.
+// - additionalValues: additional Helm chart values as a map for custom configurations.
+// Returns an error if the chart installation fails or its status cannot be confirmed.
 func InstallStackStateServerChart(client *rancher.Client, installOptions *charts.InstallOptions, systemProjectID string, additionalValues map[string]interface{}) error {
 	serverSetting, err := client.Management.Setting.ByID(serverURLSettingID)
 	if err != nil {

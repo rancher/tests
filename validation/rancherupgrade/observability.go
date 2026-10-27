@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"time"
 
@@ -35,7 +36,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
-	"sort"
 )
 
 const (
@@ -222,6 +222,9 @@ func previousStableChartVersion(catalogClient *catalog.Client, chartName, repoNa
 		if !strings.Contains(version, "-pre") {
 			stable = append(stable, version)
 		}
+	}
+	if len(stable) == 0 {
+		return "", fmt.Errorf("chart %s from repo %s has no stable versions", chartName, repoName)
 	}
 	if len(stable) < 2 {
 		return "", fmt.Errorf("chart %s from repo %s has no stable version below %s", chartName, repoName, stable[0])
