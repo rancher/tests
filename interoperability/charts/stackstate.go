@@ -275,7 +275,7 @@ func InstallStackstateAgentChart(client *rancher.Client, installOptions *charts.
 	})
 
 	err = retryChartAction("stackstate-k8s-agent chart install", func() error {
-		return catalogClient.InstallChart(chartInstallAction, RancherPartnerChartRepo)
+		return catalogClient.InstallChart(chartInstallAction, StackStateServerChartRepo)
 	})
 	if err != nil {
 		return err
