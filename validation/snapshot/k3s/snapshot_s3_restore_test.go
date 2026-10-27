@@ -42,6 +42,9 @@ func TestS3SnapshotRestore(t *testing.T) {
 	for _, tt := range tests {
 		t.Cleanup(func() {
 			logrus.Infof("Running cleanup (%s)", tt.name)
+			err := s3.DeleteS3Bucket(s.S3BucketName, s.S3Region, s.AWSAccessKey, s.AWSSecretKey)
+			assert.NoError(t, err)
+
 			s.Session.Cleanup()
 		})
 
@@ -74,9 +77,6 @@ func TestS3SnapshotRestore(t *testing.T) {
 			logrus.Infof("Verifying cluster pods (%s)", tt.cluster.Name)
 			err = pods.VerifyClusterPods(s.Client, tt.cluster)
 			require.NoError(t, err)
-
-			err = s3.DeleteS3Bucket(s.S3BucketName, s.S3Region, s.AWSAccessKey, s.AWSSecretKey)
-			assert.NoError(t, err)
 		})
 
 		params := provisioning.GetProvisioningSchemaParams(s.Client, s.CattleConfig)
