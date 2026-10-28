@@ -29,7 +29,11 @@ its projects, PVCs, and workloads survive the server upgrade and the post-upgrad
 phases assert against an environment carrying real Longhorn load. The default
 `LONGHORN_FUNCTIONAL_TESTCASE` selection excludes `TestVolumeEncryption`, whose
 encrypted-backup verification needs AWS S3 credentials the pipeline's default
-config does not carry.
+config does not carry, and `TestMonitoringIntegration`: against Longhorn 1.12
+the manager's `/metrics` takes 30s or more per scrape (it gathers volume
+metrics live from instance managers), so every Prometheus scrape times out even
+with a 60s scrapeTimeout and its series never appear; re-enable it via the
+parameter once that metrics latency is fixed upstream.
 
 ## Deliberate deviations
 
