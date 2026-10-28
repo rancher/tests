@@ -69,6 +69,7 @@ const (
 	CreateVerb                         = "create"
 	UpdateVerb                         = "update"
 	PatchVerb                          = "patch"
+	EditVerb                           = "edit"
 	DeleteVerb                         = "delete"
 	DeleteCollectionVerb               = "deletecollection"
 	Wildcard                           = "*"
