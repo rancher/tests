@@ -66,16 +66,25 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
 
       - name: Set up Go 
-        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: "./go.mod"
           cache-dependency-path: "**/*.sum"
 
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: "${{ vars.TERRAFORM_VERSION }}"
+          terraform_wrapper: false
+
+      - name: Verify Terraform installation
+        run: terraform version
+        
       - name: Install gotestsum
         run: go install gotest.tools/gotestsum@c4a0df2e75a225d979a444342dd3db752b53619f # v1.13.0
 
@@ -90,8 +99,8 @@ jobs:
           chmod 600 ~/.ssh/$SSH_PRIVATE_KEY_NAME.pem
           echo "SSH_PRIVATE_KEY_PATH=$HOME/.ssh" >> $GITHUB_ENV
 
-      - name: Fetch and Set DockerHub Credentials
-        uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 
+      - name: Fetch and Set DockerHub Credentials from Vault
+        uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
         with:
           secrets: |
             secret/data/github/repo/${{ github.repository }}/dockerhub/org-token/credentials username | DOCKERHUB_USERNAME ;
