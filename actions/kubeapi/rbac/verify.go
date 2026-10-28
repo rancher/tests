@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/rancher"
@@ -728,7 +729,13 @@ func remainingBindingsForProvider(client *rancher.Client, prefix string) ([]stri
 
 	for _, grb := range grbs.Items {
 		if strings.HasPrefix(grb.GroupPrincipalName, prefix) || strings.HasPrefix(grb.UserPrincipalName, prefix) {
-			remaining = append(remaining, "globalrolebinding/"+grb.Name)
+			remaining = append(remaining, fmt.Sprintf(
+				"globalrolebinding/%s (userPrincipal %q, groupPrincipal %q, created %s)",
+				grb.Name,
+				grb.UserPrincipalName,
+				grb.GroupPrincipalName,
+				grb.CreationTimestamp.UTC().Format(time.RFC3339),
+			))
 		}
 	}
 
@@ -739,7 +746,14 @@ func remainingBindingsForProvider(client *rancher.Client, prefix string) ([]stri
 
 	for _, crtb := range crtbs.Items {
 		if strings.HasPrefix(crtb.GroupPrincipalName, prefix) || strings.HasPrefix(crtb.UserPrincipalName, prefix) {
-			remaining = append(remaining, "clusterroletemplatebinding/"+crtb.Name)
+			remaining = append(remaining, fmt.Sprintf(
+				"clusterroletemplatebinding/%s/%s (userPrincipal %q, groupPrincipal %q, created %s)",
+				crtb.Namespace,
+				crtb.Name,
+				crtb.UserPrincipalName,
+				crtb.GroupPrincipalName,
+				crtb.CreationTimestamp.UTC().Format(time.RFC3339),
+			))
 		}
 	}
 
@@ -750,7 +764,14 @@ func remainingBindingsForProvider(client *rancher.Client, prefix string) ([]stri
 
 	for _, prtb := range prtbs.Items {
 		if strings.HasPrefix(prtb.GroupPrincipalName, prefix) || strings.HasPrefix(prtb.UserPrincipalName, prefix) {
-			remaining = append(remaining, "projectroletemplatebinding/"+prtb.Name)
+			remaining = append(remaining, fmt.Sprintf(
+				"projectroletemplatebinding/%s/%s (userPrincipal %q, groupPrincipal %q, created %s)",
+				prtb.Namespace,
+				prtb.Name,
+				prtb.UserPrincipalName,
+				prtb.GroupPrincipalName,
+				prtb.CreationTimestamp.UTC().Format(time.RFC3339),
+			))
 		}
 	}
 

@@ -126,6 +126,9 @@ func (k *KeycloakOIDCTerraformSuite) SetupSuite() {
 	require.NotEmpty(k.T(), keycloakConfig.ClientSecret, "Keycloak OIDC setup should have produced the client secret terraform writes")
 	require.NotEmpty(k.T(), keycloakConfig.Issuer, "Keycloak OIDC setup should have produced the issuer Rancher reads its endpoints from")
 
+	logrus.Info("Making sure the Keycloak OIDC auth config record exists, since terraform reads it before it can manage the provider")
+	require.NoError(k.T(), authactions.EnsureAuthConfigPresent(k.client, authactions.KeycloakOIDC), "Failed to ensure the Keycloak OIDC auth config exists")
+
 	logrus.Info("Setting up the terraform workspace for the Keycloak OIDC auth config resource")
 	k.terratestConfig.PathToRepo = filepath.Join(k.terratestConfig.PathToRepo, authproviders.KeycloakOIDC)
 
