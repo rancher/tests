@@ -123,6 +123,9 @@ func (k *KeycloakSAMLTerraformSuite) SetupSuite() {
 	require.NotEmpty(k.T(), keycloakConfig.IdpMetadataContent, "Keycloak SAML setup should have produced the identity provider metadata terraform writes")
 	require.NotEmpty(k.T(), keycloakConfig.RancherAPIHost, "Keycloak SAML setup should have produced the host Keycloak issues assertions for")
 
+	logrus.Info("Making sure the Keycloak SAML auth config record exists, since terraform reads it before it can manage the provider")
+	require.NoError(k.T(), authactions.EnsureAuthConfigPresent(k.client, authactions.KeycloakSAML), "Failed to ensure the Keycloak SAML auth config exists")
+
 	logrus.Info("Setting up the terraform workspace for the Keycloak SAML auth config resource")
 	k.terratestConfig.PathToRepo = filepath.Join(k.terratestConfig.PathToRepo, authproviders.KeycloakSAML)
 

@@ -245,14 +245,19 @@ func VerifyUserLogins(authAdmin *rancher.Client, providerName string, users []Us
 	return nil
 }
 
-// EnsureAuthProviderEnabled enables the specified auth provider and waits for it to be ready
-func EnsureAuthProviderEnabled(client *rancher.Client, providerName string) error {
+// EnsureAuthConfigPresent creates the auth config record for the specified provider when the Rancher server holds none
+func EnsureAuthConfigPresent(client *rancher.Client, providerName string) error {
 	configType, supported := authConfigTypes[providerName]
 	if !supported {
 		return fmt.Errorf("unsupported auth provider: %s", providerName)
 	}
 
-	if err := authconfigsapi.EnsureAuthConfigExists(client, providerName, configType); err != nil {
+	return authconfigsapi.EnsureAuthConfigExists(client, providerName, configType)
+}
+
+// EnsureAuthProviderEnabled enables the specified auth provider and waits for it to be ready
+func EnsureAuthProviderEnabled(client *rancher.Client, providerName string) error {
+	if err := EnsureAuthConfigPresent(client, providerName); err != nil {
 		return err
 	}
 
