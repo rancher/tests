@@ -507,7 +507,16 @@ func (l *LonghornTestSuite) TestMonitoringIntegration() {
 			MatchNames: []string{charts.LonghornNamespace},
 		},
 		Endpoints: []monitoringv1.Endpoint{
-			{Port: "manager"},
+			{
+				Port: "manager",
+				// Longhorn 1.12's manager gathers volume metrics live from
+				// instance managers per scrape, so /metrics can take tens of
+				// seconds; the 10s default scrape timeout drops every sample
+				// (verified live: all longhorn-backend targets down with
+				// "context deadline exceeded"). Allow a full minute.
+				Interval:      "90s",
+				ScrapeTimeout: "60s",
+			},
 		},
 	}
 
