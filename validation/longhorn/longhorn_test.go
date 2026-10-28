@@ -53,13 +53,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-var (
-	LonghornEncryptionSecretBaseName       = "longhorn-crypto"
-	LonghornEncryptionStorageClassBaseName = "longhorn-crypto-global"
-	volumeBytesPrometheusQueryTemplate     = "longhorn_volume_capacity_bytes{volume=\"%s\"}"
-	numberVolumesPrometheusQuery           = "count(longhorn_volume_capacity_bytes) OR on() vector(0)" // Return an empty list instead of nil with OR on() vector(0).
-)
-
 type LonghornTestSuite struct {
 	suite.Suite
 	client             *rancher.Client
@@ -69,33 +62,22 @@ type LonghornTestSuite struct {
 	project            *management.Project
 }
 
-// rancherUpgradePipelineConfigKey is the cattle-config key of the pipeline
-// marker; validation/rancherupgrade owns the canonical definition.
-const rancherUpgradePipelineConfigKey = "rancherUpgradePipeline"
+// skipTearDown reports whether the dispatched config sets skipTearDown, asking
+// this suite to leave its resources in place instead of tearing them down.
+func skipTearDown() bool {
+	skip := false
+	operations.LoadObjectFromMap(skipTearDownConfigKey, config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey)), &skip)
 
-// upgradePipelineConfig mirrors validation/rancherupgrade's PipelineInput marker
-// section; declared locally so this suite does not depend on another validation
-// package for a single bool.
-type upgradePipelineConfig struct {
-	Enabled bool `json:"enabled" yaml:"enabled"`
-}
-
-// runningInUpgradePipeline reports whether the loaded test config carries the
-// rancherUpgradePipeline marker section.
-func runningInUpgradePipeline() bool {
-	pipeline := new(upgradePipelineConfig)
-	operations.LoadObjectFromMap(rancherUpgradePipelineConfigKey, config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey)), pipeline)
-
-	return pipeline.Enabled
+	return skip
 }
 
 func (l *LonghornTestSuite) TearDownSuite() {
-	if runningInUpgradePipeline() {
+	if skipTearDown() {
 		// The rancher-upgrade pipeline runs this suite as pre-upgrade functional
 		// coverage: its workloads must survive the in-place server upgrade so the
 		// post-upgrade phases assert against an environment carrying real load.
 		// The pipeline environment teardown is the cleanup.
-		l.T().Log("rancher-upgrade pipeline detected: skipping teardown so the suite's resources survive the server upgrade")
+		l.T().Log("skipTearDown is set: skipping teardown so the suite's resources survive the server upgrade")
 		return
 	}
 

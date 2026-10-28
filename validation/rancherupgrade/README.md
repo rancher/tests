@@ -23,12 +23,13 @@ under deterministic names (PVC/deployment `rancher-upgrade-longhorn`, data file
 
 Before the seed dispatch, the pipeline optionally runs the primary
 `validation/longhorn` suite as pre-upgrade functional coverage
-(`LONGHORN_FUNCTIONAL_COVERAGE`, default on): the suite detects the
-`rancherUpgradePipeline` marker in the dispatched config and skips its own teardown, so
+(`LONGHORN_FUNCTIONAL_COVERAGE`, default on): the dispatched config sets
+`skipTearDown: true` and the suite skips its own teardown, so
 its projects, PVCs, and workloads survive the server upgrade and the post-upgrade
 phases assert against an environment carrying real Longhorn load. The default
-`LONGHORN_FUNCTIONAL_TESTCASE` selection excludes `TestVolumeEncryption`, which needs
-cloud credentials the pipeline's default config does not carry.
+`LONGHORN_FUNCTIONAL_TESTCASE` selection excludes `TestVolumeEncryption`, whose
+encrypted-backup verification needs AWS S3 credentials the pipeline's default
+config does not carry.
 
 ## Deliberate deviations
 

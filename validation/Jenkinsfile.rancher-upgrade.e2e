@@ -7,10 +7,10 @@
  *   1. Setup: checks out tests + qa-infra-automation, builds the pinned
  *      images, installs yq, detects the runner IP, and resolves the upgrade
  *      window
- *   2. Deploy Rancher Pre-Upgrade Environment: deploys a 2.14-latest
- *      environment via qa-infra-automation (make backend-s3, workspace-new,
- *      infra-up, cluster, rancher), then writes the test config and injects
- *      the admin token
+ *   2. Deploy Rancher Pre-Upgrade Environment: deploys the previous release
+ *      line (n-1, currently 2.14-latest) via qa-infra-automation (make
+ *      backend-s3, workspace-new, infra-up, cluster, rancher), then writes
+ *      the test config and injects the admin token
  *   3. Rancher Upgrade Validation: seeds the upgrade state
  *      (validation/rancherupgrade, TestLonghornPreUpgrade), optionally runs
  *      the primary validation/longhorn suite as pre-upgrade functional
@@ -66,8 +66,8 @@ def CHART_UPGRADE_TESTCASE = '-run "TestLonghornUpgradeTestSuite/TestLonghornCha
 
 // Pre-upgrade functional coverage reuses the primary Longhorn suite
 // (validation/longhorn) instead of duplicating its cases here. The default
-// selector excludes TestVolumeEncryption, which needs cloud credentials the
-// pipeline's default config does not carry; override the
+// selector excludes TestVolumeEncryption, whose encrypted-backup verification
+// needs AWS S3 credentials the pipeline's default config does not carry; override the
 // LONGHORN_FUNCTIONAL_TESTCASE parameter to include it when the dispatched
 // config provides them.
 def FUNCTIONAL_TEST_PACKAGE = './validation/longhorn/...'
@@ -376,7 +376,12 @@ rancherUpgradeInput:
 # Marker: set only by this pipeline. The suite fails rather than skips when
 # this marker is present but the target version is missing (pipeline bug).
 rancherUpgradePipeline:
-    enabled: true''',
+    enabled: true
+# Ask suites that support it (validation/longhorn) to leave their resources in
+# place: this pipeline dispatches that suite as pre-upgrade functional coverage
+# whose resources must survive the in-place server upgrade; the pipeline's
+# environment teardown is the cleanup.
+skipTearDown: true''',
         )
         booleanParam(
             name: 'REPORT_ARTIFACTS',
@@ -408,7 +413,7 @@ rancherUpgradePipeline:
         string(
             name: 'LONGHORN_FUNCTIONAL_TESTCASE',
             defaultValue: '-run "TestLonghornTestSuite/(TestRBACIntegration|TestScaleStatefulSetWithPVC|TestMonitoringIntegration)"',
-            description: '-run selector for the pre-upgrade functional coverage dispatch. Default excludes TestVolumeEncryption, which needs cloud credentials the default config does not carry'
+            description: '-run selector for the pre-upgrade functional coverage dispatch. Default excludes TestVolumeEncryption, whose encrypted-backup verification needs AWS S3 credentials the default config does not carry'
         )
         string(
             name: 'QASE_REPORTER_SCRIPT',
@@ -823,8 +828,8 @@ rancher_use_bundled_system_charts: true
                         dispatchUpgradePhase('pre-upgrade seed', PRE_UPGRADE_TESTCASE, testRunID, configYaml)
 
                         // ── Pre-upgrade functional coverage: primary Longhorn suite ──
-                        // The dispatched config carries the rancherUpgradePipeline marker,
-                        // so the suite skips its own teardown and its resources survive
+                        // The dispatched config sets skipTearDown: true, so the
+                        // suite skips its own teardown and its resources survive
                         // the server upgrade as extra post-upgrade state.
                         if (params.LONGHORN_FUNCTIONAL_COVERAGE) {
                             dispatchUpgradePhase('pre-upgrade functional coverage', params.LONGHORN_FUNCTIONAL_TESTCASE, testRunID, configYaml, FUNCTIONAL_TEST_PACKAGE)
