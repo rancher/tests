@@ -17,6 +17,7 @@ import (
 )
 
 const (
+	KubeSystemNamespace                     = "kube-system"
 	ContainerDefaultResourceLimitAnnotation = "field.cattle.io/containerDefaultResourceLimit"
 	ProjectIDAnnotation                     = "field.cattle.io/projectId"
 	ResourceQuotaAnnotation                 = "field.cattle.io/resourceQuota"

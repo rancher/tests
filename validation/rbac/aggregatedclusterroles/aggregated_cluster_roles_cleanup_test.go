@@ -66,17 +66,13 @@ func (acrd *AggregatedClusterRolesCleanupTestSuite) SetupSuite() {
 	acrd.cluster, err = acrd.client.Management.Cluster.ByID(clusterID)
 	require.NoError(acrd.T(), err)
 
-	featureDefault, err := rbacapi.GetAggregatedRoleTemplatesDefault(acrd.client)
-	require.NoError(acrd.T(), err, "Failed to get the feature flag default value")
-	if !featureDefault {
-		featureEnabled, err := extfeaturesapi.IsFeatureEnabled(acrd.client, rbacapi.AggregatedRoleTemplatesFeatureFlag)
-		require.NoError(acrd.T(), err, "Failed to check if feature flag is enabled")
-		if !featureEnabled {
-			log.Infof("Enabling the feature flag %s", rbacapi.AggregatedRoleTemplatesFeatureFlag)
-			err := extfeaturesapi.EnableFeatureFlag(acrd.client, rbacapi.AggregatedRoleTemplatesFeatureFlag)
-			require.NoError(acrd.T(), err, "Failed to enable the feature flag")
-			acrd.featureEnabledBySuite = true
-		}
+	featureEnabled, err := extfeaturesapi.IsFeatureEnabled(acrd.client, rbacapi.AggregatedRoleTemplatesFeatureFlag)
+	require.NoError(acrd.T(), err, "Failed to check if the feature flag is enabled")
+	if !featureEnabled {
+		log.Infof("Enabling the feature flag %s", rbacapi.AggregatedRoleTemplatesFeatureFlag)
+		err := extfeaturesapi.EnableFeatureFlag(acrd.client, rbacapi.AggregatedRoleTemplatesFeatureFlag)
+		require.NoError(acrd.T(), err, "Failed to enable the feature flag")
+		acrd.featureEnabledBySuite = true
 	}
 }
 

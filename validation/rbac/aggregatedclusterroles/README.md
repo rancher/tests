@@ -11,6 +11,8 @@ Your GO suite should be set to `-run ^Test<TestSuite>$`
 - To run the CRTB tests in aggregated_cluster_roles_crtb_test.go, set the GO suite to `-run ^TestAggregatedClusterRolesCrtbTestSuite$`
 - To run the PRTB tests in aggregated_cluster_roles_prtb_test.go, set the GO suite to `-run ^TestAggregatedClusterRolesPrtbTestSuite$`
 - To run the CRTB tests in aggregated_cluster_roles_cleanup_test.go, set the GO suite to `-run ^TestAggregatedClusterRolesCleanupTestSuite$`
+- To run the clusterScopedRules tests in cluster_scoped_rules_test.go, set the GO suite to `-run ^TestClusterScopedRulesTestSuite$`
+- To run the clusterScopedRules lifecycle tests in cluster_scoped_rules_lifecycle_test.go, set the GO suite to `-run ^TestClusterScopedRulesLifecycleTestSuite$`
 
 In your config file, set the following:
 

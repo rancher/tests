@@ -34,6 +34,8 @@ const (
 	RkeCattleAPIGroup                  = "rke.cattle.io"
 	ProjectCattleAPIGroup              = "project.cattle.io"
 	CatalogCattleAPIGroup              = "catalog.cattle.io"
+	APIRegistrationAPIGroup            = "apiregistration.k8s.io"
+	StorageAPIGroup                    = "storage.k8s.io"
 	AppsAPIGroup                       = "apps"
 	CompletedSummary                   = "Completed"
 	MembershipBindingOwnerLabel        = "membership-binding-owner"
@@ -44,11 +46,32 @@ const (
 	ProjectResource                    = "projects"
 	GlobalRoleResource                 = "globalroles"
 	GlobalRoleBindingResource          = "globalrolebindings"
+	RoleTemplateResource               = "roletemplates"
+	CrtbResource                       = "clusterroletemplatebindings"
 	PrtbResource                       = "projectroletemplatebindings"
-	CatalogAppsResource                = "apps"
+	AppsResource                       = "apps"
 	SecretsResource                    = "secrets"
 	DeploymentsResource                = "deployments"
 	PodsResource                       = "pods"
+	ConfigMapResource                  = "configmaps"
+	ProjectsResource                   = "projects"
+	NamespaceResource                  = "namespaces"
+	StatefulSetResource                = "statefulsets"
+	NodesResource                      = "nodes"
+	PersistentVolumesResource          = "persistentvolumes"
+	StorageClassesResource             = "storageclasses"
+	APIServicesResource                = "apiservices"
+	ClusterReposResource               = "clusterrepos"
+	ClustersResource                   = "clusters"
+	GetVerb                            = "get"
+	ListVerb                           = "list"
+	WatchVerb                          = "watch"
+	CreateVerb                         = "create"
+	UpdateVerb                         = "update"
+	PatchVerb                          = "patch"
+	DeleteVerb                         = "delete"
+	DeleteCollectionVerb               = "deletecollection"
+	Wildcard                           = "*"
 	ManageUsersVerb                    = "manage-users"
 	UpdatePsaVerb                      = "updatepsa"
 	ClusterOwnerRoleSuffix             = "clusterowner"
@@ -76,20 +99,23 @@ var (
 	}
 
 	PolicyRules = map[string][]rbacv1.PolicyRule{
-		"readProjects":      definePolicyRules([]string{"get", "list"}, []string{"projects"}, []string{ManagementAPIGroup}),
-		"createProjects":    definePolicyRules([]string{"create"}, []string{"projects"}, []string{ManagementAPIGroup}),
-		"updateProjects":    definePolicyRules([]string{"update", "patch"}, []string{"projects"}, []string{ManagementAPIGroup}),
-		"deleteProjects":    definePolicyRules([]string{"delete"}, []string{"projects"}, []string{ManagementAPIGroup}),
-		"manageProjects":    definePolicyRules([]string{"create", "update", "patch", "delete"}, []string{"projects"}, []string{ManagementAPIGroup}),
-		"readPrtbs":         definePolicyRules([]string{"get", "list"}, []string{"projectroletemplatebindings"}, []string{ManagementAPIGroup}),
-		"updatePrtbs":       definePolicyRules([]string{"update", "patch"}, []string{"projectroletemplatebindings"}, []string{ManagementAPIGroup}),
-		"readDeployments":   definePolicyRules([]string{"get", "list"}, []string{"deployments"}, []string{AppsAPIGroup}),
-		"readPods":          definePolicyRules([]string{"get", "list"}, []string{"pods"}, []string{""}),
-		"readNamespaces":    definePolicyRules([]string{"get", "list"}, []string{"namespaces"}, []string{""}),
-		"readConfigMaps":    definePolicyRules([]string{"get", "list"}, []string{"configmaps"}, []string{""}),
-		"readSecrets":       definePolicyRules([]string{"get", "list"}, []string{"secrets"}, []string{""}),
-		"readStatefulSets":  definePolicyRules([]string{"get", "list"}, []string{"statefulsets"}, []string{AppsAPIGroup}),
-		"deleteDeployments": definePolicyRules([]string{"delete"}, []string{"deployments"}, []string{AppsAPIGroup}),
+		"readProjects":                definePolicyRules([]string{GetVerb, ListVerb}, []string{ProjectResource}, []string{ManagementAPIGroup}),
+		"createProjects":              definePolicyRules([]string{CreateVerb}, []string{ProjectResource}, []string{ManagementAPIGroup}),
+		"updateProjects":              definePolicyRules([]string{UpdateVerb, PatchVerb}, []string{ProjectResource}, []string{ManagementAPIGroup}),
+		"deleteProjects":              definePolicyRules([]string{DeleteVerb}, []string{ProjectResource}, []string{ManagementAPIGroup}),
+		"manageProjects":              definePolicyRules([]string{CreateVerb, UpdateVerb, PatchVerb, DeleteVerb}, []string{ProjectResource}, []string{ManagementAPIGroup}),
+		"readPrtbs":                   definePolicyRules([]string{GetVerb, ListVerb}, []string{PrtbResource}, []string{ManagementAPIGroup}),
+		"updatePrtbs":                 definePolicyRules([]string{UpdateVerb, PatchVerb}, []string{PrtbResource}, []string{ManagementAPIGroup}),
+		"readDeployments":             definePolicyRules([]string{GetVerb, ListVerb}, []string{DeploymentsResource}, []string{AppsAPIGroup}),
+		"readConfigMaps":              definePolicyRules([]string{GetVerb, ListVerb}, []string{ConfigMapResource}, []string{""}),
+		"readPods":                    definePolicyRules([]string{GetVerb, ListVerb}, []string{PodsResource}, []string{""}),
+		"allPods":                     definePolicyRules([]string{Wildcard}, []string{PodsResource}, []string{""}),
+		"writePods":                   definePolicyRules([]string{GetVerb, ListVerb, CreateVerb, DeleteVerb}, []string{PodsResource}, []string{""}),
+		"readNamespaces":              definePolicyRules([]string{GetVerb, ListVerb}, []string{NamespaceResource}, []string{""}),
+		"readSecrets":                 definePolicyRules([]string{GetVerb, ListVerb}, []string{SecretsResource}, []string{""}),
+		"readStatefulSets":            definePolicyRules([]string{GetVerb, ListVerb}, []string{StatefulSetResource}, []string{AppsAPIGroup}),
+		"deleteDeployments":           definePolicyRules([]string{DeleteVerb}, []string{DeploymentsResource}, []string{AppsAPIGroup}),
+		"authorRoleTemplatesAndPrtbs": definePolicyRules([]string{GetVerb, ListVerb, CreateVerb, UpdateVerb}, []string{RoleTemplateResource, PrtbResource}, []string{ManagementAPIGroup}),
 	}
 )
 
@@ -464,6 +490,23 @@ func WaitForClusterRoleExistence(client *rancher.Client, clusterID, clusterRoleN
 	})
 }
 
+// WaitForRoleTemplateClusterRolesDeletion waits until no generated ClusterRoles remain for a RoleTemplate.
+func WaitForRoleTemplateClusterRolesDeletion(client *rancher.Client, clusterID, templateName string) error {
+	err := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.TwoMinuteTimeout, true, func(ctx context.Context) (bool, error) {
+		roles, err := GetClusterRolesForRoleTemplates(client, clusterID, templateName)
+		if err != nil {
+			return false, err
+		}
+		return len(roles.Items) == 0, nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("waiting for ClusterRoles for RoleTemplate %s in cluster %s to be deleted: %w", templateName, clusterID, err)
+	}
+
+	return nil
+}
+
 // WaitForRoleExistence polls until the Role exists or does not exist, based on shouldExist.
 func WaitForRoleExistence(client *rancher.Client, clusterID, namespaceName, roleName string, shouldExist bool) error {
 	wranglerCtx, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
@@ -536,4 +579,22 @@ func GetAggregatedRoleTemplatesDefault(client *rancher.Client) (bool, error) {
 	}
 
 	return feature.Status.Default, nil
+}
+
+// GrantRoleTemplateAndPRTBAuthoring grants get, list, create, and update on RoleTemplates and project role template bindings.
+func GrantRoleTemplateAndPRTBAuthoring(client *rancher.Client, userName string) error {
+	role, err := CreateGlobalRoleWithAllRules(client, nil, PolicyRules["authorRoleTemplatesAndPrtbs"], nil, nil)
+	if err != nil {
+		return err
+	}
+	_, err = CreateGlobalRoleBinding(client, role.Name, userName, "", "")
+	return err
+}
+
+// GetProjectRoleTemplateBindingNamespace returns the namespace in which a PRTB for the given project must be created.
+func GetProjectRoleTemplateBindingNamespace(project *v3.Project) string {
+	if project.Status.BackingNamespace != "" {
+		return fmt.Sprintf("%s-%s", project.Spec.ClusterName, project.Name)
+	}
+	return project.Name
 }

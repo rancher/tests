@@ -118,10 +118,7 @@ func CreateClusterRoleTemplateBinding(client *rancher.Client, clusterID string, 
 func CreateProjectRoleTemplateBinding(client *rancher.Client, userName string, project *v3.Project, roleTemplateID string) (*v3.ProjectRoleTemplateBinding, error) {
 	projectName := fmt.Sprintf("%s:%s", project.Namespace, project.Name)
 
-	prtbNamespace := project.Name
-	if project.Status.BackingNamespace != "" {
-		prtbNamespace = fmt.Sprintf("%s-%s", project.Spec.ClusterName, project.Name)
-	}
+	prtbNamespace := GetProjectRoleTemplateBindingNamespace(project)
 
 	prtbObj := &v3.ProjectRoleTemplateBinding{
 		ObjectMeta: metav1.ObjectMeta{
