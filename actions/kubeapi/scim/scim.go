@@ -62,12 +62,20 @@ const (
 	SCIMExternalIDPrefix   = "scim-ext"
 	SCIMPathPrefix         = "/v1-scim/"
 
-	SCIMAuditUserPrefix   = "system:scim:"
-	SCIMAuditGroup        = "system:scim"
-	SCIMAuditProviderKey  = "scim.cattle.io/provider"
-	SCIMAuditTokenKey     = "scim.cattle.io/token-id"
-	SCIMAuditRedacted     = "[redacted]"
-	SCIMAuditPasswordPath = "password"
+	SCIMAuditUserPrefix      = "system:scim:"
+	SCIMAuditGroup           = "system:scim"
+	SCIMAuditProviderKey     = "scim.cattle.io/provider"
+	SCIMAuditTokenKey        = "scim.cattle.io/token-id"
+	SCIMAuditRedacted        = "[redacted]"
+	SCIMAuditPasswordPath    = "password"
+	SCIMAuditTokenPath       = "token"
+	SCIMAuditKubeconfigPath  = "kubeconfig"
+	SCIMAuditURNPasswordPath = "urn:ietf:params:scim:schemas:core:2.0:User:password"
+	SCIMAuditDisplayNamePath = "displayName"
+	SCIMAuthorizationHeader  = "Authorization"
+	SCIMContentType          = "application/scim+json"
+	JSONContentType          = "application/json"
+	SCIMLocalClusterPrefix   = "/k8s/clusters/local"
 
 	UserAttributeExternalIDKey = "externalid"
 	UserAttributeEmailKey      = "email"
@@ -1241,4 +1249,26 @@ func CountSCIMCodes(results []int) (ok, throttled int) {
 		}
 	}
 	return ok, throttled
+}
+
+// SendRawSCIMRequest sends a SCIM request with the given method, path, content type and body, carrying the provider's bearer token
+func SendRawSCIMRequest(client *rancher.Client, providerName, method, path, contentType string, body interface{}) (*clientbase.Response, error) {
+	token, err := FetchSCIMBearerToken(client, providerName)
+	if err != nil {
+		return nil, err
+	}
+
+	return client.Management.Ops.RawHttpRequest(method, fmt.Sprintf("https://%s%s", client.RancherConfig.Host, path), body, map[string]string{
+		"Authorization": "Bearer " + token,
+		"Content-Type":  contentType,
+		"Accept":        SCIMContentType,
+	})
+}
+
+// NewSCIMPatchBody returns the body of a SCIM PATCH request carrying a single operation
+func NewSCIMPatchBody(op, path string, value interface{}) map[string]interface{} {
+	return map[string]interface{}{
+		"schemas":    []string{"urn:ietf:params:scim:api:messages:2.0:PatchOp"},
+		"Operations": []map[string]interface{}{{"op": op, "path": path, "value": value}},
+	}
 }

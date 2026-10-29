@@ -11,6 +11,7 @@ import (
 	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	extdeployments "github.com/rancher/shepherd/extensions/kubeapi/workloads/deployments"
 	"github.com/rancher/tests/actions/kubeapi/rancherserver"
+	"github.com/rancher/tests/actions/kubeapi/workloads/deployments"
 	"github.com/sirupsen/logrus"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -25,13 +26,18 @@ func RancherAuditLogs(client *rancher.Client) (string, error) {
 }
 
 const (
-	RancherAuditLogContainer = "rancher-audit-log"
-	RancherAuditLevelEnv     = "AUDIT_LEVEL"
+	RancherAuditLogContainer     = "rancher-audit-log"
+	RancherAuditLevelEnv         = "AUDIT_LEVEL"
+	RancherAuditExcludeGroupsEnv = "AUDIT_EXCLUDE_GROUPS"
 
-	RancherAuditLevel  = "2"
-	AuditLogVolumeName = "audit-log"
-	AuditLogMountPath  = "/var/log/auditlog"
-	AuditLogFilePath   = "/var/log/auditlog/rancher-api-audit.log"
+	RancherAuditLevel         = "2"
+	RancherAuditLevelMetadata = "0"
+	RancherAuditLevelHeaders  = "1"
+	RancherAuditLevelResponse = "3"
+	AuditLogErrorKey          = "auditLogError"
+	AuditLogVolumeName        = "audit-log"
+	AuditLogMountPath         = "/var/log/auditlog"
+	AuditLogFilePath          = "/var/log/auditlog/rancher-api-audit.log"
 
 	auditLogBodyLevel    = 2
 	auditLogEnabledEnv   = "AUDIT_LOG_ENABLED"
@@ -47,13 +53,14 @@ type User struct {
 }
 
 type Entry struct {
-	AuditID      string         `json:"auditID,omitempty"`
-	RequestURI   string         `json:"requestURI,omitempty"`
-	Method       string         `json:"method,omitempty"`
-	ResponseCode int            `json:"responseCode,omitempty"`
-	User         *User          `json:"user,omitempty"`
-	RequestBody  map[string]any `json:"requestBody,omitempty"`
-	ResponseBody map[string]any `json:"responseBody,omitempty"`
+	AuditID       string              `json:"auditID,omitempty"`
+	RequestURI    string              `json:"requestURI,omitempty"`
+	Method        string              `json:"method,omitempty"`
+	ResponseCode  int                 `json:"responseCode,omitempty"`
+	User          *User               `json:"user,omitempty"`
+	RequestHeader map[string][]string `json:"requestHeader,omitempty"`
+	RequestBody   map[string]any      `json:"requestBody,omitempty"`
+	ResponseBody  map[string]any      `json:"responseBody,omitempty"`
 }
 
 // EnsureRancherAuditLogging turns the Rancher audit log on at the given level with a sidecar that serves it, and returns a function that puts the deployment back as it was
@@ -281,4 +288,60 @@ func rancherDeployment(client *rancher.Client) (*appsv1.Deployment, error) {
 	}
 
 	return deployment, nil
+}
+
+// FetchFirstPatchOperation returns the single operation recorded in the entry's SCIM PATCH request body
+func FetchFirstPatchOperation(entry Entry) (map[string]any, error) {
+	operations, ok := entry.RequestBody["Operations"].([]any)
+	if !ok {
+		return nil, fmt.Errorf("the recorded body of %s holds no Operations array", entry.RequestURI)
+	}
+
+	if len(operations) != 1 {
+		return nil, fmt.Errorf("the recorded body of %s holds %d operations, want 1", entry.RequestURI, len(operations))
+	}
+
+	operation, ok := operations[0].(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("the recorded operation of %s is not an object", entry.RequestURI)
+	}
+
+	return operation, nil
+}
+
+// EnsureRancherAuditExcludeGroups sets the audit exclude groups variable on the Rancher server container and returns a function that puts its previous value back
+func EnsureRancherAuditExcludeGroups(client *rancher.Client, value string) (func() error, error) {
+	deployment, err := extdeployments.GetDeploymentByName(client, extclusterapi.LocalCluster, extdeployments.RancherDeploymentNamespace, extdeployments.RancherDeploymentName)
+	if err != nil {
+		return nil, fmt.Errorf("getting the %s/%s deployment: %w", extdeployments.RancherDeploymentNamespace, extdeployments.RancherDeploymentName, err)
+	}
+
+	previous := ""
+	for _, container := range deployment.Spec.Template.Spec.Containers {
+		if container.Name != rancherserver.RancherContainer {
+			continue
+		}
+
+		for _, env := range container.Env {
+			if env.Name == RancherAuditExcludeGroupsEnv {
+				previous = env.Value
+			}
+		}
+	}
+
+	if previous == value {
+		logrus.Infof("The Rancher deployment already runs with %s=%s", RancherAuditExcludeGroupsEnv, value)
+		return func() error { return nil }, nil
+	}
+
+	logrus.Infof("Setting %s=%s on the %s deployment", RancherAuditExcludeGroupsEnv, value, extdeployments.RancherDeploymentName)
+	if err := deployments.UpdateOrRemoveEnvVarForDeployment(client, extclusterapi.LocalCluster, extdeployments.RancherDeploymentNamespace, extdeployments.RancherDeploymentName, RancherAuditExcludeGroupsEnv, value); err != nil {
+		return nil, err
+	}
+
+	return func() error {
+		logrus.Infof("Restoring %s on the %s deployment", RancherAuditExcludeGroupsEnv, extdeployments.RancherDeploymentName)
+
+		return deployments.UpdateOrRemoveEnvVarForDeployment(client, extclusterapi.LocalCluster, extdeployments.RancherDeploymentNamespace, extdeployments.RancherDeploymentName, RancherAuditExcludeGroupsEnv, previous)
+	}, nil
 }
