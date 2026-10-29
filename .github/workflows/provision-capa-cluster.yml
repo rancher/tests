@@ -59,6 +59,7 @@ jobs:
       RANCHER_URL: ${{ inputs.rancher_url }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_AMI: ${{ secrets.AWS_AMI }}
+      AWS_SSH_KEY_NAME: ${{ secrets.SSH_PRIVATE_KEY_NAME }}
       AWS_VPC_ID: ${{ secrets.AWS_VPC_ID }}
       AWS_SUBNET_ID: ${{ secrets.AWS_SUBNET_ID }}
       AWS_SG: ${{ secrets.AWS_SG }}
