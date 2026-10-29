@@ -12,6 +12,7 @@ import (
 	"github.com/rancher/shepherd/extensions/defaults"
 	extuserapi "github.com/rancher/shepherd/extensions/kubeapi/users"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
+	authactions "github.com/rancher/tests/actions/auth"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -355,4 +356,40 @@ func WaitForUserAttributeRefresh(client *rancher.Client, userID, previousRefresh
 			return current != "" && current != previousRefresh, nil
 		},
 	)
+}
+
+// SetUserGroupPrincipals writes the given group principal names onto the user's UserAttribute for the given auth provider, creating the UserAttribute when the user holds none
+func SetUserGroupPrincipals(client *rancher.Client, userID, providerName string, principalNames []string) error {
+	items := make([]v3.Principal, 0, len(principalNames))
+	for _, name := range principalNames {
+		items = append(items, v3.Principal{
+			ObjectMeta:    metav1.ObjectMeta{Name: name},
+			PrincipalType: authactions.PrincipalTypeGroup,
+			Provider:      providerName,
+			MemberOf:      true,
+		})
+	}
+
+	attribute, err := client.WranglerContext.Mgmt.UserAttribute().Get(userID, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		_, err = client.WranglerContext.Mgmt.UserAttribute().Create(&v3.UserAttribute{
+			ObjectMeta:      metav1.ObjectMeta{Name: userID},
+			GroupPrincipals: map[string]v3.Principals{providerName: {Items: items}},
+		})
+
+		return err
+	}
+	if err != nil {
+		return err
+	}
+
+	updated := attribute.DeepCopy()
+	if updated.GroupPrincipals == nil {
+		updated.GroupPrincipals = map[string]v3.Principals{}
+	}
+	updated.GroupPrincipals[providerName] = v3.Principals{Items: items}
+
+	_, err = client.WranglerContext.Mgmt.UserAttribute().Update(updated)
+
+	return err
 }
