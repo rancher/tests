@@ -1,13 +1,8 @@
 package imported
 
 import (
-	"context"
-	"fmt"
-	"time"
-
 	"github.com/rancher/shepherd/clients/rancher"
-	"github.com/rancher/shepherd/extensions/defaults"
-	kwait "k8s.io/apimachinery/pkg/util/wait"
+	"github.com/rancher/tests/actions/clusters/imported"
 )
 
 const (
@@ -45,20 +40,9 @@ func RotateEncryptionKey(client *rancher.Client, clusterName string) error {
 		return err
 	}
 
-	return kwait.PollUntilContextTimeout(context.TODO(), 10*time.Second, defaults.ThirtyMinuteTimeout, true, func(ctx context.Context) (bool, error) {
-		current, err := resourceType.ByID(created.ID)
-		if err != nil {
-			return false, err
-		}
+	if err := imported.WaitForOperation(client, encryptionKeyRotationSteveType, created.ID); err != nil {
+		return err
+	}
 
-		if current.State == nil {
-			return false, fmt.Errorf("encryption key rotation operation %s has no state", created.ID)
-		}
-
-		if current.State.Error {
-			return false, fmt.Errorf("encryption key rotation operation %s failed: %s", created.ID, current.State.Message)
-		}
-
-		return !current.State.Transitioning && current.State.Name != "pending" && current.State.Name != "restart", nil
-	})
+	return nil
 }

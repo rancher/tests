@@ -57,7 +57,7 @@ terraform:
   awsConfig:
     ami: ""
     awsKeyName: ""
-    awsInstanceType: "t"
+    awsInstanceType: ""
     awsVolumeType: ""
     region: ""
     awsSecurityGroups: ["sg-"]
@@ -70,7 +70,7 @@ terraform:
     sshConnectionType: "ssh"
     timeout: "5m"
   standalone:
-    k3sVersion: ""
+    rke2Version: ""
     osGroup: ""
     osUser: ""
 ```

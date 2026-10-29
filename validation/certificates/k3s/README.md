@@ -18,7 +18,7 @@ The certificate test verifies that a cluster can rotate certificates.
 
 #### Required Configurations:
 1. [Cloud Credential](#cloud-credential-config)
-2. [Cluster Config](#cluster-config) (with IPv6 settings)
+2. [Cluster Config](#cluster-config)
 3. [Machine Config](#machine-config)
 
 #### Table Tests:
@@ -27,7 +27,60 @@ The certificate test verifies that a cluster can rotate certificates.
 #### Run Commands:
 1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestCertRotation -timeout=2h -v`
 
+### Certificate Imported Tests
+
+#### Description:
+The certificate test verifies that a cluster can rotate certificates on an imported cluster.
+
+#### Required Configurations:
+1. [Cloud Credential](#cloud-credential-config)
+2. [Cluster Config](#cluster-config)
+3. [Machine Config](#machine-config)
+
+#### Table Tests:
+1. `K3S_Certificate_Rotation_Imported`
+
+#### Run Commands:
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/certificates/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestCertRotationImported -timeout=2h -v`
+
 ## Configurations
+
+### Terraform Config
+terraform config is needed when running imported clusters as rancher/tfp-automation is utilized to create the clusters.
+
+```yaml
+terraform:
+  downstreamClusterProvider: "aws"
+  privateKeyPath: ""
+  resourcePrefix: ""
+  awsConfig:
+    ami: ""
+    awsKeyName: ""
+    awsInstanceType: ""
+    awsVolumeType: ""
+    region: ""
+    awsSecurityGroups: ["sg-"]
+    awsSecurityGroupNames: [""]
+    awsSubnetID: ""
+    awsVpcID: ""
+    awsZoneLetter: "a"
+    awsRootSize: 100
+    awsUser: "ubuntu"
+    sshConnectionType: "ssh"
+    timeout: "5m"
+  standalone:
+    k3sVersion: ""
+    osGroup: ""
+    osUser: ""
+```
+
+Also, be sure to export the following variables:
+
+```
+export RANCHER2_PROVIDER_VERSION=""                                     # Required
+export CLOUD_PROVIDER_VERSION=""                                        # Required for infrastructure building
+export LOCALS_PROVIDER_VERSION=""                                       # Required for infrastructure building
+```
 
 ### Existing cluster:
 ```yaml
