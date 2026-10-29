@@ -24,6 +24,7 @@ const (
 	ResourceQuotaStatusAnnotation           = "cattle.io/status"
 	InitialUsedResourceQuotaValue           = "0"
 	ManagedResourceQuotaLabel               = "resourcequota.management.cattle.io/default-resource-quota"
+	TrueLabelValue                          = "true"
 )
 
 // GetNamespacesInProject retrieves all namespaces in a specific project within a cluster
@@ -68,6 +69,7 @@ func GetNamespaceAnnotation(client *rancher.Client, clusterID string, namespaceN
 }
 
 // WaitForProjectIDUpdate is a helper that waits for the project-id annotation and label to be updated in a specified namespace
+// An empty project name waits for both keys to be removed.
 func WaitForProjectIDUpdate(client *rancher.Client, clusterID, projectName, namespaceName string) error {
 	expectedAnnotations := map[string]string{
 		ProjectIDAnnotation: clusterID + ":" + projectName,
@@ -81,6 +83,12 @@ func WaitForProjectIDUpdate(client *rancher.Client, clusterID, projectName, name
 		namespace, pollErr := extnamespaceapi.GetNamespaceByName(client, clusterID, namespaceName)
 		if pollErr != nil {
 			return false, pollErr
+		}
+
+		if projectName == "" {
+			_, hasAnnotation := namespace.Annotations[ProjectIDAnnotation]
+			_, hasLabel := namespace.Labels[ProjectIDAnnotation]
+			return !hasAnnotation && !hasLabel, nil
 		}
 
 		for key, expectedValue := range expectedAnnotations {

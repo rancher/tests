@@ -343,6 +343,15 @@ func CheckPrtbAccess(userContext *wrangler.Context, verb, prtbNamespace, prtbNam
 // CheckConfigMapAccess checks if a user has the specified access to a ConfigMap in a namespace. It returns true if the user has access, false otherwise.
 func CheckConfigMapAccess(userContext *wrangler.Context, verb, namespaceName, configMapName string) (bool, error) {
 	switch verb {
+	case CreateVerb:
+		configMap := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      namegen.AppendRandomString("testcm-"),
+				Namespace: namespaceName,
+			},
+		}
+		_, err := userContext.Core.ConfigMap().Create(configMap)
+		return err == nil, err
 	case GetVerb:
 		_, err := userContext.Core.ConfigMap().Get(namespaceName, configMapName, metav1.GetOptions{})
 		return err == nil, err
