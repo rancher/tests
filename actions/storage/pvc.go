@@ -158,7 +158,6 @@ func CreatePVC(client *rancher.Client, clusterID string, storageClassName string
 		}
 		return false, err
 	})
-
 	if err != nil {
 		return nil, "", err
 	}
@@ -185,19 +184,25 @@ func CreatePVCWorkload(t *testing.T, client *rancher.Client, clusterID string, s
 	persistentVolumeClaim, volumeName, err := CreatePVC(client, clusterID, storageClassName)
 	require.NoError(t, err)
 
-	logrus.Debugf("Creating Nginx deployment with %s PVC (volume name %s)", persistentVolumeClaim.Name, volumeName)
-	nginxResponse, err := createNginxDeploymentWithPVC(client, clusterID, persistentVolumeClaim.Name, volumeName)
+	// Random workload name: this helper targets single-process functional tests;
+	// callers needing a deterministic (cross-phase relocatable) name call
+	// createNginxDeploymentWithPVC directly (see CreateChecksumWorkload).
+	deploymentName := namegenerator.AppendRandomString(containerNamePrefix)
+	logrus.Debugf("Creating Nginx deployment %s with %s PVC (volume name %s)", deploymentName, persistentVolumeClaim.Name, volumeName)
+	nginxResponse, err := createNginxDeploymentWithPVC(client, clusterID, persistentVolumeClaim.Name, volumeName, deploymentName)
 	require.NoError(t, err)
 
 	return nginxResponse
 }
 
-// createNginxDeploymentWithPVC is a helper function that creates a nginx deployment in a cluster's default namespace
-func createNginxDeploymentWithPVC(client *rancher.Client, clusterID string, pvcName, volName string) (*steveV1.SteveAPIObject, error) {
+// createNginxDeploymentWithPVC is a helper function that creates a nginx deployment in a cluster's default namespace.
+// The deployment and its DeploymentIdentifierLabel both use deploymentName, letting callers
+// pick a random name (functional tests) or a deterministic name (workloads a later test
+// phase must re-find from a separate process).
+func createNginxDeploymentWithPVC(client *rancher.Client, clusterID string, pvcName, volName, deploymentName string) (*steveV1.SteveAPIObject, error) {
 	logrus.Tracef("Vol: %s", volName)
 	logrus.Tracef("Pod: %s", pvcName)
 
-	containerName := namegenerator.AppendRandomString(containerNamePrefix)
 	volMount := &corev1.VolumeMount{
 		MountPath: MountPath,
 		Name:      volName,
@@ -218,8 +223,8 @@ func createNginxDeploymentWithPVC(client *rancher.Client, clusterID string, pvcN
 	}
 
 	containerTemplate := wloads.NewContainer(nginxName, nginxName, corev1.PullAlways, []corev1.VolumeMount{*volMount}, []corev1.EnvFromSource{}, nil, nil, nil)
-	podTemplate := wloads.NewPodTemplate([]corev1.Container{containerTemplate}, []corev1.Volume{podVol}, []corev1.LocalObjectReference{}, map[string]string{DeploymentIdentifierLabel: containerName}, nil)
-	deployment := wloads.NewDeploymentTemplate(containerName, namespaces.Default, podTemplate, true, nil)
+	podTemplate := wloads.NewPodTemplate([]corev1.Container{containerTemplate}, []corev1.Volume{podVol}, []corev1.LocalObjectReference{}, map[string]string{DeploymentIdentifierLabel: deploymentName}, nil)
+	deployment := wloads.NewDeploymentTemplate(deploymentName, namespaces.Default, podTemplate, true, nil)
 
 	deploymentResp, err := steveclient.SteveType(stevetypes.Deployment).Create(deployment)
 	if err != nil {
@@ -227,7 +232,7 @@ func createNginxDeploymentWithPVC(client *rancher.Client, clusterID string, pvcN
 	}
 
 	err = charts.WatchAndWaitDeployments(client, clusterID, namespaces.Default, metav1.ListOptions{
-		FieldSelector: "metadata.name=" + containerName,
+		FieldSelector: "metadata.name=" + deploymentName,
 	})
 
 	return deploymentResp, err
