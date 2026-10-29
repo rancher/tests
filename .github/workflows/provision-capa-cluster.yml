@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       rancher_url:
-        description: "Rancher server URL"
+        description: "Rancher server URL; include the protocol (e.g., https://rancher.example.com)"
         required: true
         type: string
       rancher_token:
@@ -44,6 +44,16 @@ on:
         required: false
         type: number
         default: 1
+      instance_type:
+        description: "Instance type for the nodes"
+        required: true
+        type: choice
+        options:
+          - t3.medium
+          - t3.large
+          - t3.xlarge
+          - t3.2xlarge
+        default: t3.xlarge
 
 permissions:
   contents: read
@@ -65,7 +75,7 @@ jobs:
       AWS_SG: ${{ secrets.AWS_SG }}
       AWS_ROLE_IDENTITY_NAME: ${{ secrets.IAM_PROFILE_NAME }}
       CAPA_NAMESPACE: capa-system
-      INSTANCE_TYPE: t3.xlarge
+      INSTANCE_TYPE: ${{ inputs.instance_type }}
       DISTRIBUTION_INPUT: ${{ inputs.distribution }}
 
     steps:
@@ -88,6 +98,7 @@ jobs:
           ETCD_QTY_INPUT: ${{ inputs.etcd_quantity }}
           CP_QTY_INPUT: ${{ inputs.controlplane_quantity }}
           WORKER_QTY_INPUT: ${{ inputs.worker_quantity }}
+          INSTANCE_TYPE_INPUT: ${{ inputs.instance_type }}
         run: |
           set -euo pipefail
 
@@ -99,7 +110,8 @@ jobs:
             AWS_VPC_ID \
             AWS_SUBNET_ID \
             AWS_SG \
-            AWS_ROLE_IDENTITY_NAME
+            AWS_ROLE_IDENTITY_NAME \
+            INSTANCE_TYPE_INPUT
           do
             if [[ -z "${!name:-}" ]]; then
               echo "::error::Required configuration is empty: $name"
@@ -136,6 +148,7 @@ jobs:
           ETCD_QTY="${ETCD_QTY_INPUT:-1}"
           CP_QTY="${CP_QTY_INPUT:-1}"
           WORKER_QTY="${WORKER_QTY_INPUT:-1}"
+          INSTANCE_TYPE="${INSTANCE_TYPE_INPUT:-t3.xlarge}"
 
           {
             echo "RANCHER_URL=$RANCHER_URL"
@@ -144,10 +157,12 @@ jobs:
             echo "ETCD_QTY=$ETCD_QTY"
             echo "CP_QTY=$CP_QTY"
             echo "WORKER_QTY=$WORKER_QTY"
+            echo "INSTANCE_TYPE=$INSTANCE_TYPE"
           } >> "$GITHUB_ENV"
 
           echo "Cluster name: $CLUSTER_NAME"
           echo "Distribution: $DISTRIBUTION_INPUT"
+          echo "Instance type: $INSTANCE_TYPE"
           echo "Etcd nodes: $ETCD_QTY"
           echo "Control plane nodes: $CP_QTY"
           echo "Worker nodes: $WORKER_QTY"
@@ -507,6 +522,7 @@ jobs:
           : "${ETCD_QTY:?ETCD_QTY was not set}"
           : "${CP_QTY:?CP_QTY was not set}"
           : "${WORKER_QTY:?WORKER_QTY was not set}"
+          : "${INSTANCE_TYPE:?INSTANCE_TYPE was not set}"
 
           MANIFEST_DIR="$RUNNER_TEMP/capa-manifests"
           mkdir -p "$MANIFEST_DIR"
