@@ -65,12 +65,10 @@ jobs:
             v2.14-head*) versions='[{"version":"14","channel":"prime-head","prime":false,"environment":"prime-head"}]' ;;
             v2.13-head*) versions='[{"version":"13","channel":"prime-head","prime":false,"environment":"prime-head"}]' ;;
             v2.12-head*) versions='[{"version":"12","channel":"prime-head","prime":false,"environment":"prime-head"}]' ;;
-            v2.11-head*) versions='[{"version":"11","channel":"prime-head","prime":false,"environment":"prime-head"}]' ;;
             v2.15*-rc*) versions='[{"version":"15","channel":"head","prime":false,"environment":"head"},{"version":"15","channel":"staging-latest","prime":true,"environment":"staging-latest"}]' ;;
             v2.14*-rc*) versions='[{"version":"14","channel":"staging-latest","prime":true,"environment":"staging-latest"}]' ;;
             v2.13*-rc*) versions='[{"version":"13","channel":"staging-latest","prime":true,"environment":"staging-latest"}]' ;;
             v2.12*-rc*) versions='[{"version":"12","channel":"staging-latest","prime":true,"environment":"staging-latest"}]' ;;
-            v2.11*-rc*) versions='[{"version":"11","channel":"staging-latest","prime":true,"environment":"staging-latest"}]' ;;
           esac
           echo "matrix={\"include\":$versions}" >> "$GITHUB_OUTPUT"
 
