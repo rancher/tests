@@ -14,16 +14,15 @@ the workload data, and a Longhorn chart upgrade to the version offered by the up
 Rancher's catalog.
 
 Each phase is a suite test method selected via the `-run` regex and runs as its own
-`go test` invocation. The pipeline (`validation/Jenkinsfile.rancher-upgrade.e2e`) keeps
-its stage list at three high-level phases (Setup, Deploy, Upgrade Validation) and runs
-every dispatch as a step inside the validation stage, so the list stays constant as
-modules are added. All cross-phase state lives in-cluster
+`go test` invocation. The pipeline (`validation/Jenkinsfile.rancher-upgrade.e2e`) runs every phase as an
+in-pipeline gotestsum step in the pinned go-test image (no downstream job), so the stage
+list stays constant as modules are added. All cross-phase state lives in-cluster
 under deterministic names (PVC/deployment `rancher-upgrade-longhorn`, data file
 `/auto-mnt/checksum-data`), never in process memory.
 
-Before the seed dispatch, the pipeline optionally runs the primary
+Before the seed phase, the pipeline optionally runs the primary
 `validation/longhorn` suite as pre-upgrade functional coverage
-(`LONGHORN_FUNCTIONAL_COVERAGE`, default on): the dispatched config sets
+(`LONGHORN_FUNCTIONAL_COVERAGE`, default on): the pipeline's config sets
 `skipTearDown: true` and the suite skips its own teardown, so
 its projects, PVCs, and workloads survive the server upgrade and the post-upgrade
 phases assert against an environment carrying real Longhorn load. The default
