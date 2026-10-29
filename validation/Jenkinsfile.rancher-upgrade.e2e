@@ -4,23 +4,23 @@
  *
  * Six-stage flow (stages carry high-level phases, per-phase work is steps,
  * per the Jenkins Pipeline Syntax Guide), community leg:
- *   1. Setup: checks out tests + qa-infra-automation, builds the pinned
- *      images, installs yq, detects the runner IP, and resolves the upgrade
- *      window
+ *   1. Setup: checks out tests + qa-infra-automation, resolves the
+ *      TEST_MODULE phase selectors, builds the pinned images, installs yq,
+ *      detects the runner IP, and resolves the upgrade window
  *   2. Deploy Rancher: deploys the previous release line (n-1, currently
  *      2.14-latest) via qa-infra-automation (make backend-s3, workspace-new,
- *      infra-up, cluster, rancher), then writes the test config and injects
- *      the admin token
- *   3. Pre Upgrade Tasks: starts the shared Qase run, seeds the upgrade
- *      state (validation/rancherupgrade, TestLonghornPreUpgrade), and
- *      optionally runs the primary validation/longhorn suite as pre-upgrade
- *      functional coverage with its teardown skipped
+ *      infra-up, cluster, rancher), then writes the test config (with
+ *      per-module threading: fleet node SSH key, observability StackState
+ *      settings) and injects the admin token
+ *   3. Pre Upgrade Tasks: starts the shared Qase run and seeds the upgrade
+ *      state (validation/rancherupgrade, <Module>UpgradeTestSuite/<Phase>)
  *   4. Upgrade Rancher: upgrades the Rancher server in place via
  *      `make rancher-upgrade`, then re-injects and smoke-checks the
  *      rotated admin token
- *   5. Post Upgrade Tasks: asserts survival (post-upgrade), upgrades
- *      Longhorn to the version offered by the upgraded Rancher's catalog
- *      (chart-upgrade), and closes the shared Qase run
+ *   5. Post Upgrade Tasks: asserts survival (post-upgrade), upgrades the
+ *      module chart to the version offered by the upgraded Rancher's catalog
+ *      (chart-upgrade; skipped for fleet, which ships inside Rancher with no
+ *      standalone chart), and closes the shared Qase run
  *   6. post always destroys the environment (infra-down AUTO_APPROVE=yes)
  *
  * Versions resolve at runtime when RANCHER_VERSION_FROM / RANCHER_VERSION_TO_UPGRADE
@@ -72,24 +72,46 @@ def S3_BUCKET_NAME = 'jenkins-terraform-state-storage'
 def S3_BUCKET_REGION = 'us-east-2'
 def S3_KEY_PREFIX = 'terraform.tfstate'
 
-// Suite/method selectors consumed by the in-pipeline phase invocations.
-// Each phase is its own go test invocation (-run regex), so cross-phase state
-// lives in-cluster under deterministic names, never in process memory.
-def PRE_UPGRADE_TESTCASE = '-run "TestLonghornUpgradeTestSuite/TestLonghornPreUpgrade"'
-def POST_UPGRADE_TESTCASE = '-run "TestLonghornUpgradeTestSuite/TestLonghornPostUpgrade"'
-def CHART_UPGRADE_TESTCASE = '-run "TestLonghornUpgradeTestSuite/TestLonghornChartUpgrade"'
+// Per-module suite/method selectors consumed by the in-pipeline phase
+// invocations. Each phase is its own go test invocation (-run regex), so
+// cross-phase state lives in-cluster under deterministic names, never in
+// process memory. TEST_MODULE selects the entry (Setup stage fails fast on
+// an unknown name); fleet ships inside Rancher with no standalone chart, so
+// its map has no chart phase and the chart-upgrade phase is skipped for it.
+def UPGRADE_TEST_MODULES = [
+    longhorn: [
+        pre:   '-run "TestLonghornUpgradeTestSuite/TestLonghornPreUpgrade"',
+        post:  '-run "TestLonghornUpgradeTestSuite/TestLonghornPostUpgrade"',
+        chart: '-run "TestLonghornUpgradeTestSuite/TestLonghornChartUpgrade"'
+    ],
+    neuvector: [
+        pre:   '-run "TestNeuVectorUpgradeTestSuite/TestNeuVectorPreUpgrade"',
+        post:  '-run "TestNeuVectorUpgradeTestSuite/TestNeuVectorPostUpgrade"',
+        chart: '-run "TestNeuVectorUpgradeTestSuite/TestNeuVectorChartUpgrade"'
+    ],
+    fleet: [
+        pre:  '-run "TestFleetUpgradeTestSuite/TestFleetPreUpgrade"',
+        post: '-run "TestFleetUpgradeTestSuite/TestFleetPostUpgrade"'
+    ],
+    observability: [
+        pre:   '-run "TestObservabilityUpgradeTestSuite/TestObservabilityPreUpgrade"',
+        post:  '-run "TestObservabilityUpgradeTestSuite/TestObservabilityPostUpgrade"',
+        chart: '-run "TestObservabilityUpgradeTestSuite/TestObservabilityChartUpgrade"'
+    ],
+    all: [
+        // Every module's suite in one pipeline run; the broad regex also
+        // picks up modules added to the package later. Fleet has no chart
+        // subtest, so the chart phase runs its Setup/TearDown with zero
+        // matched methods (harmless: its config keys are still threaded).
+        pre:   '-run "Test.*UpgradeTestSuite/Test.*PreUpgrade"',
+        post:  '-run "Test.*UpgradeTestSuite/Test.*PostUpgrade"',
+        chart: '-run "Test.*UpgradeTestSuite/Test.*ChartUpgrade"'
+    ]
+]
 
-// Pre-upgrade functional coverage reuses the primary Longhorn suite
-// (validation/longhorn) instead of duplicating its cases here. The default
-// selector runs TestRBACIntegration and TestScaleStatefulSetWithPVC;
-// TestVolumeEncryption is excluded because its encrypted-backup verification
-// needs AWS S3 credentials the pipeline's default config does not carry.
-// TestMonitoringIntegration is excluded because Longhorn 1.12's manager
-// gathers volume metrics live per scrape, so /metrics takes 30s or more and
-// every Prometheus scrape of it times out even with a 60s scrapeTimeout
-// (live-verified across three fresh pipeline environments); re-enable it via
-// this parameter once that metrics latency is fixed upstream.
-def FUNCTIONAL_TEST_PACKAGE = './validation/longhorn/...'
+// Binding variable (no def) so the phase stages' script blocks see it; set in
+// the Setup stage, read by the Pre/Post Upgrade Tasks stages below.
+TEST_PHASES = null
 
 /**
  * Shared teardown helper: re-renders tfvars from params, tears down tofu workspace
@@ -251,13 +273,12 @@ pipeline {
 
     options {
         ansiColor('xterm')
-        // Budget: four sequential in-pipeline test invocations (TEST_TIMEOUT
-        // each, default 60m: seed, functional coverage, post-upgrade,
-        // chart-upgrade) plus deploy, server upgrade, and destroy (~90m
-        // overhead). Must exceed the sum of the invocation budgets or a
-        // legitimately slow run aborts mid-phase; revisit when raising
-        // TEST_TIMEOUT.
-        timeout(time: 360, unit: 'MINUTES')
+        // Budget: three sequential in-pipeline test phases (TEST_TIMEOUT
+        // each, default 60m: pre-upgrade, post-upgrade, chart-upgrade) plus
+        // deploy, server upgrade, and destroy (~90m overhead). Must exceed
+        // the sum of the phase budgets or a legitimately slow run aborts
+        // mid-phase; revisit when raising TEST_TIMEOUT.
+        timeout(time: 300, unit: 'MINUTES')
         buildDiscarder(logRotator(numToKeepStr: '30'))
     }
 
@@ -388,6 +409,16 @@ server_flags: |
         )
 
         // ── Test parameters ────────────────────────────────────
+        string(
+            name: 'TEST_MODULE',
+            defaultValue: params.TEST_MODULE ?: 'longhorn',
+            description: 'rancherupgrade module under test (longhorn | neuvector | fleet | observability | all). Selects the per-phase -run regexes; fleet has no chart-upgrade phase; all runs every module suite in one pipeline.'
+        )
+        string(
+            name: 'STACKSTATE_URL',
+            defaultValue: params.STACKSTATE_URL ?: 'http://stackstate-router.suse-observability.svc.cluster.local:8080',
+            description: 'observability module only: the URL the StackState agent reports to. The in-cluster router service default works when the agent is co-located with the server (the pipeline pins the server to local); override with a resolvable StackState address otherwise.'
+        )
         text(
             name: 'CATTLE_TEST_CONFIG',
             description: 'Test configuration YAML (cattle-config). rancher.adminToken is injected at runtime (initial + rotated after the server upgrade); rancherUpgradeInput.targetVersion is substituted from the resolved upgrade target.',
@@ -408,12 +439,7 @@ rancherUpgradeInput:
 # Marker: set only by this pipeline. The suite fails rather than skips when
 # this marker is present but the target version is missing (pipeline bug).
 rancherUpgradePipeline:
-    enabled: true
-# Ask suites that support it (validation/longhorn) to leave their resources in
-# place: this pipeline runs that suite in-pipeline as pre-upgrade functional coverage
-# whose resources must survive the in-place server upgrade; the pipeline's
-# environment teardown is the cleanup.
-skipTearDown: true''',
+    enabled: true''',
         )
         booleanParam(
             name: 'REPORT_ARTIFACTS',
@@ -431,16 +457,6 @@ skipTearDown: true''',
             name: 'TEST_TIMEOUT',
             defaultValue: '60m',
             description: 'go test -timeout value applied to each in-pipeline phase'
-        )
-        booleanParam(
-            name: 'LONGHORN_FUNCTIONAL_COVERAGE',
-            defaultValue: true,
-            description: 'Run the primary validation/longhorn suite pre-upgrade as functional coverage; the suite skips its teardown in this pipeline so its resources survive the server upgrade'
-        )
-        string(
-            name: 'LONGHORN_FUNCTIONAL_TESTCASE',
-            defaultValue: '-run "TestLonghornTestSuite/(TestRBACIntegration|TestScaleStatefulSetWithPVC)"',
-            description: '-run selector for the pre-upgrade functional coverage invocation. Default excludes TestVolumeEncryption (needs AWS S3 credentials the default config does not carry) and TestMonitoringIntegration (Longhorn 1.12 manager /metrics takes 30s+ per scrape, so Prometheus scrapes time out even with a 60s scrapeTimeout; re-enable once fixed upstream)'
         )
         string(
             name: 'QASE_REPORTER_SCRIPT',
@@ -479,6 +495,15 @@ skipTearDown: true''',
                     )
                     env.TESTS_DIR = dirs.testsDir
                     env.INFRA_DIR = dirs.infraDir
+
+                    // Resolve the selected module's phase selectors before any
+                    // infra spend: an unknown TEST_MODULE fails here, and the
+                    // log records exactly which regex each phase will run.
+                    TEST_PHASES = UPGRADE_TEST_MODULES[params.TEST_MODULE]
+                    if (!TEST_PHASES) {
+                        error "Unknown TEST_MODULE '${params.TEST_MODULE}' — valid modules: ${UPGRADE_TEST_MODULES.keySet().sort().join(', ')}"
+                    }
+                    echo "TEST_MODULE '${params.TEST_MODULE}' phase selectors: pre=${TEST_PHASES.pre} post=${TEST_PHASES.post} chart=${TEST_PHASES.chart ?: '(none: module has no chart-upgrade phase)'}"
 
                     def hostnamePrefix = params.HOSTNAME_PREFIX ?: 'unknown'
                     currentBuild.displayName = "#${env.BUILD_NUMBER} - ${hostnamePrefix}"
@@ -572,7 +597,26 @@ skipTearDown: true''',
                           TO   (upgrade): ${env.RANCHER_TO_VERSION} (${env.RANCHER_TO_IMAGE_TAG})
                           Chart flavor:   ${params.RANCHER_CHART_REPO_FLAVOR}
                         """.stripIndent()
-                    currentBuild.description = "Upgrade ${env.RANCHER_FROM_VERSION} -> ${env.RANCHER_TO_VERSION} (${params.RANCHER_CHART_REPO_FLAVOR}) | ${params.HOSTNAME_PREFIX}"
+                    currentBuild.description = "Upgrade ${env.RANCHER_FROM_VERSION} -> ${env.RANCHER_TO_VERSION} (${params.RANCHER_CHART_REPO_FLAVOR}) | ${params.HOSTNAME_PREFIX} | ${params.TEST_MODULE}"
+
+                    if (params.TEST_MODULE in ['observability', 'all']) {
+                        // Pre-deploy guard: fail before any infra spend when
+                        // the SUSE Observability license credential is absent
+                        // or empty; the post-deploy config injection reuses it.
+                        def licenseProblem = ''
+                        try {
+                            withCredentials([string(credentialsId: 'STACKSTATE_LICENSE', variable: 'STACKSTATE_LICENSE_CHECK')]) {
+                                if (!env.STACKSTATE_LICENSE_CHECK?.trim()) {
+                                    licenseProblem = 'STACKSTATE_LICENSE exists but is empty; set the SUSE Observability license key and rerun'
+                                }
+                            }
+                        } catch (Exception e) {
+                            licenseProblem = "observability module needs the STACKSTATE_LICENSE folder credential (SUSE Observability license key); add it to the rancher_qa folder and rerun (checked pre-deploy to avoid infra spend)"
+                        }
+                        if (licenseProblem) {
+                            error licenseProblem
+                        }
+                    }
                 }
             }
         }
@@ -749,6 +793,62 @@ rancher_use_bundled_system_charts: true
                         writeFile file: cattleConfigPath, text: resolvedConfig.trim() + '\n'
                     }
 
+                    // The fleet module's pre-upgrade phase serves its GitRepo
+                    // over SSH from a downstream node. The suite consumes
+                    // sshNode.sshKey/sshUser from the test config rather than a
+                    // filesystem path, so the node key is threaded through the
+                    // config for fleet alone; the PEM sits in the pipeline
+                    // workspace where writeSshKey put it for ansible.
+                    if (params.TEST_MODULE in ['fleet', 'all']) {
+                        property.useWithProperties(['AWS_SSH_PEM_KEY_NAME']) {
+                            def pemPath = "${workspace}/.ssh/${AWS_SSH_PEM_KEY_NAME}"
+                            if (!fileExists(pemPath)) {
+                                error "fleet module needs the node key at ${pemPath} (AWS_SSH_PEM_KEY_NAME), but it does not exist"
+                            }
+                            def sshUser = sh(
+                                script: "awk -F': *' '/^aws_ssh_user/{print \$2}' ${env.INFRA_DIR}/tofu/aws/modules/cluster_nodes/terraform.tfvars | head -1 | tr -d '\"'",
+                                returnStdout: true
+                            ).trim()
+                            if (!sshUser) {
+                                sshUser = 'ubuntu'
+                            }
+                            sh """
+                                set +x
+                                export nodekey=\$(cat ${pemPath})
+                                export sshuser='${sshUser}'
+                                ./yq e '.sshNode.sshKey = strenv(nodekey)' -i ${cattleConfigPath}
+                                ./yq e '.sshNode.sshUser = strenv(sshuser)' -i ${cattleConfigPath}
+                            """
+                            echo "fleet module: node ssh key and user threaded into the test config"
+                        }
+                    }
+
+                    if (params.TEST_MODULE in ['observability', 'all']) {
+                        // SUSE Observability needs its license plus the
+                        // connection settings the server and the agent share.
+                        // The license is the STACKSTATE_LICENSE folder
+                        // credential, checked pre-deploy by the guard in the
+                        // Setup stage; the URL defaults to the in-cluster
+                        // router service, which the co-located agent can
+                        // always reach; the cluster API key is self-consistent
+                        // because this suite installs the server with the same
+                        // value.
+                        property.useWithProperties(['STACKSTATE_LICENSE']) {
+                            if (!env.STACKSTATE_LICENSE) {
+                                error "observability module needs the STACKSTATE_LICENSE folder credential (SUSE Observability license key); add it to the rancher_qa folder and rerun"
+                            }
+                            sh """
+                                set +x
+                                export sslicense=\$STACKSTATE_LICENSE
+                                ./yq e '.stackstateConfigs.url = "${params.STACKSTATE_URL}"' -i ${cattleConfigPath}
+                                ./yq e '.stackstateConfigs.license = strenv(sslicense)' -i ${cattleConfigPath}
+                                ./yq e '.stackstateConfigs.clusterApiKey = "rancher-upgrade-observability-cluster-key"' -i ${cattleConfigPath}
+                                ./yq e '.stackstateConfigs.adminPassword = "rancher-upgrade-observability-admin"' -i ${cattleConfigPath}
+                            """
+                            echo "observability module: stackstate connection settings threaded into the test config"
+                        }
+                    }
+
                     // Generate admin token via Ansible playbook
                     // TODO: replace with 'make token' once that target is added upstream
                     def containerConfigPath = "/workspace/${cattleConfigPath}"
@@ -806,9 +906,9 @@ rancher_use_bundled_system_charts: true
         }
 
         // ── High-level phase 3: pre-upgrade tasks ──
-        // Starts the shared Qase run once and runs the pre-upgrade phases
-        // (seed + optional functional coverage); every later phase reports
-        // into that run, which the final stage closes.
+        // Starts the shared Qase run once and runs the pre-upgrade phase;
+        // every later phase reports into that run, which the final stage
+        // closes.
         stage('Pre Upgrade Tasks') {
             steps {
                 script {
@@ -853,18 +953,8 @@ rancher_use_bundled_system_charts: true
                     // cross-phase state must survive, and the pipeline environment
                     // teardown is the cleanup.
                     property.useWithProperties(['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'QASE_AUTOMATION_TOKEN']) {
-                        // ── Pre-upgrade seed: Longhorn install + deterministic workload ──
-                        runUpgradePhase('pre-upgrade seed', PRE_UPGRADE_TESTCASE, testRunID)
-
-                        // ── Pre-upgrade functional coverage: primary Longhorn suite ──
-                        // The pipeline config sets skipTearDown: true, so the
-                        // suite skips its own teardown and its resources survive
-                        // the server upgrade as extra post-upgrade state.
-                        if (params.LONGHORN_FUNCTIONAL_COVERAGE) {
-                            runUpgradePhase('pre-upgrade functional coverage', params.LONGHORN_FUNCTIONAL_TESTCASE, testRunID, FUNCTIONAL_TEST_PACKAGE)
-                        } else {
-                            echo 'Skipping pre-upgrade functional coverage (LONGHORN_FUNCTIONAL_COVERAGE=false)'
-                        }
+                        // ── Pre-upgrade: module install + deterministic state seed ──
+                        runUpgradePhase('pre-upgrade', TEST_PHASES.pre, testRunID)
                     }
                 }
             }
@@ -951,10 +1041,36 @@ rancher_use_bundled_system_charts: true
                             echo "Test config carries the rotated admin token (length \${#expected})"
                         """
 
-                        runUpgradePhase('post-upgrade assertions', POST_UPGRADE_TESTCASE, testRunID)
+                        runUpgradePhase('post-upgrade', TEST_PHASES.post, testRunID)
 
                         // ── Chart upgrade through the upgraded catalog ──
-                        runUpgradePhase('chart-upgrade', CHART_UPGRADE_TESTCASE, testRunID)
+                        // Single modules without a chart-upgrade phase (fleet:
+                        // it ships inside Rancher) skip it. All-mode sequences
+                        // the volume-heavy observability chart upgrade BEFORE
+                        // longhorn's: Longhorn's upgrade live-upgrades every
+                        // volume engine in the cluster, and an observability
+                        // rollout starting while those engine upgrades are in
+                        // flight can stall its statefulsets on volume reattach
+                        // for the full helm deadline (build 52: zookeeper stuck
+                        // in ContainerCreating for 45 minutes, kafka
+                        // crashlooping on the unresolved headless service,
+                        // everything cascading from there); fleet has no chart
+                        // subtest, so its suite contributes Setup/TearDown with
+                        // zero matched methods (harmless). Each phase gets a
+                        // distinct name so its per-phase result/log artifacts
+                        // do not collide in the shared workspace.
+                        def chartPhases = params.TEST_MODULE == 'all' ? [
+                            [name: 'observability', selector: UPGRADE_TEST_MODULES.observability.chart],
+                            [name: 'fleet-longhorn-neuvector', selector: '-run "Test(Fleet|Longhorn|NeuVector)UpgradeTestSuite/Test(Fleet|Longhorn|NeuVector)ChartUpgrade"']
+                        ] : [[name: params.TEST_MODULE, selector: TEST_PHASES.chart]]
+
+                        chartPhases.each { chartPhase ->
+                            if (chartPhase.selector) {
+                                runUpgradePhase("chart-upgrade ${chartPhase.name}", chartPhase.selector, testRunID)
+                            } else {
+                                echo "Skipping chart-upgrade phase (module ${chartPhase.name} has no standalone chart)"
+                            }
+                        }
 
                         // Complete the shared qase test run: the reporter never
                         // sets QASE_TEST_RUN_COMPLETE; the pipeline owns the
