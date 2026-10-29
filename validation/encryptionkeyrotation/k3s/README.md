@@ -55,7 +55,7 @@ terraform:
   awsConfig:
     ami: ""
     awsKeyName: ""
-    awsInstanceType: "t"
+    awsInstanceType: ""
     awsVolumeType: ""
     region: ""
     awsSecurityGroups: ["sg-"]

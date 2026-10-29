@@ -2,14 +2,13 @@ package imported
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"time"
 
 	"github.com/rancher/shepherd/clients/rancher"
-	rancherv1 "github.com/rancher/shepherd/clients/rancher/v1"
 	"github.com/rancher/shepherd/extensions/defaults"
+	"github.com/rancher/tests/actions/clusters/imported"
 	"github.com/rancher/tests/actions/etcdsnapshot"
 	"github.com/rancher/tests/actions/storage/s3"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
@@ -67,7 +66,7 @@ func CreateImportedETCDSnapshot(client *rancher.Client, clusterName string) (str
 		return "", err
 	}
 
-	if err := waitForSnapshotOperation(client, etcdSnapshotSaveSteveType, created.ID); err != nil {
+	if err := imported.WaitForOperation(client, etcdSnapshotSaveSteveType, created.ID); err != nil {
 		return "", err
 	}
 
@@ -154,48 +153,5 @@ func RestoreImportedETCDSnapshot(client *rancher.Client, clusterName, snapshotNa
 		return err
 	}
 
-	return waitForSnapshotOperation(client, etcdSnapshotRestoreSteveType, created.ID)
-}
-
-func waitForSnapshotOperation(client *rancher.Client, resourceType, operationID string) error {
-	var lastStatus any
-
-	operationClient := client.Steve.SteveType(resourceType)
-
-	err := kwait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 30*time.Minute, true, func(ctx context.Context) (bool, error) {
-		current, err := operationClient.ByID(operationID)
-		if err != nil {
-			return false, fmt.Errorf("get snapshot operation %s: %w", operationID, err)
-		}
-
-		lastStatus = current.Status
-
-		return snapshotOperationResults(operationID, current.Status)
-	})
-	if err != nil {
-		return fmt.Errorf("waiting for %s snapshot operation %s (last status: %v): %w", resourceType, operationID, lastStatus, err)
-	}
-
-	return nil
-}
-
-func snapshotOperationResults(operationID string, rawStatus any) (bool, error) {
-	var status struct {
-		Phase      string          `json:"phase"`
-		Step       string          `json:"step"`
-		Conditions json.RawMessage `json:"conditions"`
-	}
-
-	if err := rancherv1.ConvertToK8sType(rawStatus, &status); err != nil {
-		return false, fmt.Errorf("decode snapshot operation results for %s status: %w", operationID, err)
-	}
-
-	switch status.Phase {
-	case "Succeeded":
-		return true, nil
-	case "Failed", "Canceled":
-		return false, fmt.Errorf("snapshot operation %s ended with phase %q at step %q; conditions: %s", operationID, status.Phase, status.Step, status.Conditions)
-	default:
-		return false, nil
-	}
+	return imported.WaitForOperation(client, etcdSnapshotRestoreSteveType, created.ID)
 }
