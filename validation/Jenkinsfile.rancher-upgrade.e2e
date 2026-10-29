@@ -59,8 +59,12 @@ def DEFAULT_RANCHER_PASSWORD = 'X%S3bPyg@n8kWcRs675l#fH0'
 // job last built under the shared :latest tag on the same agent. The :latest
 // alias is still applied at build time because qa-jenkins-library's
 // make.runTarget resolves that name for its own container runs.
-def INFRA_TOOLS_IMAGE = "rancher-infra-tools:pitupgrade-${env.BUILD_NUMBER}"
-def GO_TEST_IMAGE = "rancher-go-test:pitupgrade-${env.BUILD_NUMBER}"
+// Binding variables (no def): helper methods (runUpgradePhase,
+// collectUpgradeDiagnostics) cannot see script-level def locals, only the
+// script binding (live-verified: the def form fails the phase with
+// MissingPropertyException).
+INFRA_TOOLS_IMAGE = "rancher-infra-tools:pitupgrade-${env.BUILD_NUMBER}"
+GO_TEST_IMAGE = "rancher-go-test:pitupgrade-${env.BUILD_NUMBER}"
 // Terraform state backend constants: the fixed bucket the other e2e
 // pipelines resolve into (BUCKET/KEY/REGION make args for backend-s3);
 // never varied per run, so not exposed as parameters.
