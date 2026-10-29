@@ -1,0 +1,875 @@
+name: Provision CAPA Cluster
+
+on:
+  workflow_dispatch:
+    inputs:
+      rancher_url:
+        description: "Rancher server URL"
+        required: true
+        type: string
+      rancher_token:
+        description: "Rancher API token"
+        required: true
+        type: string
+      distribution:
+        description: "Kubernetes distribution"
+        required: true
+        type: choice
+        options:
+          - rke2
+          - k3s
+        default: rke2
+      k8s_version:
+        description: "K8s version format: vX.Y.Z+rke2r1 / vX.Y.Z+k3s1  (if blank, will fetch latest available from this Rancher server)"
+        required: false
+        type: string
+        default: ""
+      cluster_name:
+        description: "Optional cluster name (auto-generated if blank: gha-capa-#)"
+        required: false
+        type: string
+        default: ""
+      etcd_quantity:
+        description: "Number of etcd nodes"
+        required: false
+        type: number
+        default: 1
+      controlplane_quantity:
+        description: "Number of control plane nodes"
+        required: false
+        type: number
+        default: 1
+      worker_quantity:
+        description: "Number of worker nodes"
+        required: false
+        type: number
+        default: 1
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  provision:
+    name: Provision AWS cluster through Rancher CAPA
+    runs-on: ubuntu-latest
+    environment: capa
+
+    env:
+      RANCHER_URL: ${{ inputs.rancher_url }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_AMI: ${{ secrets.AWS_AMI }}
+      AWS_VPC_ID: ${{ secrets.AWS_VPC_ID }}
+      AWS_SUBNET_ID: ${{ secrets.AWS_SUBNET_ID }}
+      AWS_SG: ${{ secrets.AWS_SG }}
+      AWS_ROLE_IDENTITY_NAME: ${{ secrets.IAM_PROFILE_NAME }}
+      CAPA_NAMESPACE: capa-system
+      INSTANCE_TYPE: t3.xlarge
+      DISTRIBUTION_INPUT: ${{ inputs.distribution }}
+
+    steps:
+      - name: Mask Rancher token
+        shell: bash
+        env:
+          RANCHER_TOKEN_INPUT: ${{ inputs.rancher_token }}
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$RANCHER_TOKEN_INPUT"
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Validate configuration
+        shell: bash
+        env:
+          RANCHER_TOKEN_INPUT: ${{ inputs.rancher_token }}
+          CLUSTER_NAME_INPUT: ${{ inputs.cluster_name }}
+          ETCD_QTY_INPUT: ${{ inputs.etcd_quantity }}
+          CP_QTY_INPUT: ${{ inputs.controlplane_quantity }}
+          WORKER_QTY_INPUT: ${{ inputs.worker_quantity }}
+        run: |
+          set -euo pipefail
+
+          for name in \
+            RANCHER_URL \
+            AWS_REGION \
+            AWS_AMI \
+            AWS_SSH_KEY_NAME \
+            AWS_VPC_ID \
+            AWS_SUBNET_ID \
+            AWS_SG \
+            AWS_ROLE_IDENTITY_NAME
+          do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::Required configuration is empty: $name"
+              exit 1
+            fi
+          done
+
+          if [[ -z "$RANCHER_TOKEN_INPUT" ]]; then
+            echo "::error::Rancher token is required."
+            exit 1
+          fi
+
+          if [[ "$DISTRIBUTION_INPUT" != "rke2" &&
+                "$DISTRIBUTION_INPUT" != "k3s" ]]; then
+            echo "::error::Distribution must be either rke2 or k3s."
+            exit 1
+          fi
+
+          RANCHER_URL="${RANCHER_URL%/}"
+          requested_cluster_name="$(printf '%s' "$CLUSTER_NAME_INPUT" | xargs)"
+
+          if [[ -n "$requested_cluster_name" ]]; then
+            if [[ ! "$requested_cluster_name" =~ ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$ ]] ||
+               (( ${#requested_cluster_name} > 63 )); then
+              echo "::error::Invalid cluster name. Use 1-63 lowercase letters, numbers, or hyphens; start and end with a letter or number."
+              exit 1
+            fi
+
+            CLUSTER_NAME="$requested_cluster_name"
+          else
+            CLUSTER_NAME="gha-capa-${GITHUB_RUN_NUMBER}"
+          fi
+
+          ETCD_QTY="${ETCD_QTY_INPUT:-1}"
+          CP_QTY="${CP_QTY_INPUT:-1}"
+          WORKER_QTY="${WORKER_QTY_INPUT:-1}"
+
+          {
+            echo "RANCHER_URL=$RANCHER_URL"
+            echo "CLUSTER_NAME=$CLUSTER_NAME"
+            echo "DISTRIBUTION=$DISTRIBUTION_INPUT"
+            echo "ETCD_QTY=$ETCD_QTY"
+            echo "CP_QTY=$CP_QTY"
+            echo "WORKER_QTY=$WORKER_QTY"
+          } >> "$GITHUB_ENV"
+
+          echo "Cluster name: $CLUSTER_NAME"
+          echo "Distribution: $DISTRIBUTION_INPUT"
+          echo "Etcd nodes: $ETCD_QTY"
+          echo "Control plane nodes: $CP_QTY"
+          echo "Worker nodes: $WORKER_QTY"
+          echo "AWS region: $AWS_REGION"
+          echo "CAPA namespace: $CAPA_NAMESPACE"
+          echo "Provisioning namespace: fleet-default"
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@15650b3ad78fff148532a140b8a4c821796b2d7b # v5
+
+      - name: Install workflow dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes gettext-base jq
+
+      - name: Configure AWS credentials through OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6
+        with:
+          role-to-assume: ${{ secrets.IAM_ROLE }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          role-duration-seconds: 14400
+
+      - name: Check subnet tag limit availability
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Checking current tag count on shared subnet..."
+
+          tag_count=$(aws ec2 describe-tags \
+            --region "${AWS_REGION}" \
+            --filters "Name=resource-id,Values=${AWS_SUBNET_ID}" \
+            --query "length(Tags)" \
+            --output text 2>/dev/null || echo "0")
+
+          if [[ -z "$tag_count" || "$tag_count" == "None" ]]; then
+            tag_count=0
+          fi
+
+          echo "Current tag count on subnet: $tag_count / 50"
+
+          # AWS hard limit is 50. Since a new cluster needs to add a tag, 
+          # fail fast if we are at 50 to prevent a TagLimitExceeded crash.
+          if (( tag_count == 50 )); then
+            echo "::error::Subnet has $tag_count tags. AWS enforces a maximum limit of 50 tags per resource."
+            echo "::error::Resource limit prevents creation. Please run the Subnet Tag Cleanup workflow or remove stale tags before trying again."
+            exit 1
+          else
+            echo "Tag count is safe ($tag_count/50). Proceeding with cluster provisioning."
+          fi
+
+      - name: Configure kubectl for Rancher
+        shell: bash
+        env:
+          RANCHER_TOKEN_INPUT: ${{ inputs.rancher_token }}
+        run: |
+          set -euo pipefail
+          umask 077
+
+          kubectl config set-cluster rancher \
+            --server="${RANCHER_URL}/k8s/clusters/local" \
+            --insecure-skip-tls-verify=true \
+            --kubeconfig="$RUNNER_TEMP/rancher-kubeconfig"
+
+          kubectl config set-credentials rancher \
+            --token="$RANCHER_TOKEN_INPUT" \
+            --kubeconfig="$RUNNER_TEMP/rancher-kubeconfig"
+
+          kubectl config set-context rancher \
+            --cluster=rancher \
+            --user=rancher \
+            --kubeconfig="$RUNNER_TEMP/rancher-kubeconfig"
+
+          kubectl config use-context rancher \
+            --kubeconfig="$RUNNER_TEMP/rancher-kubeconfig"
+
+          echo "KUBECONFIG=$RUNNER_TEMP/rancher-kubeconfig" >> "$GITHUB_ENV"
+
+      - name: Verify Rancher access and prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          kubectl get --raw=/version
+          kubectl get namespace fleet-default
+          kubectl get crd clusters.provisioning.cattle.io
+          kubectl get crd capiproviders.turtles-capi.cattle.io
+          kubectl get crd clusters.cluster.x-k8s.io
+
+      - name: Resolve Kubernetes distribution version
+        shell: bash
+        env:
+          K8S_VERSION_INPUT: ${{ inputs.k8s_version }}
+          RANCHER_TOKEN_INPUT: ${{ inputs.rancher_token }}
+        run: |
+          set -euo pipefail
+
+          requested_version="$(printf '%s' "$K8S_VERSION_INPUT" | xargs)"
+
+          case "$DISTRIBUTION" in
+            rke2)
+              version_regex='^v[0-9]+\.[0-9]+\.[0-9]+\+rke2r[0-9]+$'
+              release_endpoint="v1-rke2-release/releases"
+              release_file="$RUNNER_TEMP/rke2-releases.json"
+              ;;
+            k3s)
+              version_regex='^v[0-9]+\.[0-9]+\.[0-9]+\+k3s[0-9]+$'
+              release_endpoint="v1-k3s-release/releases"
+              release_file="$RUNNER_TEMP/k3s-releases.json"
+              ;;
+            *)
+              echo "::error::Unsupported distribution: $DISTRIBUTION"
+              exit 1
+              ;;
+          esac
+
+          if [[ -n "$requested_version" ]]; then
+            if [[ ! "$requested_version" =~ $version_regex ]]; then
+              echo "::error::Version '$requested_version' does not match distribution '$DISTRIBUTION'."
+              exit 1
+            fi
+            resolved_version="$requested_version"
+          else
+            echo "Querying Rancher for available $DISTRIBUTION releases."
+
+            http_status="$(
+              curl --silent --show-error --location \
+                --retry 3 \
+                --retry-delay 2 \
+                --output "$release_file" \
+                --write-out '%{http_code}' \
+                --header "Authorization: Bearer $RANCHER_TOKEN_INPUT" \
+                --header "Accept: application/json" \
+                "$RANCHER_URL/$release_endpoint"
+            )"
+
+            if [[ "$http_status" != "200" ]]; then
+              echo "::error::Rancher $DISTRIBUTION release API returned HTTP $http_status."
+              exit 1
+            fi
+
+            mapfile -t available_versions < <(
+              jq -r --arg pattern "$version_regex" '
+                [
+                  .. | strings |
+                  select(test($pattern))
+                ] | unique[]
+              ' "$release_file" |
+              sort -Vu
+            )
+
+            if [[ "${#available_versions[@]}" -eq 0 ]]; then
+              echo "::error::No stable $DISTRIBUTION versions found in Rancher release metadata."
+              exit 1
+            fi
+
+            resolved_version="${available_versions[-1]}"
+          fi
+
+          {
+            echo "K8S_VERSION=$resolved_version"
+            echo "K8S_RELEASE_FILE=$release_file"
+          } >> "$GITHUB_ENV"
+
+          echo "Selected distribution: $DISTRIBUTION"
+          echo "Selected Kubernetes version: $resolved_version"
+
+      - name: Install CAPA provider if missing
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+
+          : "${AWS_ACCESS_KEY_ID:?Missing OIDC access key}"
+          : "${AWS_SECRET_ACCESS_KEY:?Missing OIDC secret key}"
+          : "${AWS_SESSION_TOKEN:?Missing OIDC session token}"
+
+          CREDENTIALS_FILE="$RUNNER_TEMP/capa-aws-credentials"
+          trap 'rm -f "$CREDENTIALS_FILE"' EXIT
+
+          cat > "$CREDENTIALS_FILE" <<EOF
+          [default]
+          aws_access_key_id = ${AWS_ACCESS_KEY_ID}
+          aws_secret_access_key = ${AWS_SECRET_ACCESS_KEY}
+          aws_session_token = ${AWS_SESSION_TOKEN}
+          EOF
+
+          ENCODED_CREDENTIALS="$(base64 -w 0 < "$CREDENTIALS_FILE")"
+
+          kubectl get namespace "$CAPA_NAMESPACE" >/dev/null 2>&1 ||
+            kubectl create namespace "$CAPA_NAMESPACE"
+
+          PROVIDER_RESOURCE="capiproviders.turtles-capi.cattle.io"
+
+          if ! kubectl -n "$CAPA_NAMESPACE" get "$PROVIDER_RESOURCE/aws" >/dev/null 2>&1; then
+            jq -n \
+              --arg namespace "$CAPA_NAMESPACE" \
+              --arg credentials "$ENCODED_CREDENTIALS" \
+              '{
+                apiVersion: "turtles-capi.cattle.io/v1alpha1",
+                kind: "CAPIProvider",
+                metadata: {
+                  name: "aws",
+                  namespace: $namespace
+                },
+                spec: {
+                  type: "infrastructure",
+                  variables: {
+                    AWS_B64ENCODED_CREDENTIALS: $credentials
+                  }
+                }
+              }' |
+              kubectl apply -f -
+          fi
+
+      - name: Configure CAPA bootstrap credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+
+          CREDENTIALS_FILE="$RUNNER_TEMP/capa-aws-credentials"
+          trap 'rm -f "$CREDENTIALS_FILE"' EXIT
+
+          cat > "$CREDENTIALS_FILE" <<EOF
+          [default]
+          aws_access_key_id = ${AWS_ACCESS_KEY_ID}
+          aws_secret_access_key = ${AWS_SECRET_ACCESS_KEY}
+          aws_session_token = ${AWS_SESSION_TOKEN}
+          EOF
+
+          ENCODED_CREDENTIALS="$(base64 -w 0 < "$CREDENTIALS_FILE")"
+
+          kubectl patch capiproviders.turtles-capi.cattle.io aws \
+            --namespace "$CAPA_NAMESPACE" \
+            --type=merge \
+            -p "$(jq -n --arg credentials "$ENCODED_CREDENTIALS" \
+              '{spec:{variables:{AWS_B64ENCODED_CREDENTIALS:$credentials}}}')"
+
+          for attempt in $(seq 1 180); do
+            if kubectl -n "$CAPA_NAMESPACE" get deployment capa-controller-manager >/dev/null 2>&1; then
+              break
+            fi
+            sleep 5
+          done
+
+          kubectl -n "$CAPA_NAMESPACE" rollout status deployment/capa-controller-manager --timeout=5m
+
+      - name: Ensure CAPA permissions for RKEControlPlane
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "Applying cluster-wide permissions for CAPA controller to access RKEControlPlane resources..."
+          cat <<EOF | kubectl apply -f -
+          apiVersion: rbac.authorization.k8s.io/v1
+          kind: ClusterRole
+          metadata:
+            name: capa-rkecontrolplane-reader
+          rules:
+            - apiGroups: ["rke.cattle.io"]
+              resources: ["rkecontrolplanes", "rkecontrolplanes/status"]
+              verbs: ["get", "list", "watch"]
+          ---
+          apiVersion: rbac.authorization.k8s.io/v1
+          kind: ClusterRoleBinding
+          metadata:
+            name: capa-rkecontrolplane-reader-binding
+          subjects:
+            - kind: ServiceAccount
+              name: capa-controller-manager
+              namespace: capa-system
+          roleRef:
+            kind: ClusterRole
+            name: capa-rkecontrolplane-reader
+            apiGroup: rbac.authorization.k8s.io
+          EOF
+
+      - name: Configure cluster identity based on distribution
+        shell: bash
+        env:
+          AWS_ROLE_ARN: ${{ secrets.IAM_ROLE }}
+        run: |
+          set -euo pipefail
+          umask 077
+
+          if [[ "$DISTRIBUTION" == "rke2" ]]; then
+            echo "Configuring AWSClusterRoleIdentity for RKE2 using role name: $AWS_ROLE_IDENTITY_NAME"
+            cat <<EOF | envsubst '${AWS_ROLE_ARN} ${AWS_ROLE_IDENTITY_NAME}' | kubectl apply -f -
+          apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+          kind: AWSClusterControllerIdentity
+          metadata:
+            name: default
+            namespace: fleet-default
+          spec:
+            allowedNamespaces:
+              list:
+                - fleet-default
+          ---
+          apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+          kind: AWSClusterRoleIdentity
+          metadata:
+            name: ${AWS_ROLE_IDENTITY_NAME}
+            namespace: fleet-default
+          spec:
+            roleARN: ${AWS_ROLE_ARN}
+            sourceIdentityRef:
+              kind: AWSClusterControllerIdentity
+              name: default
+            allowedNamespaces:
+              list:
+                - fleet-default
+          EOF
+          else
+            echo "Configuring AWSClusterStaticIdentity for K3s..."
+            
+            if kubectl -n capa-system get secret cluster-identity-secret >/dev/null 2>&1; then
+              echo "Found existing 'cluster-identity-secret' in capa-system. Preserving existing secret."
+            else
+              echo "Creating new 'cluster-identity-secret' in capa-system with CAPA-expected PascalCase keys..."
+              cat <<EOF | envsubst '${AWS_ACCESS_KEY_ID} ${AWS_SECRET_ACCESS_KEY} ${AWS_SESSION_TOKEN}' | kubectl apply -f -
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: cluster-identity-secret
+            namespace: capa-system
+          stringData:
+            AccessKeyID: "${AWS_ACCESS_KEY_ID}"
+            SecretAccessKey: "${AWS_SECRET_ACCESS_KEY}"
+            SessionToken: "${AWS_SESSION_TOKEN}"
+          EOF
+            fi
+
+            cat <<EOF | kubectl apply -f -
+          apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+          kind: AWSClusterStaticIdentity
+          metadata:
+            name: cluster-identity
+            namespace: fleet-default
+          spec:
+            secretRef: cluster-identity-secret
+            allowedNamespaces:
+              list:
+                - fleet-default
+          EOF
+          fi
+
+      - name: Render manifests
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          : "${CLUSTER_NAME:?CLUSTER_NAME was not set by Validate configuration}"
+          : "${DISTRIBUTION:?DISTRIBUTION was not set by Validate configuration}"
+          : "${K8S_VERSION:?K8S_VERSION was not set by Resolve Kubernetes distribution version}"
+          : "${ETCD_QTY:?ETCD_QTY was not set}"
+          : "${CP_QTY:?CP_QTY was not set}"
+          : "${WORKER_QTY:?WORKER_QTY was not set}"
+
+          MANIFEST_DIR="$RUNNER_TEMP/capa-manifests"
+          mkdir -p "$MANIFEST_DIR"
+
+          if [[ "$DISTRIBUTION" == "rke2" ]]; then
+            AWS_IDENTITY_KIND="AWSClusterRoleIdentity"
+            AWS_IDENTITY_NAME="$AWS_ROLE_IDENTITY_NAME"
+          else
+            AWS_IDENTITY_KIND="AWSClusterStaticIdentity"
+            AWS_IDENTITY_NAME="cluster-identity"
+          fi
+          export AWS_IDENTITY_KIND AWS_IDENTITY_NAME
+
+          cat > "$MANIFEST_DIR/aws-cluster.yaml.tmpl" <<'EOF'
+          apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+          kind: AWSCluster
+          metadata:
+            name: ${CLUSTER_NAME}
+            namespace: fleet-default
+          spec:
+            identityRef:
+              kind: ${AWS_IDENTITY_KIND}
+              name: ${AWS_IDENTITY_NAME}
+            region: ${AWS_REGION}
+            controlPlaneLoadBalancer:
+              loadBalancerType: nlb
+              healthCheckProtocol: TCP
+            network:
+              vpc:
+                id: ${AWS_VPC_ID}
+              subnets:
+                - id: ${AWS_SUBNET_ID}
+              securityGroupOverrides:
+                controlplane: ${AWS_SG}
+                node: ${AWS_SG}
+          EOF
+
+          envsubst '${CLUSTER_NAME} ${AWS_REGION} ${AWS_IDENTITY_KIND} ${AWS_IDENTITY_NAME} ${AWS_VPC_ID} ${AWS_SUBNET_ID} ${AWS_SG}' \
+            < "$MANIFEST_DIR/aws-cluster.yaml.tmpl" \
+            > "$MANIFEST_DIR/aws-cluster.yaml"
+
+          pools=("etcd" "control-plane" "worker")
+
+          for pool in "${pools[@]}"; do
+            case "$pool" in
+              control-plane|etcd)
+                AWS_IAM_PROFILE="control-plane.cluster-api-provider-aws.sigs.k8s.io"
+                ;;
+              *)
+                AWS_IAM_PROFILE="nodes.cluster-api-provider-aws.sigs.k8s.io"
+                ;;
+            esac
+            export AWS_IAM_PROFILE
+
+            cat > "$MANIFEST_DIR/aws-machine-template-${pool}.yaml.tmpl" <<'EOF'
+          apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+          kind: AWSMachineTemplate
+          metadata:
+            name: ${CLUSTER_NAME}-${POOL_NAME}
+            namespace: fleet-default
+          spec:
+            template:
+              spec:
+                ami:
+                  id: ${AWS_AMI}
+                instanceType: ${INSTANCE_TYPE}
+                iamInstanceProfile: ${AWS_IAM_PROFILE}
+                sshKeyName: ${AWS_SSH_KEY_NAME}
+                rootVolume:
+                  size: 100
+                publicIP: true
+                cloudInit:
+                  insecureSkipSecretsManager: true
+                privateDnsName:
+                  hostnameType: resource-name
+          EOF
+
+            sed "s/\${POOL_NAME}/${pool}/g" \
+              "$MANIFEST_DIR/aws-machine-template-${pool}.yaml.tmpl" \
+              > "$MANIFEST_DIR/aws-machine-template-${pool}.yaml.pool"
+
+            envsubst '${CLUSTER_NAME} ${AWS_AMI} ${INSTANCE_TYPE} ${AWS_IAM_PROFILE} ${AWS_SSH_KEY_NAME}' \
+              < "$MANIFEST_DIR/aws-machine-template-${pool}.yaml.pool" \
+              > "$MANIFEST_DIR/aws-machine-template-${pool}.yaml"
+
+            rm "$MANIFEST_DIR/aws-machine-template-${pool}.yaml.pool"
+          done
+
+          if [[ "$DISTRIBUTION" == "rke2" ]]; then
+            cat > "$MANIFEST_DIR/capa-cluster.yaml" <<EOF
+          apiVersion: provisioning.cattle.io/v1
+          kind: Cluster
+          metadata:
+            name: ${CLUSTER_NAME}
+            namespace: fleet-default
+          spec:
+            kubernetesVersion: ${K8S_VERSION}
+            rkeConfig:
+              machineGlobalConfig:
+                cni: calico
+                disable-kube-proxy: false
+                disable:
+                  - rke2-metrics-server
+                etcd-expose-metrics: false
+                cloud-provider-name: external
+                disable-cloud-controller: true
+                protect-kernel-defaults: false
+              machineSelectorFiles:
+                - fileSources:
+                    - configMap:
+                        name: ${CLUSTER_NAME}-extra-config
+                        items:
+                          - key: extra-config.yaml
+                            path: /etc/rancher/rke2/config.yaml.d/extra-config.yaml
+              infrastructureRef:
+                apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+                kind: AWSCluster
+                name: ${CLUSTER_NAME}
+                namespace: fleet-default
+              machinePools:
+                - name: etcd
+                  quantity: ${ETCD_QTY}
+                  controlPlaneRole: false
+                  etcdRole: true
+                  workerRole: false
+                  machineConfigRef:
+                    apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+                    kind: AWSMachineTemplate
+                    name: ${CLUSTER_NAME}-etcd
+                    namespace: fleet-default
+                - name: control-plane
+                  quantity: ${CP_QTY}
+                  controlPlaneRole: true
+                  etcdRole: false
+                  workerRole: false
+                  machineConfigRef:
+                    apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+                    kind: AWSMachineTemplate
+                    name: ${CLUSTER_NAME}-control-plane
+                    namespace: fleet-default
+                - name: worker
+                  quantity: ${WORKER_QTY}
+                  controlPlaneRole: false
+                  etcdRole: false
+                  workerRole: true
+                  machineConfigRef:
+                    apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+                    kind: AWSMachineTemplate
+                    name: ${CLUSTER_NAME}-worker
+                    namespace: fleet-default
+              additionalManifest: |
+                apiVersion: helm.cattle.io/v1
+                kind: HelmChart
+                metadata:
+                  name: aws-cloud-controller-manager
+                  namespace: kube-system
+                spec:
+                  chart: aws-cloud-controller-manager
+                  repo: https://kubernetes.github.io/cloud-provider-aws
+                  targetNamespace: kube-system
+                  bootstrap: true
+                  valuesContent: |-
+                    hostNetworking: true
+                    nodeSelector:
+                      node-role.kubernetes.io/control-plane: "true"
+                    args:
+                      - --configure-cloud-routes=false
+                      - --v=5
+                      - --cloud-provider=aws
+                      - --cluster-name=${CLUSTER_NAME}
+          EOF
+          else
+            cat > "$MANIFEST_DIR/capa-cluster.yaml" <<EOF
+          apiVersion: provisioning.cattle.io/v1
+          kind: Cluster
+          metadata:
+            name: ${CLUSTER_NAME}
+            namespace: fleet-default
+          spec:
+            kubernetesVersion: ${K8S_VERSION}
+            rkeConfig:
+              machineGlobalConfig:
+                disable-cloud-controller: true
+                disable-kube-proxy: false
+                etcd-expose-metrics: false
+                protect-kernel-defaults: false
+              machineSelectorConfig:
+                - config:
+                    disable-cloud-controller: true
+                    kube-controller-manager-arg:
+                      - cloud-provider=external
+                    kubelet-arg:
+                      - cloud-provider=external
+                  machineLabelSelector:
+                    matchExpressions:
+                      - key: rke.cattle.io/control-plane-role
+                        operator: In
+                        values:
+                          - 'true'
+                - config:
+                    disable-cloud-controller: true
+                    kubelet-arg:
+                      - cloud-provider=external
+                  machineLabelSelector:
+                    matchExpressions:
+                      - key: rke.cattle.io/etcd-role
+                        operator: In
+                        values:
+                          - 'true'
+                - config:
+                    kubelet-arg:
+                      - cloud-provider=external
+                  machineLabelSelector:
+                    matchExpressions:
+                      - key: rke.cattle.io/worker-role
+                        operator: In
+                        values:
+                          - 'true'
+              infrastructureRef:
+                apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+                kind: AWSCluster
+                name: ${CLUSTER_NAME}
+                namespace: fleet-default
+              machinePools:
+                - name: etcd
+                  quantity: ${ETCD_QTY}
+                  controlPlaneRole: false
+                  etcdRole: true
+                  workerRole: false
+                  machineConfigRef:
+                    apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+                    kind: AWSMachineTemplate
+                    name: ${CLUSTER_NAME}-etcd
+                    namespace: fleet-default
+                - name: control-plane
+                  quantity: ${CP_QTY}
+                  controlPlaneRole: true
+                  etcdRole: false
+                  workerRole: false
+                  machineConfigRef:
+                    apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+                    kind: AWSMachineTemplate
+                    name: ${CLUSTER_NAME}-control-plane
+                    namespace: fleet-default
+                - name: worker
+                  quantity: ${WORKER_QTY}
+                  controlPlaneRole: false
+                  etcdRole: false
+                  workerRole: true
+                  machineConfigRef:
+                    apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+                    kind: AWSMachineTemplate
+                    name: ${CLUSTER_NAME}-worker
+                    namespace: fleet-default
+              additionalManifest: |
+                apiVersion: helm.cattle.io/v1
+                kind: HelmChart
+                metadata:
+                  name: aws-cloud-controller-manager
+                  namespace: kube-system
+                spec:
+                  chart: aws-cloud-controller-manager
+                  repo: https://kubernetes.github.io/cloud-provider-aws
+                  targetNamespace: kube-system
+                  bootstrap: true
+                  valuesContent: |-
+                    hostNetworking: true
+                    nodeSelector:
+                      node-role.kubernetes.io/control-plane: "true"
+                    args:
+                      - --configure-cloud-routes=false
+                      - --v=5
+                      - --cloud-provider=aws
+          EOF
+          fi
+
+          echo "Rendered successfully for $DISTRIBUTION."
+
+      - name: Create extra-config ConfigMap for RKE2
+        if: env.DISTRIBUTION == 'rke2'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Creating RKE2 extra-config ConfigMap..."
+          cat <<EOF | kubectl apply -f -
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: ${CLUSTER_NAME}-extra-config
+            namespace: fleet-default
+            annotations:
+              rke.cattle.io/object-authorized-for-clusters: ${CLUSTER_NAME}
+          data:
+            extra-config.yaml: |
+              node-name-from-cloud-provider-metadata: true
+          EOF
+
+      - name: Provision cluster
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          MANIFEST_DIR="$RUNNER_TEMP/capa-manifests"
+
+          : "${CLUSTER_NAME:?CLUSTER_NAME is empty}"
+          : "${DISTRIBUTION:?DISTRIBUTION is empty}"
+          : "${K8S_VERSION:?K8S_VERSION is empty}"
+
+          echo "Creating AWSCluster $CLUSTER_NAME"
+          kubectl apply -f "$MANIFEST_DIR/aws-cluster.yaml"
+
+          echo "Waiting for CAPA to retain the requested subnet ID."
+          for attempt in $(seq 1 60); do
+            awscluster_json="$(kubectl -n fleet-default get awscluster.infrastructure.cluster.x-k8s.io "$CLUSTER_NAME" -o json)"
+            actual_subnet="$(jq -c '.spec.network.subnets[0] // {}' <<< "$awscluster_json")"
+            if jq -e --arg id "$AWS_SUBNET_ID" '.id == $id' <<< "$actual_subnet" >/dev/null; then
+              break
+            fi
+            sleep 2
+          done
+
+          pools=("etcd" "control-plane" "worker")
+
+          for pool in "${pools[@]}"; do
+            echo "Creating AWSMachineTemplate for $pool"
+            kubectl apply -f "$MANIFEST_DIR/aws-machine-template-${pool}.yaml"
+          done
+
+          echo "Creating Rancher cluster $CLUSTER_NAME with $DISTRIBUTION $K8S_VERSION"
+          kubectl apply -f "$MANIFEST_DIR/capa-cluster.yaml"
+
+      - name: Wait for cluster readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          deadline=$((SECONDS + 3600))
+
+          echo "Waiting for cluster $CLUSTER_NAME to report Ready..."
+
+          while (( SECONDS < deadline )); do
+            cluster_json="$(kubectl -n fleet-default get "clusters.provisioning.cattle.io/$CLUSTER_NAME" -o json 2>/dev/null || echo "{}")"
+            ready="$(jq -r '[.status.conditions[]? | select(.type == "Ready") | .status][0] // "Unknown"' <<< "$cluster_json")"
+
+            if [[ "$ready" == "True" ]]; then
+              echo "Cluster $CLUSTER_NAME is Ready!"
+              exit 0
+            fi
+
+            echo "Cluster readiness is $ready; checking again in 30 seconds."
+            sleep 30
+          done
+
+          echo "::error::Timed out waiting for cluster $CLUSTER_NAME to become Ready."
+          kubectl -n fleet-default describe "clusters.provisioning.cattle.io/$CLUSTER_NAME" || true
+          exit 1
+
+      - name: Clean up temporary files
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f "$RUNNER_TEMP/rancher-kubeconfig" \
+                "$RUNNER_TEMP/rke2-releases.json" \
+                "$RUNNER_TEMP/k3s-releases.json" \
+                "$RUNNER_TEMP/capa-aws-credentials" \
+                "$RUNNER_TEMP/downstream-kubeconfig"
+          rm -rf "$RUNNER_TEMP/capa-manifests"
