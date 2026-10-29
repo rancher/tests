@@ -507,6 +507,46 @@ func (s *SCIMSecurityTestSuite) TestSCIMGroupMembershipDoesNotGrantLocalUserProv
 	require.Error(s.T(), err, "A local user added to a SCIM group should not reach the cluster bound to that group")
 }
 
+func (s *SCIMSecurityTestSuite) TestSCIMLoginIgnoresGroupPrincipalsOfAnotherProvider() {
+	if !s.providerScopingOn {
+		s.T().Skip(scimCrossProviderMemberIssue)
+	}
+
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Infof("Verifying a local login does not pick up the %s group principals stored on the user", authactions.OpenLdap)
+
+	groupName, _, err := scimactions.CreateSCIMGroup(s.scimClient, subSession, "")
+	require.NoError(s.T(), err)
+
+	groupPrincipal := fmt.Sprintf("%s_%s://%s", authactions.OpenLdap, authactions.PrincipalTypeGroup, groupName)
+	logrus.Infof("Binding %s to the cluster as %s", groupPrincipal, rbac.ClusterMember)
+
+	crtb, err := rbacapi.CreateGroupClusterRoleTemplateBinding(s.client, s.cluster.ID, groupPrincipal, string(rbac.ClusterMember))
+	require.NoError(s.T(), err, "Should be able to create the group CRTB")
+	require.NotEmpty(s.T(), crtb.Name)
+
+	subClient, err := s.client.WithSession(subSession)
+	require.NoError(s.T(), err)
+
+	localUser, err := users.CreateUserWithRole(subClient, users.UserConfig(), string(rbac.StandardUser))
+	require.NoError(s.T(), err, "Should be able to create a local user")
+
+	require.NoError(s.T(), usersapi.SetUserGroupPrincipals(s.client, localUser.ID, authactions.OpenLdap, []string{groupPrincipal}),
+		"Should be able to store a %s group principal on the local user, as a SCIM write would", authactions.OpenLdap)
+
+	stored, err := usersapi.GetUserGroupPrincipals(s.client, localUser.ID, authactions.OpenLdap)
+	require.NoError(s.T(), err)
+	require.Contains(s.T(), stored, groupPrincipal, "The %s group principal should be stored before the login", authactions.OpenLdap)
+
+	localUserClient, err := subClient.AsUser(localUser)
+	require.NoError(s.T(), err, "Local user %s should be able to login", localUser.Name)
+
+	_, err = localUserClient.Management.Cluster.ByID(s.cluster.ID)
+	require.Error(s.T(), err, "A password login should not carry the %s group principals stored on the user, so it should not reach the cluster bound to %s", authactions.OpenLdap, groupPrincipal)
+}
+
 func (s *SCIMSecurityTestSuite) TestSCIMUserByIDRejectsNonProviderUser() {
 	if !s.providerScopingOn {
 		s.T().Skip(scimProviderOwnershipIssue)
