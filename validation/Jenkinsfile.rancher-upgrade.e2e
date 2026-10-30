@@ -208,7 +208,7 @@ def runUpgradePhase(String phase, String testcase, String testRunID, String test
         "QASE_AUTOMATION_TOKEN=${env.QASE_AUTOMATION_TOKEN}",
         "QASE_TEST_RUN_ID=${testRunID}",
         "QASE_SCHEMA_PREFIX=${params.QASE_SCHEMA_PREFIX}",
-        "QASE_PROJECT_ID=RANCHERINT"
+        "QASE_PROJECT_ID=${env.QASE_PROJECT_ID}"
     ].join('\n') + '\n'
     // QASE_TEST_RUN_COMPLETE deliberately absent: the pipeline owns the shared
     // run lifecycle (started before the first phase, closed after the last).
@@ -458,6 +458,9 @@ skipTearDown: true''',
         WORKSPACE_NAME = ''
         INFRA_CLEANED  = 'false'
         YQ_VERSION     = 'v4.47.2'
+        // One Qase project for the whole pipeline: the agent-side testrun
+        // binary and the in-container reporter both read this (RM otherwise).
+        QASE_PROJECT_ID = 'RANCHERINT'
         // Folder-injected TEST_RUN_NAME (if present) wins; the fallback keeps
         // the shared Qase run name readable when it is not injected.
         TEST_RUN_NAME  = "${env.TEST_RUN_NAME ?: 'Rancher Server Upgrade Validation'}"
