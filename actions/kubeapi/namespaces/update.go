@@ -52,7 +52,7 @@ func UpdateNamespaceResourceQuotaAnnotation(client *rancher.Client, clusterID st
 	return nil
 }
 
-// MoveNamespaceToProject updates the project annotation/label to move the namespace into a different project
+// MoveNamespaceToProject updates the project annotation/label and waits for project ID propagation.
 func MoveNamespaceToProject(client *rancher.Client, clusterID, namespaceName, newProjectName string) error {
 	ns, err := extnamespaceapi.GetNamespaceByName(client, clusterID, namespaceName)
 	if err != nil {
@@ -66,14 +66,21 @@ func MoveNamespaceToProject(client *rancher.Client, clusterID, namespaceName, ne
 		ns.Labels = make(map[string]string)
 	}
 
-	ns.Annotations[ProjectIDAnnotation] = fmt.Sprintf("%s:%s", clusterID, newProjectName)
-	ns.Labels[ProjectIDAnnotation] = newProjectName
-
-	if _, err := extnamespaceapi.UpdateNamespace(client, clusterID, ns); err != nil {
-		return fmt.Errorf("failed to update namespace %s with new project annotation: %w", namespaceName, err)
+	if newProjectName == "" {
+		delete(ns.Annotations, ProjectIDAnnotation)
+		delete(ns.Labels, ProjectIDAnnotation)
+	} else {
+		ns.Annotations[ProjectIDAnnotation] = fmt.Sprintf("%s:%s", clusterID, newProjectName)
+		ns.Labels[ProjectIDAnnotation] = newProjectName
 	}
 
-	if err := WaitForProjectIDUpdate(client, clusterID, newProjectName, namespaceName); err != nil {
+	_, err = extnamespaceapi.UpdateNamespace(client, clusterID, ns)
+	if err != nil {
+		return fmt.Errorf("failed to update namespace %s project association: %w", namespaceName, err)
+	}
+
+	err = WaitForProjectIDUpdate(client, clusterID, newProjectName, namespaceName)
+	if err != nil {
 		return fmt.Errorf("project ID annotation/label not updated for namespace %s: %w", namespaceName, err)
 	}
 
