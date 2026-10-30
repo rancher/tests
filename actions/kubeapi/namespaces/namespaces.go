@@ -25,6 +25,8 @@ const (
 	InitialUsedResourceQuotaValue           = "0"
 	ManagedResourceQuotaLabel               = "resourcequota.management.cattle.io/default-resource-quota"
 	TrueLabelValue                          = "true"
+	GlobalDataNamespace                     = "cattle-global-data"
+	FleetDefaultNamespace                   = "fleet-default"
 )
 
 // GetNamespacesInProject retrieves all namespaces in a specific project within a cluster
