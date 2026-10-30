@@ -4,9 +4,11 @@ package longhorn
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"net/http"
 	"net/url"
 	"os"
 	"slices"
@@ -22,6 +24,7 @@ import (
 	shepherdCharts "github.com/rancher/shepherd/extensions/charts"
 	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	"github.com/rancher/shepherd/extensions/clusters"
+	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/extensions/defaults/namespaces"
 	"github.com/rancher/shepherd/extensions/kubeapi/secrets"
 	extstatefulsetapi "github.com/rancher/shepherd/extensions/kubeapi/workloads/statefulsets"
@@ -51,13 +54,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-)
-
-var (
-	LonghornEncryptionSecretBaseName       = "longhorn-crypto"
-	LonghornEncryptionStorageClassBaseName = "longhorn-crypto-global"
-	volumeBytesPrometheusQueryTemplate     = "longhorn_volume_capacity_bytes{volume=\"%s\"}"
-	numberVolumesPrometheusQuery           = "count(longhorn_volume_capacity_bytes) OR on() vector(0)" // Return an empty list instead of nil with OR on() vector(0).
+	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
 type LonghornTestSuite struct {
@@ -70,7 +67,25 @@ type LonghornTestSuite struct {
 	project            *management.Project
 }
 
+// skipTearDown reports whether the dispatched config sets skipTearDown, asking
+// this suite to leave its resources in place instead of tearing them down.
+func skipTearDown() bool {
+	skip := false
+	operations.LoadObjectFromMap(skipTearDownConfigKey, config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey)), &skip)
+
+	return skip
+}
+
 func (l *LonghornTestSuite) TearDownSuite() {
+	if skipTearDown() {
+		// The rancher-upgrade pipeline runs this suite as pre-upgrade functional
+		// coverage: its workloads must survive the in-place server upgrade so the
+		// post-upgrade phases assert against an environment carrying real load.
+		// The pipeline environment teardown is the cleanup.
+		l.T().Log("skipTearDown is set: skipping teardown so the suite's resources survive the server upgrade")
+		return
+	}
+
 	l.session.Cleanup()
 }
 
@@ -440,6 +455,28 @@ func (l *LonghornTestSuite) TestVolumeEncryption() {
 	storage.CheckMountedVolume(l.T(), kubeConfig, l.cluster.ID, namespaces.Default, pod.Name, storage.MountPath)
 }
 
+// prometheusQueryEqual polls the query through Grafana until it returns
+// expected: a freshly installed monitoring stack needs time to scrape
+// Longhorn's exporter, and single-shot queries race the first scrape.
+func prometheusQueryEqual(loggedClient *http.Client, host string, clusterID string, query string, expected int) error {
+	err := kwait.PollUntilContextTimeout(context.TODO(), defaults.FiveSecondTimeout, defaults.FiveMinuteTimeout, true,
+		func(context.Context) (bool, error) {
+			value, queryErr := monitoring.PrometheusQueryInGrafana(loggedClient, host, clusterID, query)
+			if queryErr != nil {
+				// Transient failures (Grafana or its datasource still
+				// booting) are retried until the deadline.
+				return false, nil
+			}
+
+			return value == expected, nil
+		})
+	if err != nil {
+		return fmt.Errorf("query %q never returned %d within 5m: %w", query, expected, err)
+	}
+
+	return nil
+}
+
 func (l *LonghornTestSuite) TestMonitoringIntegration() {
 	l.T().Log("Checking if the monitoring chart is already installed")
 	initialMonitoringChart, err := shepherdCharts.GetChartStatus(l.standardUserClient, l.cluster.ID, charts.RancherMonitoringNamespace, charts.RancherMonitoringName)
@@ -479,7 +516,16 @@ func (l *LonghornTestSuite) TestMonitoringIntegration() {
 			MatchNames: []string{charts.LonghornNamespace},
 		},
 		Endpoints: []monitoringv1.Endpoint{
-			{Port: "manager"},
+			{
+				Port: "manager",
+				// Longhorn 1.12's manager gathers volume metrics live from
+				// instance managers per scrape, so /metrics can take tens of
+				// seconds; the 10s default scrape timeout drops every sample
+				// (verified live: all longhorn-backend targets down with
+				// "context deadline exceeded"). Allow a full minute.
+				Interval:      "90s",
+				ScrapeTimeout: "60s",
+			},
 		},
 	}
 
@@ -495,9 +541,7 @@ func (l *LonghornTestSuite) TestMonitoringIntegration() {
 	previousNumberOfVolumes, err := longhornActions.GetNumberOfLonghornVolumes(l.standardUserClient, l.cluster.ID)
 	require.NoError(l.T(), err)
 
-	value, err := monitoring.PrometheusQueryInGrafana(loggedClient, l.client.RancherConfig.Host, l.cluster.ID, numberVolumesPrometheusQuery)
-	require.NoError(l.T(), err)
-	require.Equal(l.T(), previousNumberOfVolumes, value)
+	require.NoError(l.T(), prometheusQueryEqual(loggedClient, l.client.RancherConfig.Host, l.cluster.ID, numberVolumesPrometheusQuery, previousNumberOfVolumes))
 
 	_, volumeName, err := storage.CreatePVC(l.standardUserClient, l.cluster.ID, charts.LonghornStorageClass)
 	require.NoError(l.T(), err)
@@ -506,15 +550,11 @@ func (l *LonghornTestSuite) TestMonitoringIntegration() {
 	// CreatePVC creates a 1GiB volume.
 	volumeSizeQuery := fmt.Sprintf(volumeBytesPrometheusQueryTemplate, strings.TrimSpace(volumeName))
 	l.T().Logf("Checking volume %s's size with Prometheus through Grafana API (%s)", volumeName, volumeSizeQuery)
-	value, err = monitoring.PrometheusQueryInGrafana(loggedClient, l.client.RancherConfig.Host, l.cluster.ID, volumeSizeQuery)
-	require.NoError(l.T(), err)
 	gigabyte := 1024 * 1024 * 1024
-	require.Equal(l.T(), gigabyte, value)
+	require.NoError(l.T(), prometheusQueryEqual(loggedClient, l.client.RancherConfig.Host, l.cluster.ID, volumeSizeQuery, gigabyte))
 
 	l.T().Logf("Checking new number of volumes with Prometheus through Grafana API (%s)", numberVolumesPrometheusQuery)
-	value, err = monitoring.PrometheusQueryInGrafana(loggedClient, l.client.RancherConfig.Host, l.cluster.ID, numberVolumesPrometheusQuery)
-	require.NoError(l.T(), err)
-	require.Equal(l.T(), previousNumberOfVolumes+1, value)
+	require.NoError(l.T(), prometheusQueryEqual(loggedClient, l.client.RancherConfig.Host, l.cluster.ID, numberVolumesPrometheusQuery, previousNumberOfVolumes+1))
 }
 
 // In order for 'go test' to run this suite, we need to create
