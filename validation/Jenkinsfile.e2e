@@ -1012,6 +1012,15 @@ except Exception as e:
                         if (downstreamClusterName && fileExists(cattleConfigPath)) {
                             sh "./yq e '.rancher.clusterName = \"${downstreamClusterName}\"' -i ${cattleConfigPath}"
                             echo "Updated cattle-config with clusterName: ${downstreamClusterName}"
+
+                            // Point upgradeInput at the real (generated) downstream cluster name
+                            def upgradeClusters = sh(
+                                script: "./yq '.upgradeInput.clusters | length' ${cattleConfigPath}",
+                                returnStdout: true
+                            ).trim()
+                            if (upgradeClusters.isInteger() && upgradeClusters.toInteger() > 0) {
+                                sh "./yq e '.upgradeInput.clusters[0].name = \"${downstreamClusterName}\"' -i ${cattleConfigPath}"
+                            }
                         }
                     } // property.useWithProperties
                 }
