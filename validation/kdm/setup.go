@@ -16,6 +16,7 @@ import (
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/kdm"
 	"github.com/rancher/tests/actions/logging"
+	"github.com/rancher/tests/actions/provisioning"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	tfpConfig "github.com/rancher/tfp-automation/config"
 	"github.com/stretchr/testify/require"
@@ -52,7 +53,10 @@ func Setup(t *testing.T, clusterType string) *kdmTest {
 	k.CattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 	_, _, _, standaloneConfig := tfpConfig.LoadTFPConfigs(k.CattleConfig)
 
-	k.CattleConfig, err = defaults.LoadPackageDefaults(k.CattleConfig, "")
+	_, providerName, err := provisioning.GetProviderFromConfig(k.CattleConfig)
+	require.NoError(t, err)
+
+	k.CattleConfig, err = defaults.LoadPackageDefaults(k.CattleConfig, "", providerName)
 	require.NoError(t, err)
 
 	setting, err := client.Management.Setting.ByID("rke-metadata-config")

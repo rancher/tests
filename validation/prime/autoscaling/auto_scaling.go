@@ -10,6 +10,7 @@ import (
 	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/logging"
+	"github.com/rancher/tests/actions/provisioning"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	"github.com/stretchr/testify/require"
 )
@@ -35,7 +36,10 @@ func autoScalingSetup(t *testing.T) autoScalingTest {
 
 	s.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	s.cattleConfig, err = defaults.LoadPackageDefaults(s.cattleConfig, "")
+	_, providerName, err := provisioning.GetProviderFromConfig(s.cattleConfig)
+	require.NoError(t, err)
+
+	s.cattleConfig, err = defaults.LoadPackageDefaults(s.cattleConfig, "", providerName)
 	require.NoError(t, err)
 
 	loggingConfig := new(logging.Logging)

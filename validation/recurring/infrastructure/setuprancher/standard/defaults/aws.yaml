@@ -4,17 +4,13 @@ rancher:
   insecure: true
   cleanup: true
 
-awsCredentials:
-  accessKey: "<required>"
-  secretKey: "<required>"
-
 terraform:
-  provider: "<HB_PROVIDER>"
-  downstreamClusterProvider: "<HB_PROVIDER>"
+  provider: "aws"
+  downstreamClusterProvider: "aws"
   resourcePrefix: "<HB_HOSTNAME_PREFIX>"
+  localCluster: "rke2"
   cni: "<HB_CNI>"
   defaultClusterRoleForProjectMembers: "<HB_CLUSTER_ROLE_FOR_PROJECT_MEMBERS>"
-  enableNetworkPolicy: false
   privateKeyPath: "<HB_TFP_SSH_PRIVATE_KEY_PATH>"
   awsCredentials:
     awsAccessKey: "<AWS_ACCESS_KEY_ID>"
@@ -39,16 +35,16 @@ terraform:
     sshConnectionType: "<HB_SSH_CONNECTION_TYPE>"
     timeout: "<HB_SSH_TIMEOUT>"
   standalone:
+    bootstrapPassword: "<HB_RANCHER_ADMIN_PASSWORD>"
+    certManagerVersion: "<HB_CERT_MANAGER_VERSION>"
     chartVersion: "<required>"
+    osUser: "<HB_AWS_OS_USER>"
+    osGroup: "<HB_AWS_OS_GROUP>"
     rancherTagVersion: "<required>"
     rancherChartRepository: "<HB_PRIME_HEAD_HELM_CHART_URL>"
     repo: "<HB_PRIME_HEAD_REPO>"
     rancherImage: "<HB_PRIME_HEAD_RANCHER_IMAGE>"
-    rancherHostname: "<required>"
-    bootstrapPassword: "<HB_RANCHER_ADMIN_PASSWORD>"
-    certManagerVersion: "<HB_CERT_MANAGER_VERSION>"
-    osUser: "<HB_AWS_OS_USER>"
-    osGroup: "<HB_AWS_OS_GROUP>"
+    rancherHostname: "<HB_RANCHER_HOSTNAME>"
     registryPassword: "<HB_DOCKERHUB_PASSWORD>"
     registryUsername: "<HB_DOCKERHUB_USERNAME>"
     rke2Version: "<HB_RKE2_VERSION>"

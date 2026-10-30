@@ -13,6 +13,7 @@ replace (
 
 	github.com/rancher/rancher/pkg/apis => github.com/rancher/rancher/pkg/apis v0.0.0-20261008184213-aaaf0be31813
 	github.com/rancher/rancher/pkg/client => github.com/rancher/rancher/pkg/client v0.0.0-20261008184213-aaaf0be31813
+	github.com/rancher/shepherd => github.com/susesgartner/shepherd v0.0.0-20261028175709-c081b97f7ce1
 	github.com/rancher/tests/actions => ./../actions
 	github.com/rancher/tfp-automation => github.com/rancher/tfp-automation v0.0.0-20261029172718-3695a416f6d6
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc => go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.53.0
@@ -68,7 +69,7 @@ require (
 	github.com/rancher/norman v0.10.1
 	github.com/rancher/qa-infra-automation v0.0.0-20260514152023-976143409dc3
 	github.com/rancher/rancher/pkg/apis v0.0.0
-	github.com/rancher/shepherd v0.0.0-20261023222044-ce0c5d6e7f38
+	github.com/rancher/shepherd v0.0.0-20261028175709-c081b97f7ce1
 	github.com/rancher/tests/actions v0.0.0-20261008182219-05530174171d
 	github.com/rancher/tfp-automation v0.0.0-20261029172718-3695a416f6d6
 	github.com/sirupsen/logrus v1.10.2

@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
-	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/config/operations/permutations"
@@ -98,7 +97,9 @@ func TestDynamicNodeDriver(t *testing.T) {
 				}
 
 				provider := provisioning.CreateProvider(clusterConfig.Provider)
-				credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
+				credentialSpec, err := provider.LoadCredentialConfigFunc(cattleConfig)
+				require.NoError(t, err)
+
 				machineConfigSpec := provider.LoadMachineConfigFunc(cattleConfig)
 
 				logrus.Info("Provisioning cluster")

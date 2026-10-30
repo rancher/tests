@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
-	"github.com/rancher/shepherd/extensions/cloudcredentials"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
@@ -57,7 +56,9 @@ func TestKDM(t *testing.T) {
 			require.NotNil(t, clusterConfig.Provider)
 
 			provider := provisioning.CreateProvider(clusterConfig.Provider)
-			credentialSpec := cloudcredentials.LoadCloudCredential(string(provider.Name))
+			credentialSpec, err := provider.LoadCredentialConfigFunc(k.CattleConfig)
+			require.NoError(t, err)
+
 			machineConfigSpec := provider.LoadMachineConfigFunc(k.CattleConfig)
 
 			logrus.Infof("Provisioning cluster")
