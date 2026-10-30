@@ -32,7 +32,7 @@ Your GO suite should be set to `-run ^Test<TestSuite>$`
 
 - To run the scim_openldap_test.go, set the GO suite to `-run ^TestSCIMOpenLDAPSuite$`
 - To run the scim_prime_test.go, set the GO suite to `-run ^TestSCIMPrimeFeatureSuite$`
-- To run the scim_audit_test.go, set the GO suite to `-run ^TestSCIMAuditSuite$`
+- To run the scim_audit_log_test.go, set the GO suite to `-run ^TestSCIMAuditLogSuite$`
 - To run the scim_login_test.go, set the GO suite to `-run ^TestSCIMLoginAttributesSuite$`
 - To run the scim_security_test.go, set the GO suite to `-run ^TestSCIMSecuritySuite$`
 
