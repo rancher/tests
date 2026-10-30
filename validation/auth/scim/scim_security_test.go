@@ -16,6 +16,7 @@ import (
 	extclusterapi "github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	extfeatures "github.com/rancher/shepherd/extensions/kubeapi/features"
 	"github.com/rancher/shepherd/extensions/kubeapi/namespaces"
+	extauthscim "github.com/rancher/shepherd/extensions/kubeapi/scim"
 	extsecretapi "github.com/rancher/shepherd/extensions/kubeapi/secrets"
 	"github.com/rancher/shepherd/extensions/users"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
@@ -51,6 +52,7 @@ const (
 	scimHijackedUserPrefix    = "scim-hijacked-user"
 	scimHijackedGroupPrefix   = "scim-hijacked-group"
 	scimForeignProvider       = "azuread"
+	scimDefaultAdminUsername  = "admin"
 )
 
 type SCIMSecurityTestSuite struct {
@@ -793,6 +795,119 @@ func (s *SCIMSecurityTestSuite) TestSCIMZZLegacyTokenSecretRemovedOnRestart() {
 		}
 	}
 	require.True(s.T(), deletionLogged, "The warning naming %s should report the deletion, got: %v", secretName, warnings)
+}
+
+func (s *SCIMSecurityTestSuite) TestSCIMCreateRefusesAPrincipalTheProviderDoesNotManage() {
+	if !s.providerScopingOn {
+		s.T().Skip(scimProviderOwnershipIssue)
+	}
+
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Infof("Verifying a POST naming the principal the default admin holds for %s is refused as a conflict", authactions.OpenLdap)
+
+	admin, err := usersapi.GetUserByUsername(s.client, scimDefaultAdminUsername)
+	require.NoError(s.T(), err, "Should be able to read the default admin")
+
+	principalName, err := usersapi.FindUserPrincipalName(admin, authactions.OpenLdap)
+	if err != nil {
+		s.T().Skipf("The default admin holds no %s principal on this server, so no unmanaged holder exists to name", authactions.OpenLdap)
+	}
+
+	resp, err := s.scimClient.Users().Create(scimclient.User{
+		Schemas:  []string{scimclient.SCIMSchemaUser},
+		UserName: principalName,
+	})
+	require.NoError(s.T(), err)
+	require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusConflict,
+		"A POST naming a principal the provider does not manage should answer 409"))
+
+	survivor, err := s.client.Management.User.ByID(admin.Name)
+	require.NoError(s.T(), err, "The default admin should survive the refused POST")
+	require.True(s.T(), *survivor.Enabled, "The default admin should still be enabled after the refused POST")
+	require.ElementsMatch(s.T(), admin.PrincipalIDs, survivor.PrincipalIDs, "The refused POST should not have changed the principals of the default admin")
+}
+
+func (s *SCIMSecurityTestSuite) TestSCIMByIDRequestsRefuseTheDefaultAdmin() {
+	if !s.providerScopingOn {
+		s.T().Skip(scimProviderOwnershipIssue)
+	}
+
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying every by-ID SCIM user request answers 404 for the default admin and leaves the account intact")
+
+	admin, err := usersapi.GetUserByUsername(s.client, scimDefaultAdminUsername)
+	require.NoError(s.T(), err, "Should be able to read the default admin")
+
+	results, err := scimactions.FetchSCIMUserByIDResults(s.scimClient, admin.Name, namegen.AppendRandomString(scimHijackedUserPrefix))
+	require.NoError(s.T(), err)
+	require.NoError(s.T(), scimactions.VerifyByIDResultsStatus(results, http.StatusNotFound),
+		"The default admin is never managed by SCIM, so every by-ID request should answer 404")
+
+	survivor, err := s.client.Management.User.ByID(admin.Name)
+	require.NoError(s.T(), err, "The default admin should survive the refused by-ID requests, including the DELETE")
+	require.Equal(s.T(), scimDefaultAdminUsername, survivor.Username, "The refused by-ID requests should not have renamed the default admin")
+	require.True(s.T(), *survivor.Enabled, "The default admin should still be enabled after the refused PATCH")
+}
+
+func (s *SCIMSecurityTestSuite) TestSCIMGroupCreateAllowsDisplayNameOwnedByAnotherProvider() {
+	if !s.providerScopingOn {
+		s.T().Skip(scimProviderOwnershipIssue)
+	}
+
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Infof("Verifying the %s provider may name a group after a group the %s provider owns", authactions.OpenLdap, scimForeignProvider)
+
+	foreignGroup, err := scimactions.CreateGroupOwnedByProvider(s.client, subSession, scimForeignProvider)
+	require.NoError(s.T(), err, "Should be able to create a group owned by the %s provider", scimForeignProvider)
+
+	_, err = extauthscim.CreateGroupWithTemplate(s.scimClient, subSession, scimclient.Group{
+		Schemas:     []string{scimclient.SCIMSchemaGroup},
+		DisplayName: foreignGroup.DisplayName,
+	})
+	require.NoError(s.T(), err, "A display name is only taken within a provider, so the %s provider should be able to reuse it", authactions.OpenLdap)
+
+	require.NoError(s.T(), scimactions.VerifyGroupExists(s.client, foreignGroup.Name),
+		"The %s group should be left in place by a create that reuses its display name", scimForeignProvider)
+
+	byID, err := s.scimClient.Groups().ByID(foreignGroup.Name)
+	require.NoError(s.T(), err)
+	require.NoError(s.T(), scimactions.CheckStatus(byID, http.StatusNotFound,
+		fmt.Sprintf("The %s group should stay out of reach of the %s provider after the create", scimForeignProvider, authactions.OpenLdap)))
+}
+
+func (s *SCIMSecurityTestSuite) TestSCIMUserCreateAllowsUserNameHeldByLocalUser() {
+	if !s.providerScopingOn {
+		s.T().Skip(scimProviderOwnershipIssue)
+	}
+
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Infof("Verifying the %s provider may name a user after a local user, and leaves that local user alone", authactions.OpenLdap)
+
+	subClient, err := s.client.WithSession(subSession)
+	require.NoError(s.T(), err)
+
+	localUser, err := users.CreateUserWithRole(subClient, users.UserConfig(), string(rbac.StandardUser))
+	require.NoError(s.T(), err, "Should be able to create a local user")
+
+	_, err = extauthscim.CreateUserWithTemplate(s.scimClient, subSession, scimclient.User{
+		Schemas:  []string{scimclient.SCIMSchemaUser},
+		UserName: localUser.Username,
+	})
+	require.NoError(s.T(), err, "A user name is only taken within a provider, so the %s provider should be able to reuse one a local user holds", authactions.OpenLdap)
+
+	survivor, err := s.client.Management.User.ByID(localUser.ID)
+	require.NoError(s.T(), err, "The local user should survive the create that reused the user name")
+	require.Equal(s.T(), localUser.Username, survivor.Username, "The create should not have renamed the local user")
+	require.NotContains(s.T(), strings.Join(survivor.PrincipalIDs, " "), authactions.OpenLdap,
+		"The create should not have given the local user a %s principal", authactions.OpenLdap)
 }
 
 func TestSCIMSecuritySuite(t *testing.T) {

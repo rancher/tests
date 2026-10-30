@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
@@ -392,4 +393,17 @@ func SetUserGroupPrincipals(client *rancher.Client, userID, providerName string,
 	_, err = client.WranglerContext.Mgmt.UserAttribute().Update(updated)
 
 	return err
+}
+
+// FindUserPrincipalName returns the name the given auth provider knows the user by, read from the user's principal for that provider
+func FindUserPrincipalName(user *v3.User, providerName string) (string, error) {
+	prefix := fmt.Sprintf("%s_%s://", providerName, authactions.PrincipalTypeUser)
+
+	for _, principalID := range user.PrincipalIDs {
+		if strings.HasPrefix(principalID, prefix) {
+			return strings.TrimPrefix(principalID, prefix), nil
+		}
+	}
+
+	return "", fmt.Errorf("user %q holds no %s principal", user.Username, providerName)
 }
