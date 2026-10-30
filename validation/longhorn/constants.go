@@ -19,10 +19,8 @@ const (
 	// returns an empty list instead of nil.
 	numberVolumesPrometheusQuery = "count(longhorn_volume_capacity_bytes) OR on() vector(0)"
 
-	// skipTearDownConfigKey is the cattle-config key that asks this suite to skip
-	// its teardown. The rancher-upgrade pipeline sets it when it dispatches this
-	// suite as pre-upgrade functional coverage: the suite's resources must survive
-	// the in-place Rancher server upgrade, and the pipeline's environment teardown
-	// is the cleanup. Unset or false (the default): full teardown.
+	// skipTearDownConfigKey asks this suite to skip teardown: the rancher-upgrade
+	// pipeline runs it as pre-upgrade coverage whose resources must survive the
+	// in-place server upgrade (the pipeline's env teardown is the cleanup).
 	skipTearDownConfigKey = "skipTearDown"
 )

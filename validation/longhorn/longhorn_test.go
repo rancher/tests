@@ -77,10 +77,8 @@ func skipTearDown() bool {
 
 func (l *LonghornTestSuite) TearDownSuite() {
 	if skipTearDown() {
-		// The rancher-upgrade pipeline runs this suite as pre-upgrade functional
-		// coverage: its workloads must survive the in-place server upgrade so the
-		// post-upgrade phases assert against an environment carrying real load.
-		// The pipeline environment teardown is the cleanup.
+		// Resources must survive the server upgrade for the post-upgrade phases;
+		// the pipeline's environment teardown is the cleanup.
 		l.T().Log("skipTearDown is set: skipping teardown so the suite's resources survive the server upgrade")
 		return
 	}
@@ -509,11 +507,9 @@ func (l *LonghornTestSuite) TestMonitoringIntegration() {
 		Endpoints: []monitoringv1.Endpoint{
 			{
 				Port: "manager",
-				// Longhorn 1.12's manager gathers volume metrics live from
-				// instance managers per scrape, so /metrics can take tens of
-				// seconds; the 10s default scrape timeout drops every sample
-				// (verified live: all longhorn-backend targets down with
-				// "context deadline exceeded"). Allow a full minute.
+				// Longhorn 1.12's manager gathers volume metrics live per scrape, so
+				// /metrics can take tens of seconds; the 10s default timeout drops
+				// every sample. Allow a full minute.
 				Interval:      "90s",
 				ScrapeTimeout: "60s",
 			},

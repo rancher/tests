@@ -42,10 +42,8 @@ func IsRancherVersionAbove(client *rancher.Client, minVersion string) (bool, err
 	return serverVersion.GreaterThan(minimumVersion), nil
 }
 
-// WaitRancherVersion polls the management server-version setting until it equals
-// targetVersion (semver-compared) or timeout elapses. Gates post-upgrade assertions
-// on Rancher server convergence; transient read errors during the upgrade rollout
-// are retried, not returned.
+// WaitRancherVersion polls the server-version setting until it semver-equals targetVersion,
+// gating post-upgrade assertions on server convergence; transient read errors are retried.
 func WaitRancherVersion(client *rancher.Client, targetVersion string, timeout time.Duration) error {
 	target, err := parseRancherVersion(targetVersion)
 	if err != nil {

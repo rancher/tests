@@ -1,6 +1,6 @@
 #!groovy
 /**
- * Dedicated Rancher server upgrade validation pipeline (rancher/tests#968, PRD #946).
+ * Dedicated Rancher server upgrade validation pipeline.
  *
  * Six-stage flow (stages carry high-level phases, per-phase work is steps,
  * per the Jenkins Pipeline Syntax Guide), community leg:
@@ -26,24 +26,15 @@
  * Versions resolve at runtime when RANCHER_VERSION_FROM / RANCHER_VERSION_TO_UPGRADE
  * are empty (qa-infra-automation `make rancher-resolve-version`); pins override.
  *
- * Structurally cloned from validation/Jenkinsfile.e2e (deploy flow, admin-token
- * injection, Qase testrun lifecycle, destroy post) and validation/pipeline/
- * Jenkinsfile.airgap-rke2-tests (make.runTarget call shapes, teardown guard).
- * Unlike Jenkinsfile.e2e, this pipeline runs every test phase itself: phases
- * execute sequentially in-pipeline (gotestsum in the pinned go-test image
- * against the workspace cattle-config, mechanics modeled on
- * validation/Jenkinsfile.individual.e2e) against one shared Qase test run,
- * because each phase depends on the previous one's in-cluster state and the
- * rotated admin token must stay in this workspace.
+ * Unlike Jenkinsfile.e2e, every test phase runs in-pipeline (gotestsum in the
+ * pinned go-test image) against one shared Qase run: each phase depends on the
+ * previous one's in-cluster state, and the rotated admin token must stay in
+ * this workspace.
  *
- * Consumes shared functions from qa-jenkins-library:
- *   make.runTarget (backend-s3, workspace-new, infra-up, cluster, rancher,
- *                   rancher-resolve-version, rancher-upgrade, infra-down)
- *   airgap.standardCheckout
- *   infrastructure.parseAndSubstituteVars, infrastructure.writeConfig,
- *   infrastructure.generateWorkspaceName, infrastructure.archiveWorkspaceName,
- *   infrastructure.writeSshKey, infrastructure.detectPublicIp
- *   property.useWithProperties
+ * Consumes qa-jenkins-library: make.runTarget (backend-s3, workspace-new,
+ * infra-up, cluster, rancher, rancher-resolve-version, rancher-upgrade,
+ * infra-down), airgap.standardCheckout, infrastructure.* config/workspace/ssh/IP
+ * helpers, property.useWithProperties.
  *
  * Admin token generation uses a direct ansible-playbook call inside the
  * rancher-go-test image (no make token target exists upstream yet).
@@ -54,15 +45,11 @@ library "qa-jenkins-library@${libraryBranch}"
 
 def DEFAULT_RANCHER_PASSWORD = 'X%S3bPyg@n8kWcRs675l#fH0'
 
-// Build-scoped image tags: every direct docker invocation below runs the
-// pinned tag so this job never depends on (or mutates) whatever some other
-// job last built under the shared :latest tag on the same agent. The :latest
-// alias is still applied at build time because qa-jenkins-library's
-// make.runTarget resolves that name for its own container runs.
-// Binding variables (no def): helper methods (runUpgradePhase,
-// collectUpgradeDiagnostics) cannot see script-level def locals, only the
-// script binding (live-verified: the def form fails the phase with
-// MissingPropertyException).
+// Build-pinned image tags: direct docker invocations below never depend on (or
+// mutate) the shared :latest alias another job may have rebuilt; :latest is still
+// applied because make.runTarget resolves that name.
+// Binding variables (no def): helper methods see only the script binding, not
+// script-level def locals (def fails the phase with MissingPropertyException).
 INFRA_TOOLS_IMAGE = "rancher-infra-tools:pitupgrade-${env.BUILD_NUMBER}"
 GO_TEST_IMAGE = "rancher-go-test:pitupgrade-${env.BUILD_NUMBER}"
 // Terraform state backend constants: the fixed bucket the other e2e
@@ -79,16 +66,11 @@ def PRE_UPGRADE_TESTCASE = '-run "TestLonghornUpgradeTestSuite/TestLonghornPreUp
 def POST_UPGRADE_TESTCASE = '-run "TestLonghornUpgradeTestSuite/TestLonghornPostUpgrade"'
 def CHART_UPGRADE_TESTCASE = '-run "TestLonghornUpgradeTestSuite/TestLonghornChartUpgrade"'
 
-// Pre-upgrade functional coverage reuses the primary Longhorn suite
-// (validation/longhorn) instead of duplicating its cases here. The default
-// selector runs TestRBACIntegration and TestScaleStatefulSetWithPVC;
-// TestVolumeEncryption is excluded because its encrypted-backup verification
-// needs AWS S3 credentials the pipeline's default config does not carry.
-// TestMonitoringIntegration is excluded because Longhorn 1.12's manager
-// gathers volume metrics live per scrape, so /metrics takes 30s or more and
-// every Prometheus scrape of it times out even with a 60s scrapeTimeout
-// (live-verified across three fresh pipeline environments); re-enable it via
-// this parameter once that metrics latency is fixed upstream.
+// Pre-upgrade functional coverage reuses the primary Longhorn suite instead of
+// duplicating cases. TestVolumeEncryption is excluded (needs S3 credentials the
+// default config lacks) and TestMonitoringIntegration because Longhorn 1.12 serves
+// /metrics in 30s+, defeating even a 60s scrape timeout; re-enable via this
+// parameter once upstream fixes the metrics latency.
 def FUNCTIONAL_TEST_PACKAGE = './validation/longhorn/...'
 
 /**
@@ -178,21 +160,17 @@ def collectUpgradeDiagnostics() {
 }
 
 /**
- * Runs one upgrade phase in-pipeline: gotestsum against the workspace
- * cattle-config inside the pinned go-test image, then the Qase reporter for
- * the shared run. Mechanics modeled on validation/Jenkinsfile.individual.e2e's
- * Run Tests + Report Results stages, minus the security-group authorization
- * (phases run on this job's own agent, whose public IP the deploy already
- * authorized via ephemeral_sg_ingress_cidrs) and the image capturer.
+ * Runs one upgrade phase in-pipeline: gotestsum against the workspace cattle-config
+ * inside the pinned go-test image, then the Qase reporter for the shared run. No
+ * security-group authorization: phases run on this job's own agent, whose public IP
+ * the deploy already authorized via ephemeral_sg_ingress_cidrs.
  *
- * The reporter binary reads a fixed ./results.json from its working directory
- * (validation/pipeline/qase/reporter-v2/main.go, testResultsJSON), so gotestsum
- * writes the fixed names, the reporter runs, and only then are the results
- * renamed per phase for the post-always junit/archive steps.
+ * The reporter reads a fixed ./results.json from its working directory, so gotestsum
+ * writes the fixed names, the reporter runs, and only then are results renamed per
+ * phase for the post junit/archive steps.
  *
- * Failure semantics match the previous downstream build-job propagate:true:
- * gotestsum runs under catchError so the reporter still reports failed
- * results, then the phase re-raises to abort the remaining phases.
+ * gotestsum runs under catchError so the reporter still reports failed results;
+ * the phase then re-raises to abort the remaining phases.
  *
  * Must be called inside property.useWithProperties(['AWS_ACCESS_KEY_ID',
  * 'AWS_SECRET_ACCESS_KEY', 'QASE_AUTOMATION_TOKEN']).
@@ -251,12 +229,9 @@ pipeline {
 
     options {
         ansiColor('xterm')
-        // Budget: four sequential in-pipeline test invocations (TEST_TIMEOUT
-        // each, default 60m: seed, functional coverage, post-upgrade,
-        // chart-upgrade) plus deploy, server upgrade, and destroy (~90m
-        // overhead). Must exceed the sum of the invocation budgets or a
-        // legitimately slow run aborts mid-phase; revisit when raising
-        // TEST_TIMEOUT.
+        // Budget: four sequential test invocations (TEST_TIMEOUT each, default 60m)
+        // plus deploy, server upgrade, and destroy (~90m); must exceed the sum or a
+        // slow run aborts mid-phase.
         timeout(time: 360, unit: 'MINUTES')
         buildDiscarder(logRotator(numToKeepStr: '30'))
     }
@@ -268,11 +243,9 @@ pipeline {
             defaultValue: 'main',
             description: 'Branch of qa-jenkins-library to use'
         )
-        // Repo params keep whatever the job was last triggered with: a
-        // declarative pipeline re-applies its parameters{} block to the job
-        // after each run, and hard-coded defaults here would clobber the
-        // JJB-configured per-controller values (fork + slice branches on the
-        // staging controller, upstream main on the main controller).
+        // Repo params keep the job's last-triggered values: the parameters{} block
+        // is re-applied after each run, so hard-coded defaults would clobber the
+        // JJB-configured per-controller values.
         string(
             name: 'TESTS_REPO_URL',
             defaultValue: params.TESTS_REPO_URL ?: 'https://github.com/rancher/tests',
@@ -464,8 +437,7 @@ skipTearDown: true''',
         // Folder-injected TEST_RUN_NAME (if present) wins; the fallback keeps
         // the shared Qase run name readable when it is not injected.
         TEST_RUN_NAME  = "${env.TEST_RUN_NAME ?: 'Rancher Server Upgrade Validation'}"
-        // Constant admin password (folded from a pipeline parameter per
-        // review): the token-generation docker call forwards it by env name.
+        // Constant admin password: the token-generation docker call forwards it by env name.
         RANCHER_ADMIN_PASSWORD = "${DEFAULT_RANCHER_PASSWORD}"
     }
 
@@ -488,9 +460,8 @@ skipTearDown: true''',
                     currentBuild.description = "Rancher server upgrade validation for ${hostnamePrefix}"
 
                     // ── Build Docker Images ──
-                    // rancher-infra-tools — used by make.groovy / infra.* for all make
-                    // targets (library resolves the :latest alias); direct invocations
-                    // in this file use the build-pinned tag.
+                    // rancher-infra-tools — library make targets resolve the :latest
+                    // alias; direct invocations in this file use the pinned tag.
                     sh "docker build --no-cache --platform linux/amd64 -t ${INFRA_TOOLS_IMAGE} -t rancher-infra-tools:latest -f ${env.TESTS_DIR}/validation/pipeline/Dockerfile.infra ."
                     // rancher-go-test — used for the qase binary build, token playbook,
                     // and redaction step, always via the build-pinned tag.
@@ -507,16 +478,14 @@ skipTearDown: true''',
                     """
 
                     // ── Detect Public IP ──
-                    // Auto-detect this runner's public IP so the ephemeral security
-                    // group's SSH/LB ingress rule (ephemeral_sg_ingress_cidrs) allows
-                    // the IP that Ansible/SSH will actually originate from.
+                    // Auto-detect the runner IP so the ephemeral security group's
+                    // SSH/LB ingress (ephemeral_sg_ingress_cidrs) allows it.
                     env.RUNNER_PUBLIC_IP = infrastructure.detectPublicIp()
 
                     // ── Resolve Rancher Versions ──
-                    // Empty params resolve at runtime via qa-infra-automation's
-                    // rancher-resolve-version target; explicit pins pass through.
-                    // The chosen lines/regexes and resolved versions are echoed so CI
-                    // logs show exactly which version each phase ran against.
+                    // Empty params resolve at runtime (rancher-resolve-version);
+                    // explicit pins pass through. Resolved versions are echoed so
+                    // logs show what each phase ran against.
                     env.RANCHER_FROM_VERSION = params.RANCHER_VERSION_FROM?.trim() ?: ''
                     env.RANCHER_TO_VERSION = params.RANCHER_VERSION_TO_UPGRADE?.trim() ?: ''
 
@@ -655,18 +624,15 @@ skipTearDown: true''',
                         )
 
                         // ── Configure Ansible Variables ──
-                        // Must exist before make cluster (make infra-up generates
-                        // inventory.yml but not the group_vars subdirectory).
-                        // Rancher version keys carry the resolved FROM version;
-                        // the *_upgrade keys carry the resolved TO version the
-                        // later `make rancher-upgrade` step targets.
+                        // Group_vars must exist before make cluster (infra-up writes
+                        // inventory.yml but not the subdirectory). Version keys carry
+                        // the resolved FROM version; *_upgrade keys the TO version
+                        // the later `make rancher-upgrade` targets.
                         sh "mkdir -p ${ansiblePath}/inventory/group_vars"
 
-                        // Flavor selects the deploy-side repo too: the prime
-                        // leg installs the FROM version from the prime index
-                        // (community stops the 2.14 line at 2.14.3 while prime
-                        // continues it), keeping resolve, deploy, and upgrade
-                        // all on the same artifact line.
+                        // Prime flavor deploys the FROM version from the prime index
+                        // (community stops the 2.14 line at 2.14.3), keeping deploy
+                        // and upgrade on the same artifact line.
                         def fromChartRepoUrl = params.RANCHER_CHART_REPO_FLAVOR == 'prime' ? 'https://charts.rancher.com/server-charts/prime' : 'https://releases.rancher.com/server-charts/latest'
                         def upgradeRepoName = params.RANCHER_CHART_REPO_FLAVOR == 'prime' ? 'rancher-prime-upgrade' : 'rancher-upgrade'
 
@@ -792,11 +758,9 @@ rancher_use_bundled_system_charts: true
                             echo 'Archived redacted token metadata: rancher-token-metadata.json'
                         }
 
-                        // Infrastructure, Rancher deploy, and admin token all succeeded.
-                        // Shared library helpers (infra.*) may have set currentBuild.result to
-                        // UNSTABLE/FAILURE via internal catchError() wrappers for non-fatal warnings,
-                        // which would cause declarative pipeline to skip downstream test stages.
-                        // Reset build result to SUCCESS so the upgrade phases can execute.
+                        // Library helpers may have set currentBuild.result to
+                        // UNSTABLE via internal catchError wrappers; declarative
+                        // pipeline would then skip the test stages, so reset it.
                         if (currentBuild.result && currentBuild.result != 'SUCCESS') {
                             echo "Resetting currentBuild.result from '${currentBuild.result}' to 'SUCCESS' — token generation succeeded, allowing upgrade phases to run"
                             currentBuild.result = 'SUCCESS'
@@ -809,9 +773,8 @@ rancher_use_bundled_system_charts: true
         }
 
         // ── High-level phase 3: pre-upgrade tasks ──
-        // Starts the shared Qase run once and runs the pre-upgrade phases
-        // (seed + optional functional coverage); every later phase reports
-        // into that run, which the final stage closes.
+        // Starts the shared Qase run once; every later phase reports into it
+        // and the final stage closes it.
         stage('Pre Upgrade Tasks') {
             steps {
                 script {
@@ -851,18 +814,15 @@ rancher_use_bundled_system_charts: true
                     // survive a stage boundary.
                     env.SHARED_TEST_RUN_ID = testRunID
 
-                    // NOTE: unlike Jenkinsfile.e2e, rancher.cleanup is NOT set to
-                    // true and no desiredflags are forced here — the upgrade suite's
-                    // cross-phase state must survive, and the pipeline environment
-                    // teardown is the cleanup.
+                    // rancher.cleanup stays unset: the upgrade suite's cross-phase
+                    // state must survive; the environment teardown is the cleanup.
                     property.useWithProperties(['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'QASE_AUTOMATION_TOKEN']) {
                         // ── Pre-upgrade seed: Longhorn install + deterministic workload ──
                         runUpgradePhase('pre-upgrade seed', PRE_UPGRADE_TESTCASE, testRunID)
 
                         // ── Pre-upgrade functional coverage: primary Longhorn suite ──
-                        // The pipeline config sets skipTearDown: true, so the
-                        // suite skips its own teardown and its resources survive
-                        // the server upgrade as extra post-upgrade state.
+                        // The config sets skipTearDown: true so the suite's resources
+                        // survive the server upgrade as extra post-upgrade state.
                         if (params.LONGHORN_FUNCTIONAL_COVERAGE) {
                             runUpgradePhase('pre-upgrade functional coverage', params.LONGHORN_FUNCTIONAL_TESTCASE, testRunID, FUNCTIONAL_TEST_PACKAGE)
                         } else {
@@ -878,10 +838,9 @@ rancher_use_bundled_system_charts: true
             steps {
                 script {
                     // ── In-place Rancher server upgrade ──
-                    // `make rancher-upgrade` rotates the Rancher admin token and writes the
-                    // new one to ansible/rancher/default-ha/generated.tfvars; the old token
-                    // is revoked, so the test config MUST be re-injected before the
-                    // post-upgrade phases (verified live: old token 401s).
+                    // rancher-upgrade rotates the admin token (old one revoked) and
+                    // writes the new one to generated.tfvars; the test config MUST be
+                    // re-injected before the post-upgrade phases (old token 401s).
                     echo "Upgrading Rancher server: ${env.RANCHER_FROM_VERSION} -> ${env.RANCHER_TO_VERSION} (flavor ${params.RANCHER_CHART_REPO_FLAVOR})"
                     make.runTarget(
                         target: 'rancher-upgrade',
@@ -910,10 +869,8 @@ rancher_use_bundled_system_charts: true
                     }
                     echo "Rotated admin token extracted (length ${rotatedToken.length()}); re-injecting into test config"
 
-                    // The token never leaves this shell step (no Groovy/env
-                    // interpolation, set +x keeps it out of the xtrace),
-                    // and the injected token is smoke-checked against the
-                    // live API before any phase runs on it.
+                    // The token never leaves this shell step (set +x keeps it out of
+                    // xtrace) and is smoke-checked against the live API before use.
                     sh """
                         set +x
                         token=\$(awk -F'\"' '/^api_key/{print \$2}' ${generatedTfvars})
@@ -974,11 +931,9 @@ rancher_use_bundled_system_charts: true
     post {
         always {
             script {
-                // Failure diagnostics run first, while the live cluster and
-                // the docker images still exist: Jenkins evaluates post
-                // conditions in a fixed order (always before failure, cleanup
-                // last), so every failure-path action must run in this block,
-                // ahead of the teardown below.
+                // Diagnostics run first while the cluster and images exist: post
+                // conditions evaluate in fixed order (always, then failure, then
+                // cleanup), so every failure-path action belongs here.
                 if (currentBuild.currentResult != 'SUCCESS') {
                     collectUpgradeDiagnostics()
                 }
@@ -1001,15 +956,11 @@ rancher_use_bundled_system_charts: true
                 def artifactRoot = env.TESTS_DIR.replaceFirst('^\\./', '')
                 archiveArtifacts allowEmptyArchive: true, artifacts: "${artifactRoot}/validation/go-test-*.log, ${artifactRoot}/results*.xml, ${artifactRoot}/results*.json"
 
-                // Single teardown decision point. The failure-path destroy is
-                // decided here rather than in a failure{} block because always
-                // runs first: destroyInfrastructure needs workspace_name.txt,
-                // the tfvars and the infra-tools image, which are only removed
-                // afterwards in cleanup{}. A failed run is governed by
-                // DESTROY_ON_FAILURE alone and a successful one by
-                // DESTROY_AFTER_TESTS, so DESTROY_ON_FAILURE=false on a failed
-                // run keeps the environment around for debugging even when
-                // DESTROY_AFTER_TESTS is true.
+                // Single teardown decision point (in always{}: destroy needs the
+                // workspace files and infra image that cleanup{} removes afterwards).
+                // A failed run is governed by DESTROY_ON_FAILURE alone, so false
+                // keeps the environment for debugging even when DESTROY_AFTER_TESTS
+                // is true.
                 def buildSucceeded = currentBuild.currentResult == 'SUCCESS'
                 def shouldDestroy = buildSucceeded ? params.DESTROY_AFTER_TESTS : params.DESTROY_ON_FAILURE
                 if (shouldDestroy) {

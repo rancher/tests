@@ -25,19 +25,14 @@ import (
 // ChecksumDataFile is the filename written under MountPath by CreateChecksumWorkload.
 const ChecksumDataFile = "checksum-data"
 
-// checksumContentPattern constrains the content accepted by CreateChecksumWorkload:
-// content is interpolated into a single-quoted sh -c command, so a value outside
-// alphanumeric/hyphen (notably a quote) would break the quoting. Enforced in code
-// so a future caller cannot silently inject shell.
+// Content is interpolated into a single-quoted sh -c command, so anything outside
+// alphanumeric/hyphen breaks the quoting; enforced in code to block shell injection.
 var checksumContentPattern = regexp.MustCompile(`^[A-Za-z0-9-]+$`)
 
-// CreateChecksumWorkload creates a 1GiB PVC named <name> on storageClassName in the
-// default namespace, mounts it into a single-replica nginx deployment named <name> at
-// MountPath, waits for rollout, then writes content to MountPath/ChecksumDataFile via
-// kubectl exec. Deterministic names let a later test phase (running as a separate
-// process) relocate the resources. content must be shell-safe (alphanumeric/hyphen);
-// it is interpolated into an sh -c command. No session cleanup is registered: callers
-// are upgrade tests whose resources must outlive the process.
+// CreateChecksumWorkload creates the deterministic <name> PVC + nginx workload on
+// storageClassName, waits for rollout, and writes content to ChecksumDataFile via
+// kubectl exec. No session cleanup, deterministic names: a later phase running as a
+// separate process must re-find the resources.
 func CreateChecksumWorkload(client *rancher.Client, clusterID string, storageClassName string, name string, content string) error {
 	if !checksumContentPattern.MatchString(content) {
 		return fmt.Errorf("content %q must match %s: it is interpolated into a single-quoted sh -c command",
@@ -92,10 +87,8 @@ func CreateChecksumWorkload(client *rancher.Client, clusterID string, storageCla
 	}
 	logrus.Debugf("PVC %s is Bound to volume %s", pvc.Name, pvc.Spec.VolumeName)
 
-	// Shared nginx+PVC deployment construction with CreatePVCWorkload; the
-	// deterministic name makes PVC, volume mount, deployment, and relocation
-	// label all equal name, so later phases re-find the workload from a
-	// separate process.
+	// Same deterministic-name contract as CreatePVCWorkload: PVC, mount, deployment,
+	// and relocation label all equal name so later phases can re-find the workload.
 	_, err = createNginxDeploymentWithPVC(client, clusterID, name, name, name)
 	if err != nil {
 		return err

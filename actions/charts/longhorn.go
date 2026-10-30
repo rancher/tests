@@ -101,10 +101,9 @@ func InstallLonghornChart(client *rancher.Client, payload PayloadOpts, values ma
 	return err
 }
 
-// UpgradeLonghornChart upgrades the longhorn and longhorn-crd charts to
-// installOptions.Version on installOptions.Cluster and waits for Deployed state.
-// No session cleanup is registered: the uninstall cleanup belongs to the install
-// call of the same session, and upgrade-test sessions must not delete the chart.
+// UpgradeLonghornChart upgrades the longhorn and longhorn-crd charts to installOptions.Version
+// and waits for Deployed state. No session cleanup: the install call's cleanup owns the
+// uninstall, and upgrade-test sessions must not delete the chart.
 func UpgradeLonghornChart(client *rancher.Client, installOptions *InstallOptions) error {
 	serverSetting, err := client.Management.Setting.ByID(serverURLSettingID)
 	if err != nil {

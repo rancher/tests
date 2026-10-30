@@ -195,10 +195,9 @@ func CreatePVCWorkload(t *testing.T, client *rancher.Client, clusterID string, s
 	return nginxResponse
 }
 
-// createNginxDeploymentWithPVC is a helper function that creates a nginx deployment in a cluster's default namespace.
-// The deployment and its DeploymentIdentifierLabel both use deploymentName, letting callers
-// pick a random name (functional tests) or a deterministic name (workloads a later test
-// phase must re-find from a separate process).
+// createNginxDeploymentWithPVC creates a nginx deployment in the cluster's default namespace.
+// deploymentName doubles as the DeploymentIdentifierLabel so callers can pick random names
+// (functional tests) or deterministic names (cross-phase workloads).
 func createNginxDeploymentWithPVC(client *rancher.Client, clusterID string, pvcName, volName, deploymentName string) (*steveV1.SteveAPIObject, error) {
 	logrus.Tracef("Vol: %s", volName)
 	logrus.Tracef("Pod: %s", pvcName)

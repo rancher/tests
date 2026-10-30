@@ -53,10 +53,9 @@ func (s *LonghornUpgradeTestSuite) SetupSuite() {
 	require.NoError(s.T(), err)
 }
 
-// TearDownSuite deliberately does not call session.Cleanup(): resources created in
-// the pre-upgrade phase (Longhorn chart, PVC, workload) must survive into the
-// post-upgrade and chart-upgrade phases, which run as separate go test processes.
-// The pipeline environment teardown is the cleanup for these resources.
+// TearDownSuite deliberately skips session.Cleanup(): the pre-upgrade resources must
+// survive into the post-upgrade and chart-upgrade phases, which run as separate go
+// test processes. The pipeline environment teardown is the cleanup.
 func (s *LonghornUpgradeTestSuite) TearDownSuite() {
 }
 
@@ -65,11 +64,9 @@ func (s *LonghornUpgradeTestSuite) TestLonghornPreUpgrade() {
 	project, _, err := projects.CreateProjectAndNamespace(s.client, s.cluster.ID)
 	require.NoError(s.T(), err)
 
-	// Resolve the version from the cluster-scoped catalog and install that: the
-	// management view can offer versions the cluster-scoped shard does not serve
-	// yet (rancher-2.15-catalog-sharding-issue.md), and the chart action validates
-	// against the cluster-scoped index. The pre-phase still yields the 2.14-era
-	// version by construction, since it runs against the pre-upgrade Rancher.
+	// Resolve from the cluster-scoped catalog: the management view can offer versions
+	// the cluster-scoped shard does not serve yet (rancher-2.15-catalog-sharding-issue.md),
+	// and the chart action validates against the cluster-scoped index.
 	catalogClient, err := s.client.GetClusterCatalogClient(s.cluster.ID)
 	require.NoError(s.T(), err)
 	version, err := catalogClient.GetLatestChartVersion(charts.LonghornChartName, catalog.RancherChartRepo)
@@ -126,11 +123,9 @@ func (s *LonghornUpgradeTestSuite) TestLonghornChartUpgrade() {
 	latest, err := catalogClient.GetLatestChartVersion(charts.LonghornChartName, catalog.RancherChartRepo)
 	require.NoError(s.T(), err)
 
-	// Guard against a stale cluster-scoped catalog: until the cluster agent
-	// re-syncs after the server upgrade, the follower can still serve the
-	// previous Rancher line's index, whose latest equals the installed version.
-	// Upgrading to it would pass vacuously (a same-version upgrade asserted
-	// equal to itself), so fail with the runbook remedy instead; see README Notes.
+	// Guard against a stale cluster-scoped catalog: until the cluster agent re-syncs,
+	// the follower can still serve the previous index, whose latest equals the
+	// installed version; that upgrade would pass vacuously.
 	installed, err := shepherdCharts.GetChartStatus(s.client, s.cluster.ID, charts.LonghornNamespace, charts.LonghornChartName)
 	require.NoError(s.T(), err)
 	require.NotEqual(s.T(),

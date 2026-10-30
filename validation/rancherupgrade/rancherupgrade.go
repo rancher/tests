@@ -1,10 +1,8 @@
 //go:build (validation || pit.weekly) && !2.8 && !2.9 && !2.10 && !2.11 && !2.12 && !2.13
 
 // Package rancherupgrade validates the Rancher server upgrade path (2.14.x -> latest)
-// with interoperability products installed. Each phase (pre-upgrade, post-upgrade,
-// chart-upgrade) is a suite test method selected via the -run regex and runs as its
-// own go test invocation, so all cross-phase state lives in-cluster under the
-// deterministic names defined here.
+// with interoperability products installed. Each phase runs as its own go test
+// invocation, so cross-phase state lives in-cluster under deterministic names.
 package rancherupgrade
 
 import "github.com/rancher/shepherd/pkg/config"
