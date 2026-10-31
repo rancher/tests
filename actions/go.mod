@@ -72,6 +72,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.72.0
 	github.com/qase-tms/qase-go/qase-api-client v1.2.13
+	github.com/rancher/fleet/pkg/apis v0.17.0-alpha.1
 	github.com/rancher/norman v0.10.1
 	github.com/rancher/rancher v0.0.0-20260527150105-ae26ccbc3fed
 	github.com/rancher/rancher/pkg/apis v0.0.0
@@ -190,7 +191,6 @@ require (
 	github.com/rancher/ali-operator v1.16.0-rc.1 // indirect
 	github.com/rancher/apiserver v0.9.6 // indirect
 	github.com/rancher/eks-operator v1.16.0-rc.2 // indirect
-	github.com/rancher/fleet/pkg/apis v0.17.0-alpha.1 // indirect
 	github.com/rancher/gke-operator v1.16.0-rc.2 // indirect
 	github.com/rancher/lasso v0.2.10 // indirect
 	github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20260519183600-f1362a3fe1a8 // indirect

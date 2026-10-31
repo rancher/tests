@@ -1,0 +1,116 @@
+- projects: [RANCHERINT]
+  suite: Rancher Upgrade/Longhorn
+  cases:
+  - title: "Longhorn pre-upgrade setup"
+    description: "Install Longhorn and seed a checksum workload on a Longhorn volume before the Rancher server upgrade"
+    automation: 2
+    steps:
+    - action: "Create a project on the Rancher local cluster"
+      data: ""
+      expectedresult: "The project is created successfully"
+      position: 1
+    - action: "Install the Longhorn chart at the latest version offered by the pre-upgrade Rancher"
+      data: "Chart: longhorn from the rancher-charts repo"
+      expectedresult: "Longhorn installs and its deployments and daemonsets become Ready"
+      position: 2
+    - action: "Create the checksum workload on a Longhorn-backed PVC"
+      data: "1GiB PVC and nginx deployment named rancher-upgrade-longhorn with data file /auto-mnt/checksum-data"
+      expectedresult: "PVC is Bound, deployment rolls out, and the checksum data is written to the Longhorn volume"
+      position: 3
+    custom_field:
+      "15": "TestLonghornPreUpgrade"
+  - title: "Longhorn post-upgrade validation"
+    description: "Verify Longhorn and its volume data survive the Rancher server upgrade"
+    automation: 2
+    steps:
+    - action: "Wait for the Rancher server to report the upgraded version"
+      data: "rancherUpgradeInput.targetVersion"
+      expectedresult: "The server-version setting equals the target version"
+      position: 1
+    - action: "Check the Longhorn chart installation state"
+      data: "Chart: longhorn in longhorn-system"
+      expectedresult: "The chart is still installed"
+      position: 2
+    - action: "Verify the checksum workload on the Longhorn volume"
+      data: "PVC rancher-upgrade-longhorn and data file /auto-mnt/checksum-data"
+      expectedresult: "PVC is Bound and the sha256 of the data file matches the pre-upgrade content"
+      position: 3
+    custom_field:
+      "15": "TestLonghornPostUpgrade"
+  - title: "Longhorn chart upgrade after Rancher upgrade"
+    description: "Upgrade Longhorn to the version offered by the upgraded Rancher catalog and verify workload data"
+    automation: 2
+    steps:
+    - action: "Wait for the Rancher server to report the upgraded version"
+      data: "rancherUpgradeInput.targetVersion"
+      expectedresult: "The server-version setting equals the target version"
+      position: 1
+    - action: "Resolve the latest Longhorn chart version from the cluster-scoped catalog"
+      data: "Chart: longhorn from the rancher-charts repo"
+      expectedresult: "The latest cluster-scoped chart version is resolved and differs from the installed pre-upgrade version"
+      position: 2
+    - action: "Upgrade the Longhorn chart with retry"
+      data: "longhorn and longhorn-crd to the latest version"
+      expectedresult: "The longhorn chart reaches Deployed state and workloads become Ready"
+      position: 3
+    - action: "Verify the chart version and the checksum workload"
+      data: "Chart version equals latest; PVC rancher-upgrade-longhorn and data file /auto-mnt/checksum-data"
+      expectedresult: "Installed chart version matches latest and the sha256 of the data file still matches the pre-upgrade content"
+      position: 4
+    custom_field:
+      "15": "TestLonghornChartUpgrade"
+- projects: [RANCHERINT]
+  suite: Rancher Upgrade/Fleet
+  cases:
+  - title: "Fleet pre-upgrade setup"
+    description: "Seed a Fleet GitRepo backed by a node-local SSH git remote and record the pre-upgrade fleet versions"
+    automation: 2
+    steps:
+    - action: "Create an SSH node and the fleet SSH auth secret on the target cluster"
+      data: "Secret rancher-upgrade-fleet-ssh in fleet-default holding the node key pair and known_hosts"
+      expectedresult: "The SSH secret is created and the node is reachable over SSH"
+      position: 1
+    - action: "Clone the fleet-examples repository on the SSH node"
+      data: "git clone https://github.com/rancher/fleet-examples into ~/rancher-upgrade-fleet-repo"
+      expectedresult: "The clone succeeds and doubles as the SSH-served git remote"
+      position: 2
+    - action: "Create the target namespace on the target cluster"
+      data: "Namespace rancher-upgrade-fleet-target"
+      expectedresult: "The namespace exists on the target cluster"
+      position: 3
+    - action: "Create the Fleet GitRepo and wait for its initial sync"
+      data: "GitRepo rancher-upgrade-fleet-gitrepo in fleet-default tracking the node-local remote, branch master, path simple"
+      expectedresult: "The GitRepo reaches an active state and deploys the example bundle on the target cluster"
+      position: 4
+    - action: "Record the pre-upgrade fleet state"
+      data: "ConfigMap rancher-upgrade-fleet-state in fleet-default with fleet-controller version, fleet-agent version and the synced commit SHA"
+      expectedresult: "The state ConfigMap is created for the post-upgrade phase"
+      position: 5
+    custom_field:
+      "15": "TestFleetPreUpgrade"
+  - title: "Fleet post-upgrade validation"
+    description: "Verify Fleet keeps reconciling git commits across the Rancher server upgrade and that fleet-controller and fleet-agent upgrade in lockstep"
+    automation: 2
+    steps:
+    - action: "Wait for the Rancher server to report the upgraded version"
+      data: "rancherUpgradeInput.targetVersion"
+      expectedresult: "The server-version setting equals the target version"
+      position: 1
+    - action: "Load the pre-upgrade fleet state"
+      data: "ConfigMap rancher-upgrade-fleet-state in fleet-default"
+      expectedresult: "The recorded controller version, agent version and commit SHA are present"
+      position: 2
+    - action: "Verify the GitRepo is still in sync after the upgrade"
+      data: "GitRepo rancher-upgrade-fleet-gitrepo"
+      expectedresult: "The GitRepo and its bundle resources on the target cluster are still active"
+      position: 3
+    - action: "Push a new commit and verify the full reconcile loop"
+      data: "Empty commit on the node-local clone, then wait for the new commit SHA and bundle Ready state"
+      expectedresult: "Fleet fetches the new commit and redeploys the bundle resources on the target cluster"
+      position: 4
+    - action: "Verify the fleet-controller and fleet-agent upgraded in lockstep"
+      data: "fleet-controller on local and fleet-agent on the target cluster via their deployment images"
+      expectedresult: "Both versions differ from the pre-upgrade recordings and equal each other"
+      position: 5
+    custom_field:
+      "15": "TestFleetPostUpgrade"
