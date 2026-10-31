@@ -56,8 +56,6 @@ func (a *AlertingTestSuite) TestAlertingInstallation() {
 	require.NoError(a.T(), err)
 
 	if !alertingChart.IsAlreadyInstalled {
-		a.T().Skip("Alerting chart is already installed")
-
 		latestAlertingVersion, err := a.client.Catalog.GetLatestChartVersion(
 			charts.RancherAlertingName,
 			catalog.RancherChartRepo,

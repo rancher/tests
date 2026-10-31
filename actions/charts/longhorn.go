@@ -64,12 +64,14 @@ func InstallLonghornChart(client *rancher.Client, payload PayloadOpts, values ma
 			return errors.New(`Provided values map has invalid value for "defaultSettings"`)
 		}
 
-		defaultSettings["deletingConfirmationFlag"] = true
+		_, ok = defaultSettings["deletingConfirmationFlag"]
+		if !ok {
+			defaultSettings["deletingConfirmationFlag"] = true
+		}
 
 		networkPolicies, ok := values["networkPolicies"].(map[string]any)
 		if !ok {
-			networkPolicies = map[string]any{}
-			values["networkPolicies"] = networkPolicies
+			return errors.New(`Provided values map has invalid value for "networkPolicies"`)
 		}
 
 		networkPolicies["restrictInternalTraffic"] = false

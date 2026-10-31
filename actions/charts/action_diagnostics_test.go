@@ -51,9 +51,9 @@ func newChartActionTestDoer(t *testing.T, handler http.Handler) (chartActionDoer
 
 func chartActionTestOpts() *PayloadOpts {
 	return &PayloadOpts{
-		InstallOptions: InstallOptions{Cluster: &clusters.ClusterMeta{ID: "c-test-local"}},
-		Name:           "rancher-monitoring",
-		Namespace:      RancherMonitoringNamespace,
+		Cluster:   &clusters.ClusterMeta{ID: "c-test-local"},
+		Name:      "rancher-monitoring",
+		Namespace: RancherMonitoringNamespace,
 	}
 }
 

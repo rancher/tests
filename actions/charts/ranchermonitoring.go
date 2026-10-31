@@ -162,10 +162,9 @@ func InstallRancherMonitoringChart(client *rancher.Client, installOptions *Insta
 		return err
 	}
 
-	// Wait for the monitoring workloads to be Ready so the chart is actually serving
-	// (Prometheus and Alertmanager run as StatefulSets; the operator and Grafana as Deployments).
-	// Without this, callers can race against Prometheus not yet scraping any targets.
-	err = shepherdCharts.WatchAndWaitDeployments(client, installOptions.Cluster.ID, RancherMonitoringNamespace, metav1.ListOptions{})
+	// Wait for the monitoring workloads to be Ready so the chart is actually serving.
+	releaseSelector := metav1.ListOptions{LabelSelector: "app.kubernetes.io/instance=" + RancherMonitoringName}
+	err = shepherdCharts.WatchAndWaitDeployments(client, installOptions.Cluster.ID, RancherMonitoringNamespace, releaseSelector)
 	if err != nil {
 		return err
 	}
