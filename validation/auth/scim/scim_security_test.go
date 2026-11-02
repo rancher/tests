@@ -910,6 +910,93 @@ func (s *SCIMSecurityTestSuite) TestSCIMUserCreateAllowsUserNameHeldByLocalUser(
 		"The create should not have given the local user a %s principal", authactions.OpenLdap)
 }
 
+func (s *SCIMSecurityTestSuite) TestSCIMInvalidTokenIsRefusedOnEveryOperation() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying every SCIM operation refuses an invalid token with 401 before it reads the provider's state")
+
+	defer func() {
+		require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap))
+	}()
+
+	badClient := scimactions.NewSCIMClientWithToken(s.client.RancherConfig.Host, authactions.OpenLdap, scimInvalidToken)
+
+	states := []struct {
+		name          string
+		config        map[string]string
+		settledStatus int
+	}{
+		{"enabled", scimactions.BaselineSCIMConfigMap(), http.StatusOK},
+		{"disabled", map[string]string{scimactions.SCIMConfigEnabledKey: scimactions.SCIMConfigFalse}, http.StatusNotFound},
+		{"paused", map[string]string{scimactions.SCIMConfigEnabledKey: scimactions.SCIMConfigTrue, scimactions.SCIMConfigPausedKey: scimactions.SCIMConfigTrue}, http.StatusServiceUnavailable},
+	}
+
+	for _, state := range states {
+		require.NoError(s.T(), scimactions.SetSCIMConfigMapAndWait(s.client, s.scimClient, authactions.OpenLdap, state.config, state.settledStatus))
+
+		statuses, err := scimactions.ProbeSCIMOperationStatuses(badClient, subSession, s.scimClient)
+		require.NoError(s.T(), err)
+
+		for operation, status := range statuses {
+			require.Equal(s.T(), http.StatusUnauthorized, status,
+				"%s should answer 401 for an invalid token while SCIM is %s, not the %d the provider state would give", operation, state.name, state.settledStatus)
+		}
+	}
+
+	logrus.Infof("Verifying every SCIM operation refuses an invalid token with 401 for a provider that does not exist")
+
+	unknownClient := scimactions.NewSCIMClientWithToken(s.client.RancherConfig.Host, scimUnknownProvider, scimInvalidToken)
+
+	unknownStatuses, err := scimactions.ProbeSCIMOperationStatuses(unknownClient, subSession, s.scimClient)
+	require.NoError(s.T(), err)
+
+	for operation, status := range unknownStatuses {
+		require.Equal(s.T(), http.StatusUnauthorized, status,
+			"%s should answer 401 for an invalid token on a provider that does not exist, not 404", operation)
+	}
+}
+
+func (s *SCIMSecurityTestSuite) TestSCIMEmptyBearerTokenIsRefusedOnEveryOperation() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Info("Verifying every SCIM operation refuses an empty bearer token with 401")
+
+	emptyTokenClient := scimactions.NewSCIMClientWithToken(s.client.RancherConfig.Host, authactions.OpenLdap, "")
+
+	statuses, err := scimactions.ProbeSCIMOperationStatuses(emptyTokenClient, subSession, s.scimClient)
+	require.NoError(s.T(), err)
+
+	for operation, status := range statuses {
+		require.Equal(s.T(), http.StatusUnauthorized, status, "%s should answer 401 for an empty bearer token", operation)
+	}
+}
+
+func (s *SCIMSecurityTestSuite) TestSCIMInvalidTokenRequestDeletesNoTokenSecret() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	logrus.Infof("Verifying a request carrying an invalid token deletes no %s token secret", authactions.OpenLdap)
+
+	before, err := scimactions.FetchSCIMTokenSecretNames(s.client, authactions.OpenLdap)
+	require.NoError(s.T(), err)
+	require.NotEmpty(s.T(), before, "The %s provider should hold at least one token secret to watch", authactions.OpenLdap)
+
+	badClient := scimactions.NewSCIMClientWithToken(s.client.RancherConfig.Host, authactions.OpenLdap, scimInvalidToken)
+
+	statuses, err := scimactions.ProbeSCIMOperationStatuses(badClient, subSession, s.scimClient)
+	require.NoError(s.T(), err)
+
+	for operation, status := range statuses {
+		require.Equal(s.T(), http.StatusUnauthorized, status, "%s should answer 401 for an invalid token", operation)
+	}
+
+	after, err := scimactions.FetchSCIMTokenSecretNames(s.client, authactions.OpenLdap)
+	require.NoError(s.T(), err)
+	require.ElementsMatch(s.T(), before, after, "A request carrying an invalid token should leave every token secret in place")
+}
+
 func TestSCIMSecuritySuite(t *testing.T) {
 	suite.Run(t, new(SCIMSecurityTestSuite))
 }

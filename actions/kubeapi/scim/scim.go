@@ -90,6 +90,7 @@ const (
 	scimListPageSize        = 100
 	scimProbeProvider       = "azuread"
 	scimProbeRefusalsNeeded = 3
+	scimProbeResourceID     = "scim-probe-id"
 )
 
 var errNoSCIMTokenSecret = fmt.Errorf("no SCIM token secret found")
@@ -1271,4 +1272,71 @@ func NewSCIMPatchBody(op, path string, value interface{}) map[string]interface{}
 		"schemas":    []string{"urn:ietf:params:scim:api:messages:2.0:PatchOp"},
 		"Operations": []map[string]interface{}{{"op": op, "path": path, "value": value}},
 	}
+}
+
+// ProbeSCIMOperationStatuses sends one request per SCIM operation and returns the status each operation answered with, registering cleanup through cleanupClient for anything a create left behind
+func ProbeSCIMOperationStatuses(scimClient *scimclient.Client, ts *session.Session, cleanupClient *scimclient.Client) (map[string]int, error) {
+	user := scimclient.User{
+		Schemas:  []string{scimclient.SCIMSchemaUser},
+		UserName: namegen.AppendRandomString("scim-probe-user"),
+	}
+	group := scimclient.Group{
+		Schemas:     []string{scimclient.SCIMSchemaGroup},
+		DisplayName: namegen.AppendRandomString("scim-probe-group"),
+	}
+	patch := scimclient.PatchOp{
+		Schemas:    []string{scimclient.SCIMSchemaPatchOp},
+		Operations: []scimclient.Operation{{Op: scimPatchOpReplace, Path: scimPatchPathActive, Value: false}},
+	}
+
+	operations := []struct {
+		name     string
+		call     func() (*scimclient.Response, error)
+		removeBy func(id string) (*scimclient.Response, error)
+	}{
+		{name: "GET /Users", call: func() (*scimclient.Response, error) { return scimClient.Users().List(nil) }},
+		{name: "POST /Users", call: func() (*scimclient.Response, error) { return scimClient.Users().Create(user) },
+			removeBy: func(id string) (*scimclient.Response, error) { return cleanupClient.Users().Delete(id) }},
+		{name: "GET /Users/{id}", call: func() (*scimclient.Response, error) { return scimClient.Users().ByID(scimProbeResourceID) }},
+		{name: "PUT /Users/{id}", call: func() (*scimclient.Response, error) { return scimClient.Users().Update(scimProbeResourceID, user) }},
+		{name: "PATCH /Users/{id}", call: func() (*scimclient.Response, error) { return scimClient.Users().Patch(scimProbeResourceID, patch) }},
+		{name: "DELETE /Users/{id}", call: func() (*scimclient.Response, error) { return scimClient.Users().Delete(scimProbeResourceID) }},
+		{name: "GET /Groups", call: func() (*scimclient.Response, error) { return scimClient.Groups().List(nil) }},
+		{name: "POST /Groups", call: func() (*scimclient.Response, error) { return scimClient.Groups().Create(group) },
+			removeBy: func(id string) (*scimclient.Response, error) { return cleanupClient.Groups().Delete(id) }},
+		{name: "GET /Groups/{id}", call: func() (*scimclient.Response, error) { return scimClient.Groups().ByID(scimProbeResourceID) }},
+		{name: "PUT /Groups/{id}", call: func() (*scimclient.Response, error) { return scimClient.Groups().Update(scimProbeResourceID, group) }},
+		{name: "PATCH /Groups/{id}", call: func() (*scimclient.Response, error) { return scimClient.Groups().Patch(scimProbeResourceID, patch) }},
+		{name: "DELETE /Groups/{id}", call: func() (*scimclient.Response, error) { return scimClient.Groups().Delete(scimProbeResourceID) }},
+		{name: "GET /ServiceProviderConfig", call: func() (*scimclient.Response, error) { return scimClient.Discovery().ServiceProviderConfig() }},
+		{name: "GET /ResourceTypes", call: func() (*scimclient.Response, error) { return scimClient.Discovery().ResourceTypes() }},
+		{name: "GET /Schemas", call: func() (*scimclient.Response, error) { return scimClient.Discovery().Schemas() }},
+	}
+
+	statuses := map[string]int{}
+	for _, operation := range operations {
+		resp, err := operation.call()
+		if err != nil {
+			return nil, fmt.Errorf("the %s probe failed: %w", operation.name, err)
+		}
+
+		statuses[operation.name] = resp.StatusCode
+
+		if operation.removeBy == nil || resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+			continue
+		}
+
+		id, err := resp.IDFromBody()
+		if err != nil {
+			return nil, fmt.Errorf("reading the id the %s probe created: %w", operation.name, err)
+		}
+
+		removeBy := operation.removeBy
+		ts.RegisterCleanupFunc(func() error {
+			_, err := removeBy(id)
+			return err
+		})
+	}
+
+	return statuses, nil
 }

@@ -25,7 +25,8 @@ import (
 )
 
 const (
-	scimLoginUsersNeeded = 2
+	scimLoginUsersNeeded   = 2
+	scimNoGroupUserMissing = "No noGroupUser is set under openLdapAuthInput, so there is no OpenLDAP user without a directory group to log in as"
 )
 
 type SCIMLoginAttributesTestSuite struct {
@@ -34,6 +35,7 @@ type SCIMLoginAttributesTestSuite struct {
 	client          *rancher.Client
 	scimClient      *scimclient.Client
 	authUsers       []authactions.User
+	noGroupUser     authactions.User
 	userSearchBase  string
 	groupSearchBase string
 }
@@ -66,6 +68,7 @@ func (s *SCIMLoginAttributesTestSuite) SetupSuite() {
 	config.LoadConfig(authactions.OpenLdapAuthInput, authConfig)
 	require.GreaterOrEqual(s.T(), len(authConfig.Users), scimLoginUsersNeeded, "At least %d auth users must be configured in cattle-config.yaml", scimLoginUsersNeeded)
 	s.authUsers = authConfig.Users
+	s.noGroupUser = authConfig.NoGroupUser
 
 	s.userSearchBase = s.client.Auth.OLDAP.Config.Users.SearchBase
 	require.NotEmpty(s.T(), s.userSearchBase, "The OpenLDAP user search base must be set in cattle-config.yaml")
@@ -407,6 +410,89 @@ func (s *SCIMLoginAttributesTestSuite) TestSCIMGroupMembershipReplacedByProvider
 	afterLogin, err := usersapi.GetUserGroupPrincipals(s.client, userID, authactions.OpenLdap)
 	require.NoError(s.T(), err)
 	require.NotContains(s.T(), afterLogin, scimGroupPrincipal, "OpenLDAP sends groups, so login should replace the SCIM group membership with the directory groups")
+}
+
+func (s *SCIMLoginAttributesTestSuite) TestSCIMDisabledProviderRefreshRemovesStoredAttributes() {
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	ldapUser := s.authUsers[0]
+	distinguishedName := authactions.AuthUserDistinguishedName(authactions.OpenLdap, ldapUser.Username, s.userSearchBase, s.groupSearchBase)
+	externalID := namegen.AppendRandomString(scimactions.SCIMExternalIDPrefix)
+
+	logrus.Infof("Verifying a provider refresh removes what SCIM stored for OpenLDAP user %s while SCIM is disabled, as it did before SCIM", ldapUser.Username)
+
+	require.NoError(s.T(), scimactions.DeleteSCIMUserByUserName(s.scimClient, distinguishedName),
+		"Should be able to clear a leftover SCIM user for %s", distinguishedName)
+
+	userID, err := scimactions.CreateSCIMUserForAuthUser(s.scimClient, subSession, distinguishedName, externalID, "")
+	require.NoError(s.T(), err)
+
+	subClient, err := s.client.WithSession(subSession)
+	require.NoError(s.T(), err)
+
+	_, err = authactions.LoginAsAuthUser(subClient, &v3.User{Username: ldapUser.Username, Password: ldapUser.Password}, authactions.OpenLdap)
+	require.NoError(s.T(), err, "OpenLDAP user %s should be able to login", ldapUser.Username)
+
+	storedBefore, err := usersapi.GetUserExtraAttribute(s.client, userID, authactions.OpenLdap, scimactions.UserAttributeExternalIDKey)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), []string{externalID}, storedBefore, "The externalId SCIM stored should be in place while SCIM is enabled")
+
+	defer func() {
+		require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap))
+	}()
+	require.NoError(s.T(), scimactions.SetSCIMConfigMapAndWait(s.client, s.scimClient, authactions.OpenLdap, map[string]string{scimactions.SCIMConfigEnabledKey: scimactions.SCIMConfigFalse}, http.StatusNotFound))
+
+	previousRefresh, err := usersapi.GetUserAttributeLastRefresh(s.client, userID)
+	require.NoError(s.T(), err)
+
+	logrus.Info("Triggering an auth provider refresh for all users")
+	require.NoError(s.T(), users.RefreshGroupMembership(s.client))
+	require.NoError(s.T(), usersapi.WaitForUserAttributeRefresh(s.client, userID, previousRefresh), "The provider refresher should write the user attribute of %s", userID)
+
+	storedAfter, err := usersapi.GetUserExtraAttribute(s.client, userID, authactions.OpenLdap, scimactions.UserAttributeExternalIDKey)
+	require.NoError(s.T(), err)
+	require.Empty(s.T(), storedAfter, "With SCIM disabled the refresh should replace the provider's attributes and remove the externalId, as it did before SCIM")
+}
+
+func (s *SCIMLoginAttributesTestSuite) TestSCIMGroupMembershipEmptiedWhenProviderSendsNoGroups() {
+	if s.noGroupUser.Username == "" {
+		s.T().Skip(scimNoGroupUserMissing)
+	}
+
+	subSession := s.session.NewSession()
+	defer subSession.Cleanup()
+
+	distinguishedName := authactions.AuthUserDistinguishedName(authactions.OpenLdap, s.noGroupUser.Username, s.userSearchBase, s.groupSearchBase)
+
+	logrus.Infof("Verifying a login by OpenLDAP user %s, who holds no directory group, empties the SCIM group membership rather than keeping it", s.noGroupUser.Username)
+
+	userID, err := scimactions.CreateSCIMUserForAuthUser(s.scimClient, subSession, distinguishedName, namegen.AppendRandomString(scimactions.SCIMExternalIDPrefix), "")
+	require.NoError(s.T(), err)
+
+	groupName, groupID, err := scimactions.CreateSCIMGroup(s.scimClient, subSession, "")
+	require.NoError(s.T(), err)
+
+	patchResp, err := scimactions.PatchGroup(s.scimClient, groupID, "add", "members", []scimclient.Member{{Value: userID}})
+	require.NoError(s.T(), err)
+	require.NoError(s.T(), scimactions.CheckStatus(patchResp, http.StatusOK, "PATCH add member should return 200"))
+	require.NoError(s.T(), scimactions.WaitForGroupMemberCount(s.scimClient, groupID, 1))
+
+	scimGroupPrincipal := fmt.Sprintf("%s_%s://%s", authactions.OpenLdap, authactions.PrincipalTypeGroup, groupName)
+
+	beforeLogin, err := usersapi.GetUserGroupPrincipals(s.client, userID, authactions.OpenLdap)
+	require.NoError(s.T(), err)
+	require.Contains(s.T(), beforeLogin, scimGroupPrincipal, "The SCIM group membership should be stored before login")
+
+	subClient, err := s.client.WithSession(subSession)
+	require.NoError(s.T(), err)
+
+	_, err = authactions.LoginAsAuthUser(subClient, &v3.User{Username: s.noGroupUser.Username, Password: s.noGroupUser.Password}, authactions.OpenLdap)
+	require.NoError(s.T(), err, "OpenLDAP user %s should be able to login", s.noGroupUser.Username)
+
+	afterLogin, err := usersapi.GetUserGroupPrincipals(s.client, userID, authactions.OpenLdap)
+	require.NoError(s.T(), err)
+	require.Empty(s.T(), afterLogin, "OpenLDAP is configured to send groups, so a login by a user who holds none should replace the SCIM group membership with an empty list, not keep it")
 }
 
 func TestSCIMLoginAttributesSuite(t *testing.T) {

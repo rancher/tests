@@ -96,6 +96,7 @@ type AuthConfig struct {
 	DoubleNestedUsers []User `yaml:"doubleNestedUsers"`
 	TripleNestedGroup string `yaml:"tripleNestedGroup"`
 	TripleNestedUsers []User `yaml:"tripleNestedUsers"`
+	NoGroupUser       User   `yaml:"noGroupUser"`
 }
 
 type ExternalAuthConfig struct {
