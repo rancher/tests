@@ -10,6 +10,7 @@ import (
 	shepherdConfig "github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
+	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 	infraConfig "github.com/rancher/tests/validation/recurring/infrastructure/config"
@@ -23,13 +24,23 @@ func main() {
 
 	cattleConfig := shepherdConfig.LoadConfigFromFile(os.Getenv(shepherdConfig.ConfigEnvironmentKey))
 
+	cattleConfig, err := defaults.LoadSecretsManagerDefaults(cattleConfig)
+	if err != nil {
+		logrus.Fatalf("Failed to load Secrets Manager defaults: %v", err)
+	}
+
+	err = defaults.VerifyCattleConfig(cattleConfig, nil)
+	if err != nil {
+		logrus.Fatalf("Cattle config verification failed: %v", err)
+	}
+
 	infraConfig.WriteConfigToFile(os.Getenv(config.ConfigEnvironmentKey), cattleConfig)
 
 	testSession := session.NewSession()
 
 	client, _, _, _, _ := setupstandard.SetupRancher(t, testSession, keypath.HostedKeyPath, cattleConfig)
 
-	cattleConfig, err := operations.ReplaceValue([]string{"rancher", "adminToken"}, client.RancherConfig.AdminToken, cattleConfig)
+	cattleConfig, err = operations.ReplaceValue([]string{"rancher", "adminToken"}, client.RancherConfig.AdminToken, cattleConfig)
 	if err != nil {
 		logrus.Fatalf("Failed to replace admin token: %v", err)
 	}

@@ -98,19 +98,6 @@ jobs:
           repository: rancher/tfp-automation
           path: tfp-automation
 
-      - name: Azure Provider Setup
-        uses: ./.github/actions/azure-provider-setup
-        with:
-          downstream-cluster-provider: ${{ env.DOWNSTREAM_CLUSTER_PROVIDER }}
-          iam-role: ${{ secrets.IAM_ROLE }}
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          region: ${{ secrets.AWS_REGION }}
-          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
-          azure-subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-
       - name: Setup kubectl
         uses: azure/setup-kubectl@15650b3ad78fff148532a140b8a4c821796b2d7b #v5
         with:
@@ -139,8 +126,6 @@ jobs:
             HB_PRIVATE_CERT_KEY_NAME, HB_PRIVATE_CERT_KEY_NAME
             HB_CLOUD_SSH_KEY, HB_CLOUD_SSH_KEY
             HB_CLOUD_SSH_KEY_NAME, HB_CLOUD_SSH_KEY_NAME
-            HB_PRIVATE_CERT_KEY, HB_PRIVATE_CERT_KEY
-            HB_PRIVATE_CERT_KEY_NAME, HB_PRIVATE_CERT_KEY_NAME
             HB_AWS_REGION, HB_AWS_REGION
             HB_TERRAFORM_VERSION, HB_TERRAFORM_VERSION
             HB_RANCHER_ADMIN_PASSWORD, HB_RANCHER_ADMIN_PASSWORD
@@ -159,6 +144,12 @@ jobs:
             HB_RANCHER_HELM_CHART_URL, HB_RANCHER_HELM_CHART_URL
             HB_STAGING_RANCHER_HELM_CHART_URL, HB_STAGING_RANCHER_HELM_CHART_URL
             HB_SLACK_WEBHOOK_URL, HB_SLACK_WEBHOOK_URL
+            HB_AZURE_CLIENT_ID, HB_AZURE_CLIENT_ID
+            HB_AZURE_CLIENT_SECRET, HB_AZURE_CLIENT_SECRET
+            HB_AZURE_SUBSCRIPTION_ID, HB_AZURE_SUBSCRIPTION_ID
+            HB_AZURE_TENANT_ID, HB_AZURE_TENANT_ID
+            HB_GCP_PROJECT_ID, HB_GCP_PROJECT_ID
+            HB_GCP_ZONE, HB_GCP_ZONE
 
       - name: Fetch and Set DockerHub Credentials
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 #v3
@@ -184,6 +175,23 @@ jobs:
             HB_PRIVATE_CERT_KEY_NAME
             HB_CLOUD_SSH_KEY
             HB_CLOUD_SSH_KEY_NAME
+            HB_AZURE_CLIENT_ID
+            HB_AZURE_CLIENT_SECRET
+            HB_AZURE_SUBSCRIPTION_ID
+            HB_AZURE_TENANT_ID
+
+      - name: Azure Provider Setup
+        uses: ./.github/actions/azure-provider-setup
+        with:
+          downstream-cluster-provider: ${{ env.DOWNSTREAM_CLUSTER_PROVIDER }}
+          iam-role: ${{ secrets.IAM_ROLE }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          region: ${{ fromJSON(env.HB_AWS_REGION).value }}
+          azure-client-id: ${{ fromJSON(env.HB_AZURE_CLIENT_ID).value }}
+          azure-client-secret: ${{ fromJSON(env.HB_AZURE_CLIENT_SECRET).value }}
+          azure-subscription-id: ${{ fromJSON(env.HB_AZURE_SUBSCRIPTION_ID).value }}
+          azure-tenant-id: ${{ fromJSON(env.HB_AZURE_TENANT_ID).value }}
 
       - name: Set up SSH Keys
         id: setup-ssh-keys
@@ -236,49 +244,49 @@ jobs:
         id: get-qase-id
         uses: ./.github/actions/get-qase-id
         with:
-          qase_recurring_id: ${{ vars[format('HB_QASE_RECURRING_TEST_RUN_ID_2_{0}', matrix.version)] }}
+          qase_recurring_id: ${{ fromJSON(env[format('HB_QASE_RECURRING_TEST_RUN_ID_2_{0}', matrix.version)]).value }}
 
       - name: Create config.yaml
         run: |
           cat > config.yaml <<EOF
           rancher:
-            host: "${{ env.HOSTNAME_PREFIX }}.${{ vars.AZURE_LOCATION }}.cloudapp.azure.com"
-            adminPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
+            host: "${{ env.HOSTNAME_PREFIX }}.<HB_AZURE_LOCATION>.cloudapp.azure.com"
+            adminPassword: "<HB_RANCHER_ADMIN_PASSWORD>"
             insecure: true
             cleanup: ${{ env.CLEANUP_ENABLED }}
           terraform:
-            cni: "${{ vars.CNI }}"
+            cni: "<HB_CNI>"
             defaultClusterRoleForProjectMembers: "true"
             enableNetworkPolicy: false
             generateV3Token: ${{ matrix.version == '14' }}
             localHostedCluster: true
             provider: "aks"
-            privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
+            privateKeyPath: "<HB_TFP_SSH_PRIVATE_KEY_PATH>"
             privateFullChainPath: "${{ steps.setup-certs.outputs.private-full-chain-tfp-path }}"
             privateCertKeyPath: "${{ steps.setup-certs.outputs.private-cert-key-tfp-path }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
             azureCredentials:
-              clientId: "${{ secrets.AZURE_CLIENT_ID }}"
-              clientSecret: "${{ secrets.AZURE_CLIENT_SECRET }}"
+              clientId: "<HB_AZURE_CLIENT_ID>"
+              clientSecret: "<HB_AZURE_CLIENT_SECRET>"
               environment: "AzurePublicCloud"
-              subscriptionId: "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
-              tenantId: "${{ secrets.AZURE_TENANT_ID }}"
+              subscriptionId: "<HB_AZURE_SUBSCRIPTION_ID>"
+              tenantId: "<HB_AZURE_TENANT_ID>"
             azureConfig:
               aksNodeCount: 3
               availabilitySet: "docker-machine"
               availabilityZones: ["1", "2", "3"]
               customData: ""
-              diskSize: "${{ vars.AZURE_DISK_SIZE }}"
+              diskSize: "<HB_AZURE_DISK_SIZE>"
               dockerPort: "2376"
               faultDomainCount: "3"
-              image: "${{ secrets.AZURE_IMAGE }}"
-              imageOffer: "${{ vars.AZURE_IMAGE_OFFER }}"
-              imageVersion: "${{ vars.AZURE_IMAGE_VERSION }}"
+              image: "<HB_AZURE_IMAGE>"
+              imageOffer: "<HB_AZURE_IMAGE_OFFER>"
+              imageVersion: "<HB_AZURE_IMAGE_VERSION>"
               keyPath: "${{ steps.setup-ssh-keys.outputs.cloud-ssh-key-path }}"
-              location: "${{ vars.AZURE_LOCATION }}"
+              location: "<HB_AZURE_LOCATION>"
               managedDisks: false
               mode: "System"
-              name: "${{ vars.AZURE_AGENT_POOL_NAME }}"
+              name: "<HB_AZURE_AGENT_POOL_NAME>"
               networkDNSServiceIP: "10.30.0.16"
               networkDockerBridgeCIDR: "172.17.0.1/16"
               networkPlugin: "kubenet"
@@ -287,47 +295,52 @@ jobs:
               openPort: ["6443/tcp","2379/tcp","2380/tcp","8472/udp","4789/udp","9796/tcp","10256/tcp","10250/tcp","10251/tcp","10252/tcp"]
               osDiskSizeGB: 128
               outboundType: "loadBalancer"
-              publisher: "${{ secrets.AZURE_PUBLISHER }}"
+              publisher: "<HB_AZURE_PUBLISHER>"
               resourceGroup: "${{ env.HOSTNAME_PREFIX }}-rg"
-              resourceLocation: "${{ vars.AZURE_LOCATION }}"
-              size: "${{ vars.AZURE_SIZE }}"
-              sku: "${{ vars.AZURE_SKU }}"
-              sshUser: "${{ vars.AZURE_SSH_USER }}"
+              resourceLocation: "<HB_AZURE_LOCATION>"
+              size: "<HB_AZURE_SIZE>"
+              sku: "<HB_AZURE_SKU>"
+              sshUser: "<HB_AZURE_SSH_USER>"
               staticPublicIp: false
               storageType: "Standard_LRS"
               taints: ["none:PreferNoSchedule"]
               updateDomainCount: "5"
-              vmSize: "${{ vars.AZURE_SIZE }}"
+              vmSize: "<HB_AZURE_SIZE>"
             standalone:
-              bootstrapPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
-              certManagerVersion: "${{ vars.CERT_MANAGER_VERSION }}"
+              bootstrapPassword: "<HB_RANCHER_ADMIN_PASSWORD>"
+              certManagerVersion: "<HB_CERT_MANAGER_VERSION>"
               chartVersion: "${{ env.RANCHER_CHART_VERSION }}"
-              osUser: "${{ vars.AZURE_SSH_USER }}"
-              osGroup: "${{ vars.AZURE_SSH_USER }}"
-              rancherAgentImage: "${{ secrets.RANCHER_AGENT_IMAGE }}"
-              rancherChartRepository: "${{ secrets.RANCHER_HELM_CHART_URL }}"
-              rancherHostname: "${{ env.HOSTNAME_PREFIX }}.${{ vars.AZURE_LOCATION }}.cloudapp.azure.com"
-              rancherImage: "${{ secrets.RANCHER_IMAGE }}"
+              osUser: "<HB_AZURE_SSH_USER>"
+              osGroup: "<HB_AZURE_SSH_USER>"
+              rancherChartRepository: "<HB_PRIME_HEAD_HELM_CHART_URL>"
+              rancherHostname: "${{ env.HOSTNAME_PREFIX }}.<HB_AZURE_LOCATION>.cloudapp.azure.com"
+              rancherImage: "<HB_PRIME_HEAD_RANCHER_IMAGE>"
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
-              repo: "${{ secrets.RANCHER_REPO }}"
+              repo: "<HB_PRIME_HEAD_REPO>"
           terratest:
-            pathToRepo: "${{ secrets.PATH_TO_REPO }}"
-            standaloneLogging: ${{ vars.TERRAFORM_LOGGING }}
+            pathToRepo: "<HB_PATH_TO_TFP_REPO>"
+            standaloneLogging: false
 
           logging:
-            level: "${{ vars.LOGGING_LEVEL }}"
-          
-          azureCredentials: 
-            clientId: "${{ secrets.AZURE_CLIENT_ID }}"
-            clientSecret: "${{ secrets.AZURE_CLIENT_SECRET }}"
-            subscriptionId: "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+            level: "<HB_LOGGING_LEVEL>"
+
+          # Required so Secrets Manager placeholders can be resolved; not used by AKS provisioning.
+          awsCredentials:
+            accessKey: "$AWS_ACCESS_KEY"
+            secretKey: "$AWS_SECRET_KEY"
+            defaultRegion: "${{ fromJSON(env.HB_AWS_REGION).value }}"
+
+          azureCredentials:
+            clientId: "<HB_AZURE_CLIENT_ID>"
+            clientSecret: "<HB_AZURE_CLIENT_SECRET>"
+            subscriptionId: "<HB_AZURE_SUBSCRIPTION_ID>"
             environment: "AzurePublicCloud"
 
           aksClusterConfig:
             dnsPrefix: "${{ env.HOSTNAME_PREFIX }}"
-            linuxAdminUsername: "${{ vars.AZURE_SSH_USER }}"
+            linuxAdminUsername: "<HB_AZURE_SSH_USER>"
             loadBalancerSku: "Standard"
             networkPlugin: "kubenet"
             nodePools:
@@ -347,7 +360,7 @@ jobs:
               osType: "Linux"
               vmSize: "Standard_DS2_v2"
             resourceGroup: "${{ env.HOSTNAME_PREFIX }}-rg"
-            resourceLocation: "${{ vars.AZURE_LOCATION }}"
+            resourceLocation: "<HB_AZURE_LOCATION>"
             tags: {}
           EOF
 
@@ -399,10 +412,10 @@ jobs:
         uses: ./.github/actions/cloud-provider-cleanup
         with:
           cloud-provider: ${{ env.CLOUD_PROVIDER }}
-          google-project-id: "${{ secrets.GCP_PROJECT_ID }}"
-          google-zone: "${{ secrets.GCP_ZONE }}"
+          google-project-id: "${{ fromJSON(env.HB_GCP_PROJECT_ID).value }}"
+          google-zone: "${{ fromJSON(env.HB_GCP_ZONE).value }}"
           prefix: "${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ secrets.AWS_REGION }}"
+          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
           iam-role: ${{ secrets.IAM_ROLE }}
 
       - name: Set job status output
