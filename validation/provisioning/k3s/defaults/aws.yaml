@@ -26,7 +26,7 @@ templateChart:
         region: "<HB_AWS_REGION>"
         subnetId: "<HB_AWS_SUBNET_ID>"
         vpcId: "<HB_AWS_VPC_ID>"
-        zone: "<HB_AWS_ZONE>"
+        zone: "<HB_AWS_ZONE_LETTER>"
         rootSize: "<HB_AWS_ROOT_SIZE>"
         volumeType: "<HB_AWS_VOLUME_TYPE>"
 
@@ -41,6 +41,7 @@ templateChart:
         region: "<HB_AWS_REGION>"
         subnetId: "<HB_AWS_SUBNET_ID>"
         vpcId: "<HB_AWS_VPC_ID>"
+        zone: "<HB_AWS_ZONE_LETTER>"
         rootSize: "<HB_AWS_ROOT_SIZE>"
         volumeType: "<HB_AWS_VOLUME_TYPE>"
 
@@ -55,5 +56,6 @@ templateChart:
         region: "<HB_AWS_REGION>"
         subnetId: "<HB_AWS_SUBNET_ID>"
         vpcId: "<HB_AWS_VPC_ID>"
+        zone: "<HB_AWS_ZONE_LETTER>"
         rootSize: "<HB_AWS_ROOT_SIZE>"
         volumeType: "<HB_AWS_VOLUME_TYPE>"
