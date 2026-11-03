@@ -65,7 +65,10 @@ func ImportedSetup(t *testing.T, clusterType string, s3Enabled bool) *importedSn
 
 	s.CattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	s.CattleConfig, err = defaults.LoadPackageDefaults(s.CattleConfig, "")
+	_, providerName, err := provisioning.GetProviderFromConfig(s.CattleConfig)
+	require.NoError(t, err)
+
+	s.CattleConfig, err = defaults.LoadPackageDefaults(s.CattleConfig, "", providerName)
 	require.NoError(t, err)
 
 	rancherConfig := new(rancher.Config)

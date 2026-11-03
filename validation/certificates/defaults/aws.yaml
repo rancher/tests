@@ -12,17 +12,17 @@ clusterConfig:
       etcd: true
       controlplane: false
       worker: false
-      quantity: 3
+      quantity: 1
   - machinePoolConfig:
       etcd: false
       controlplane: true
       worker: false
-      quantity: 2
+      quantity: 1
   - machinePoolConfig:
       etcd: false
       controlplane: false
       worker: true
-      quantity: 3
+      quantity: 1
   kubernetesVersion: ""
   cni: "calico"
   provider: "aws"
@@ -32,7 +32,7 @@ clusterConfig:
 awsCredentials:
   secretKey: "<required>"
   accessKey: "<required>"
-  defaultRegion: "us-east-2" 
+  defaultRegion: "us-east-2"
 
 #Required for tests that utilize node driver clusters
 awsMachineConfigs:
@@ -41,12 +41,9 @@ awsMachineConfigs:
   - roles: ["etcd","controlplane","worker"]
     ami: "<required>"
     instanceType: "t3.xlarge"
-    volumeType: "<required>"
-    rootSize: "<required>"
     sshUser: "<required>"
     vpcId: "<required>"
     retries: "5"
-    zone: "a"
   - roles: ["windows"]
     ami: "<required>"
     instanceType: "t2.2xlarge"
@@ -56,32 +53,3 @@ awsMachineConfigs:
     zone: "a"
     retries: "5"
     rootSize: "100"
-
-#Required for tests that utilize custom clusters
-awsEC2Configs:
-  region: "us-east-2"
-  awsSecretAccessKey: "<required>"
-  awsAccessKeyID: "<required>"
-  awsEC2Config:
-    - instanceType: "t3.xlarge"
-      awsRegionAZ: ""
-      awsSSHKeyName: "<required>"
-      awsAMI: "<required>"
-      awsSecurityGroups: ["<required>"]
-      awsSSHKeyName: "<required>"
-      awsCICDInstanceTag: "<required>"
-      awsIAMProfile: ""
-      awsUser: "<required>"
-      volumeSize: 100
-      roles: ["etcd", "controlplane", "worker"]
-    - instanceType: "t2.2xlarge"
-      awsRegionAZ: ""
-      awsSSHKeyName: "<required>"
-      awsAMI: "<required>"
-      awsSecurityGroups: ["<required>"]
-      awsSSHKeyName: "<required>"
-      awsCICDInstanceTag: "<required>"
-      awsIAMProfile: ""
-      awsUser: "<required>"
-      volumeSize: 100
-      roles: ["windows"]

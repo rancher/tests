@@ -52,7 +52,10 @@ func Setup(t *testing.T, clusterType string) *encryptionKeyRotationTest {
 
 	e.CattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	e.CattleConfig, err = defaults.LoadPackageDefaults(e.CattleConfig, "")
+	_, providerName, err := provisioning.GetProviderFromConfig(e.CattleConfig)
+	require.NoError(t, err)
+
+	e.CattleConfig, err = defaults.LoadPackageDefaults(e.CattleConfig, "", providerName)
 	require.NoError(t, err)
 
 	loggingConfig := new(logging.Logging)
@@ -76,10 +79,13 @@ func Setup(t *testing.T, clusterType string) *encryptionKeyRotationTest {
 		machineConfigSpec := provider.LoadMachineConfigFunc(e.CattleConfig)
 
 		logrus.Infof("Provisioning %s cluster", clusterType)
-		e.Cluster, err = resources.ProvisionRKE2K3SCluster(t, standardUserClient, clusterType, provider, *clusterConfig, machineConfigSpec, nil, true, false)
+		credentialSpec, err := provider.LoadCredentialConfigFunc(e.CattleConfig)
 		require.NoError(t, err)
 
-		_, err := rbacapi.GetClusterRoleTemplateBindingsForUser(e.Client, standardUser.ID)
+		e.Cluster, err = resources.ProvisionRKE2K3SCluster(t, standardUserClient, clusterType, provider, credentialSpec, *clusterConfig, machineConfigSpec, nil, true, false)
+		require.NoError(t, err)
+
+		_, err = rbacapi.GetClusterRoleTemplateBindingsForUser(e.Client, standardUser.ID)
 		require.NoError(t, err)
 
 		e.StandardUserClient, err = e.StandardUserClient.ReLogin()

@@ -4,10 +4,6 @@ name: Registries Cluster Provisioning
 on:
   workflow_dispatch:
     inputs:
-      qase_test_run_id:
-        description: "Optional Qase test run ID override"
-        required: false
-        type: string
       rancher_version:
         description: "Rancher tag version"
         required: false
@@ -31,6 +27,10 @@ on:
         type: choice
         options:
           - rke2
+      qase_test_run_id:
+        description: "Optional Qase test run ID override"
+        required: false
+        type: string
       environment_cleanup:
         description: "Enable environment cleanup after test run"
         required: false

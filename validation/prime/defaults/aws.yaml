@@ -7,6 +7,6 @@ rancher:
 
 prime:
   brand: "<required>"
-  isPrime: true 
+  isPrime: true
   rancherVersion: "<required>"
   registry: "<required>"

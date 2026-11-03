@@ -12,17 +12,17 @@ clusterConfig:
       etcd: true
       controlplane: false
       worker: false
-      quantity: 1
+      quantity: 3
   - machinePoolConfig:
       etcd: false
       controlplane: true
       worker: false
-      quantity: 1
+      quantity: 2
   - machinePoolConfig:
       etcd: false
       controlplane: false
       worker: true
-      quantity: 1
+      quantity: 3
   kubernetesVersion: ""
   cni: "calico"
   provider: "aws"
@@ -32,7 +32,7 @@ clusterConfig:
 awsCredentials:
   secretKey: "<required>"
   accessKey: "<required>"
-  defaultRegion: "us-east-2" 
+  defaultRegion: "us-east-2"
 
 #Required for tests that utilize node driver clusters
 awsMachineConfigs:
@@ -40,7 +40,27 @@ awsMachineConfigs:
   awsMachineConfig:
   - roles: ["etcd","controlplane","worker"]
     ami: "<required>"
-    instanceType: "t3.xlarge"
+    instanceType: "t3a.xlarge"
+    volumeType: "<required>"
+    rootSize: "<required>"
     sshUser: "<required>"
     vpcId: "<required>"
     retries: "5"
+    zone: "a"
+
+awsEC2Configs:
+  region: "us-east-2"
+  awsSecretAccessKey: "<required>"
+  awsAccessKeyID: "<required>"
+  awsEC2Config:
+    - instanceType: "t3a.xlarge"
+      awsRegionAZ: ""
+      awsSSHKeyName: "<required>"
+      awsAMI: "<required>"
+      awsSecurityGroups: ["<required>"]
+      awsSSHKeyName: "<required>"
+      awsCICDInstanceTag: "<required>"
+      awsIAMProfile: ""
+      awsUser: "<required>"
+      volumeSize: 100
+      roles: ["etcd", "controlplane", "worker"]

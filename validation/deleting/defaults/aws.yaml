@@ -32,7 +32,7 @@ clusterConfig:
 awsCredentials:
   secretKey: "<required>"
   accessKey: "<required>"
-  defaultRegion: "us-east-2" 
+  defaultRegion: "us-east-2"
 
 #Required for tests that utilize node driver clusters
 awsMachineConfigs:
@@ -44,12 +44,3 @@ awsMachineConfigs:
     sshUser: "<required>"
     vpcId: "<required>"
     retries: "5"
-  - roles: ["windows"]
-    ami: "<required>"
-    instanceType: "t2.2xlarge"
-    sshUser: "<required>"
-    vpcId: "<required>"
-    volumeType: "<required>"
-    zone: "a"
-    retries: "5"
-    rootSize: "100"

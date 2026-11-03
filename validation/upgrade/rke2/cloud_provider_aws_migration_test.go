@@ -52,7 +52,10 @@ func (u *MigrateCloudProviderSuite) SetupSuite() {
 
 	u.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	u.cattleConfig, err = defaults.LoadPackageDefaults(u.cattleConfig, "")
+	_, providerName, err := provisioning.GetProviderFromConfig(u.cattleConfig)
+	require.NoError(u.T(), err)
+
+	u.cattleConfig, err = defaults.LoadPackageDefaults(u.cattleConfig, "", providerName)
 	require.NoError(u.T(), err)
 
 	loggingConfig := new(logging.Logging)
@@ -78,7 +81,10 @@ func (u *MigrateCloudProviderSuite) SetupSuite() {
 		machineConfigSpec := provider.LoadMachineConfigFunc(u.cattleConfig)
 
 		logrus.Info("Provisioning RKE2 cluster")
-		u.cluster, err = resources.ProvisionRKE2K3SCluster(u.T(), u.standardUserClient, defaults.RKE2, provider, *u.clusterConfig, machineConfigSpec, awsEC2Configs, true, false)
+		credentialSpec, err := provider.LoadCredentialConfigFunc(u.cattleConfig)
+		require.NoError(u.T(), err)
+
+		u.cluster, err = resources.ProvisionRKE2K3SCluster(u.T(), u.standardUserClient, defaults.RKE2, provider, credentialSpec, *u.clusterConfig, machineConfigSpec, awsEC2Configs, true, false)
 		require.NoError(u.T(), err)
 	} else {
 		logrus.Infof("Using existing cluster %s", rancherConfig.ClusterName)

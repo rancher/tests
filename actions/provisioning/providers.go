@@ -2,7 +2,7 @@ package provisioning
 
 import (
 	"fmt"
-
+	"strings"
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
@@ -16,6 +16,7 @@ import (
 	"github.com/rancher/shepherd/extensions/cloudcredentials/linode"
 	"github.com/rancher/shepherd/extensions/cloudcredentials/vsphere"
 	"github.com/rancher/tests/actions/cloudprovider"
+	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/machinepools"
 	"github.com/rancher/tests/actions/provisioninginput"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -36,6 +37,7 @@ const (
 
 type CloudCredFunc func(rancherClient *rancher.Client, credentials cloudcredentials.CloudCredential) (*v1.SteveAPIObject, error)
 type LoadMachineConfigFunc func(cattleConfig map[string]any) machinepools.MachineConfigs
+type LoadCredentialConfigFunc func(cattleConfig map[string]any) (cloudcredentials.CloudCredential, error)
 type MachinePoolFunc func(machineConfig machinepools.MachineConfigs, generatedPoolName, namespace string) []unstructured.Unstructured
 type MachineRolesFunc func(machineConfig machinepools.MachineConfigs) []machinepools.Roles
 type OSNamesFunc func(client *rancher.Client, cloudCredential cloudcredentials.CloudCredential, machineConfigs machinepools.MachineConfigs) ([]string, error)
@@ -46,11 +48,51 @@ type Provider struct {
 	CloudProviderName                  string
 	MachineConfigPoolResourceSteveType string
 	LoadMachineConfigFunc              LoadMachineConfigFunc
+	LoadCredentialConfigFunc           LoadCredentialConfigFunc
 	MachinePoolFunc                    MachinePoolFunc
 	CloudCredFunc                      CloudCredFunc
 	VerifyCloudProviderFunc            VerifyCloudProviderFunc
 	GetMachineRolesFunc                MachineRolesFunc
 	GetOSNamesFunc                     OSNamesFunc
+}
+
+// GetProviderFromConfig returns the Terraform and downstream providers, each defaulting to AWS.
+// The downstream provider prefers clusterConfig over terraform.downstreamClusterProvider.
+func GetProviderFromConfig(cattleConfig map[string]any) (string, string, error) {
+	clusterConfig, _ := cattleConfig["clusterConfig"].(map[string]any)
+	terraformConfig, _ := cattleConfig["terraform"].(map[string]any)
+	clusterProvider, _ := clusterConfig["provider"].(string)
+	terraformProvider, _ := terraformConfig["provider"].(string)
+	if clusterProvider == "" {
+		clusterProvider, _ = terraformConfig["downstreamClusterProvider"].(string)
+	}
+
+	terraformProvider, err := getProviderName(terraformProvider)
+	if err != nil {
+		return "", "", fmt.Errorf("terraform provider: %w", err)
+	}
+
+	downstreamProvider, err := getProviderName(clusterProvider)
+	if err != nil {
+		return "", "", fmt.Errorf("downstream cluster provider: %w", err)
+	}
+
+	return terraformProvider, downstreamProvider, nil
+}
+
+func getProviderName(provider string) (string, error) {
+	provider = strings.ToLower(strings.TrimSpace(provider))
+	if provider == "" || defaults.IsSinglePlaceholderString(provider) {
+		return AWSProvider, nil
+	}
+
+	for _, supportedProvider := range []string{AWSProvider, VsphereProvider, AzureProvider, HarvesterProvider, LinodeProvider, GoogleProvider, DOProvider} {
+		if strings.Contains(provider, supportedProvider) {
+			return supportedProvider, nil
+		}
+	}
+
+	return "", fmt.Errorf("configured provider %q is not supported", provider)
 }
 
 // CreateProvider returns all machine and cloud credential
@@ -65,6 +107,7 @@ func CreateProvider(name string) Provider {
 			CloudProviderName:                  AWSProvider,
 			MachineConfigPoolResourceSteveType: machinepools.AWSPoolType,
 			LoadMachineConfigFunc:              machinepools.LoadAWSMachineConfig,
+			LoadCredentialConfigFunc:           aws.LoadAWSCredentialFromConfig,
 			MachinePoolFunc:                    machinepools.NewAWSMachineConfig,
 			CloudCredFunc:                      aws.CreateAWSCloudCredentials,
 			VerifyCloudProviderFunc:            cloudprovider.VerifyAWSCloudProvider,
@@ -76,6 +119,7 @@ func CreateProvider(name string) Provider {
 			Name:                               AzureProvider,
 			MachineConfigPoolResourceSteveType: machinepools.AzurePoolType,
 			LoadMachineConfigFunc:              machinepools.LoadAzureMachineConfig,
+			LoadCredentialConfigFunc:           azure.LoadAzureCredentialFromConfig,
 			MachinePoolFunc:                    machinepools.NewAzureMachineConfig,
 			CloudCredFunc:                      azure.CreateAzureCloudCredentials,
 			GetMachineRolesFunc:                machinepools.GetAzureMachineRoles,
@@ -85,6 +129,7 @@ func CreateProvider(name string) Provider {
 			Name:                               DOProvider,
 			MachineConfigPoolResourceSteveType: machinepools.DOPoolType,
 			LoadMachineConfigFunc:              machinepools.LoadDOMachineConfig,
+			LoadCredentialConfigFunc:           digitalocean.LoadDigitalOceanCredentialFromConfig,
 			MachinePoolFunc:                    machinepools.NewDigitalOceanMachineConfig,
 			CloudCredFunc:                      digitalocean.CreateDigitalOceanCloudCredentials,
 			GetMachineRolesFunc:                machinepools.GetDOMachineRoles,
@@ -94,6 +139,7 @@ func CreateProvider(name string) Provider {
 			Name:                               LinodeProvider,
 			MachineConfigPoolResourceSteveType: machinepools.LinodePoolType,
 			LoadMachineConfigFunc:              machinepools.LoadLinodeMachineConfig,
+			LoadCredentialConfigFunc:           linode.LoadLinodeCredentialFromConfig,
 			MachinePoolFunc:                    machinepools.NewLinodeMachineConfig,
 			CloudCredFunc:                      linode.CreateLinodeCloudCredentials,
 			GetMachineRolesFunc:                machinepools.GetLinodeMachineRoles,
@@ -104,6 +150,7 @@ func CreateProvider(name string) Provider {
 			CloudProviderName:                  HarvesterProvider,
 			MachineConfigPoolResourceSteveType: machinepools.HarvesterPoolType,
 			LoadMachineConfigFunc:              machinepools.LoadHarvesterMachineConfig,
+			LoadCredentialConfigFunc:           harvester.LoadHarvesterCredentialFromConfig,
 			MachinePoolFunc:                    machinepools.NewHarvesterMachineConfig,
 			CloudCredFunc:                      harvester.CreateHarvesterCloudCredentials,
 			VerifyCloudProviderFunc:            cloudprovider.VerifyHarvesterCloudProvider,
@@ -115,6 +162,7 @@ func CreateProvider(name string) Provider {
 			CloudProviderName:                  VsphereCloudProvider,
 			MachineConfigPoolResourceSteveType: machinepools.VmwarevsphereType,
 			LoadMachineConfigFunc:              machinepools.LoadVSphereMachineConfig,
+			LoadCredentialConfigFunc:           vsphere.LoadVSphereCredentialFromConfig,
 			MachinePoolFunc:                    machinepools.NewVSphereMachineConfig,
 			CloudCredFunc:                      vsphere.CreateVsphereCloudCredentials,
 			VerifyCloudProviderFunc:            cloudprovider.VerifyVSphereCloudProvider,

@@ -28,7 +28,7 @@ clusterConfig:
       quantity: 3
   kubernetesVersion: ""
   cni: "<HB_CNI>"
-  provider: "<HB_PROVIDER>"
+  provider: "aws"
   nodeProvider: "<HB_NODE_PROVIDER>"
   pathToRepo: "<HB_PATH_TO_TESTS_REPO>"
   registries:

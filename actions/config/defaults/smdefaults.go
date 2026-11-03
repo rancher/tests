@@ -138,7 +138,7 @@ func resolveAWSSecretsInValue(ctx context.Context, client *secretsmanager.Client
 			}
 
 			// If the list element is exactly one placeholder and resolves to a list,
-			if isSinglePlaceholderString(listValue) {
+			if IsSinglePlaceholderString(listValue) {
 				switch listTypedValue := resolvedListValue.(type) {
 				case []any:
 					resolvedList = append(resolvedList, listTypedValue...)
@@ -162,7 +162,8 @@ func resolveAWSSecretsInValue(ctx context.Context, client *secretsmanager.Client
 	}
 }
 
-func isSinglePlaceholderString(value any) bool {
+// IsSinglePlaceholderString reports whether value is exactly one placeholder string.
+func IsSinglePlaceholderString(value any) bool {
 	typedValue, ok := value.(string)
 	if !ok {
 		return false
