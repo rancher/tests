@@ -595,21 +595,6 @@ func (ext *ExtTokenTestSuite) TestExtTokenHashAbsentFromReadResponse() {
 	ext.assertStatusHashEmptyInToken(adminUpdatedToken, "admin update")
 }
 
-func (ext *ExtTokenTestSuite) TestAuthenticateWithExtSessionToken() {
-	subSession := ext.session.NewSession()
-	defer subSession.Cleanup()
-
-	log.Info("Create ext session token as admin user")
-	adminExtSessionToken, err := tokenapi.CreateExtSessionToken(ext.client)
-	require.NoError(ext.T(), err)
-
-	log.Info("Create an R_SESS cookie containing the session token value and use it to authenticate a request")
-	tokenValue := adminExtSessionToken.Status.Value
-	baseURL := "https://" + ext.client.RancherConfig.Host
-	err = tokenapi.AuthenticateWithExtToken(baseURL, adminExtSessionToken.Name, tokenValue, tokenapi.ExtTokenAPIPath)
-	require.NoError(ext.T(), err)
-}
-
 func (ext *ExtTokenTestSuite) TestAuthenticateWithExtToken() {
 	subSession := ext.session.NewSession()
 	defer subSession.Cleanup()
@@ -742,57 +727,70 @@ func (ext *ExtTokenTestSuite) TestExtTokenDeleteCollectionScoping() {
 	require.NotEmpty(ext.T(), victimList.Items, "standarduserA's tokens MUST NOT be deleted by standardUserB's DeleteCollection call")
 }
 
-func (ext *ExtTokenTestSuite) TestCreateExtSessionTokenAsAdmin() {
+func (ext *ExtTokenTestSuite) TestCreateExtSessionTokenRejectedAsAdmin() {
 	subSession := ext.session.NewSession()
 	defer subSession.Cleanup()
 
-	log.Info("Create ext session token as admin user")
-	adminExtSessionToken, err := tokenapi.CreateExtSessionToken(ext.client)
-	require.NoError(ext.T(), err)
-
-	log.Info("Verify ext session token data as admin user")
-	err = tokenapi.VerifyExtSessionTokenData(adminExtSessionToken, ext.client.UserID)
+	log.Info("Verify admin user cannot create ext token of kind session, with or without dry-run")
+	err := tokenapi.VerifySessionTokenCreateRejected(ext.client)
 	require.NoError(ext.T(), err)
 }
 
-func (ext *ExtTokenTestSuite) TestCreateExtSessionTokenAsNonAdmin() {
+func (ext *ExtTokenTestSuite) TestCreateExtSessionTokenRejectedAsNonAdmin() {
 	subSession := ext.session.NewSession()
 	defer subSession.Cleanup()
 
-	log.Info("Verify standard user can create ext session tokens")
+	log.Info("Verify standard user cannot create ext token of kind session, with or without dry-run")
 	_, standardUserClient, err := rbac.SetupUser(ext.client, rbac.StandardUser.String())
 	require.NoError(ext.T(), err)
-	_, err = tokenapi.CreateExtSessionToken(standardUserClient)
-	require.NoError(ext.T(), err, "standard user should be permitted to create ext session tokens")
-}
-
-func (ext *ExtTokenTestSuite) TestDeleteExtSessionTokenAsAdmin() {
-	subSession := ext.session.NewSession()
-	defer subSession.Cleanup()
-
-	log.Info("Create ext session token as admin user")
-	adminExtSessionToken, err := tokenapi.CreateExtSessionToken(ext.client)
-	require.NoError(ext.T(), err)
-
-	log.Info("Delete ext session token as admin user")
-	err = exttokenapi.DeleteExtToken(ext.client, adminExtSessionToken.Name, true)
+	err = tokenapi.VerifySessionTokenCreateRejected(standardUserClient)
 	require.NoError(ext.T(), err)
 }
 
-func (ext *ExtTokenTestSuite) TestDeleteExtSessionTokenAsNonAdmin() {
+func (ext *ExtTokenTestSuite) TestDryRunCreateExtTokenReturnsResolvedTTLAndNoHash() {
 	subSession := ext.session.NewSession()
 	defer subSession.Cleanup()
 
-	log.Info("Create ext session token as admin user")
-	adminExtSessionToken, err := tokenapi.CreateExtSessionToken(ext.client)
-	require.NoError(ext.T(), err)
-
-	log.Info("Verify standard user cannot delete admin ext session token")
 	_, standardUserClient, err := rbac.SetupUser(ext.client, rbac.StandardUser.String())
 	require.NoError(ext.T(), err)
-	err = exttokenapi.DeleteExtToken(standardUserClient, adminExtSessionToken.Name, false)
+
+	log.Info("Reset auth-token-max-ttl-minutes to its default so the resolved TTL matches the default")
+	err = extsettingsapi.ResetGlobalSettingToDefaultValue(ext.client, extsettingsapi.AuthTokenMaxTTLMinutesSetting)
+	require.NoError(ext.T(), err)
+
+	log.Info("Dry-run create ext token with TTL set to 0")
+	dryRunToken, err := tokenapi.CreateExtTokenDryRun(standardUserClient, tokenapi.NewExtTokenObject("", 0))
+	require.NoError(ext.T(), err)
+
+	log.Info("Verify dry-run response has the resolved default TTL and no status.hash")
+	require.Equal(ext.T(), ext.defaultExtTokenTTL, dryRunToken.Spec.TTL, "Expected dry-run TTL to equal the default TTL")
+	ext.assertStatusHashEmptyInToken(dryRunToken, "dry-run create")
+	require.Empty(ext.T(), dryRunToken.Status.Value, "dry-run create should not return a token value")
+
+	log.Info("Verify dry-run did not persist the ext token")
+	_, err = exttokenapi.GetExtTokenByName(standardUserClient, dryRunToken.Name)
 	require.Error(ext.T(), err)
 	require.True(ext.T(), k8serrors.IsNotFound(err))
+}
+
+func (ext *ExtTokenTestSuite) TestDryRunCreateExtTokenCapsTTLAtMax() {
+	subSession := ext.session.NewSession()
+	defer subSession.Cleanup()
+
+	_, standardUserClient, err := rbac.SetupUser(ext.client, rbac.StandardUser.String())
+	require.NoError(ext.T(), err)
+
+	log.Info("Reset auth-token-max-ttl-minutes to its default so the cap matches the default max")
+	err = extsettingsapi.ResetGlobalSettingToDefaultValue(ext.client, extsettingsapi.AuthTokenMaxTTLMinutesSetting)
+	require.NoError(ext.T(), err)
+
+	log.Info("Dry-run create ext token with TTL value > max TTL value")
+	dryRunToken, err := tokenapi.CreateExtTokenDryRun(standardUserClient, tokenapi.NewExtTokenObject("", int64(9999999999)))
+	require.NoError(ext.T(), err)
+
+	log.Info("Verify dry-run response has the max TTL value instead of the requested value")
+	require.Equal(ext.T(), ext.defaultExtTokenTTL, dryRunToken.Spec.TTL, "Expected dry-run TTL to be capped at the max TTL")
+	ext.assertStatusHashEmptyInToken(dryRunToken, "dry-run create")
 }
 
 func TestExtTokenTestSuite(ext *testing.T) {

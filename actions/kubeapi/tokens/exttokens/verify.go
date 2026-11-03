@@ -5,6 +5,8 @@ import (
 
 	extapi "github.com/rancher/rancher/pkg/apis/ext.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
+	exttokenapi "github.com/rancher/shepherd/extensions/kubeapi/tokens"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
 // VerifyExtTokenData validates ext token data against expected values
@@ -88,4 +90,25 @@ func VerifyExtTokenExistsInList(tokens []extapi.Token, name string) bool {
 		}
 	}
 	return false
+}
+
+// VerifySessionTokenCreateRejected returns an error unless both a real create and a dry-run create of an ext token of kind session are rejected with HTTP 400
+func VerifySessionTokenCreateRejected(client *rancher.Client) error {
+	_, err := exttokenapi.CreateExtToken(client, NewExtTokenObject("session", 0))
+	if err == nil {
+		return fmt.Errorf("creating an ext token of kind session should be rejected")
+	}
+	if !k8serrors.IsBadRequest(err) {
+		return fmt.Errorf("expected HTTP 400 on create, got: %w", err)
+	}
+
+	_, err = CreateExtTokenDryRun(client, NewExtTokenObject("session", 0))
+	if err == nil {
+		return fmt.Errorf("dry-run create of an ext token of kind session should be rejected")
+	}
+	if !k8serrors.IsBadRequest(err) {
+		return fmt.Errorf("expected HTTP 400 on dry-run, got: %w", err)
+	}
+
+	return nil
 }

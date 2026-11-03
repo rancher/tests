@@ -25,20 +25,23 @@ const (
 
 )
 
-// CreateExtToken creates an ext token with the TTL value provided using wrangler context and returns the created ext token object
-func CreateExtToken(client *rancher.Client, ttlValue int64) (*extapi.Token, error) {
-	name := namegen.AppendRandomString("test-exttoken")
-	extToken := &extapi.Token{
+// NewExtTokenObject returns an unpersisted ext token with a generated name, the given kind, and the given TTL
+func NewExtTokenObject(kind string, ttl int64) *extapi.Token {
+	return &extapi.Token{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   name,
+			Name:   namegen.AppendRandomString("test-exttoken"),
 			Labels: map[string]string{},
 		},
 		Spec: extapi.TokenSpec{
-			TTL: ttlValue,
+			Kind: kind,
+			TTL:  ttl,
 		},
 	}
+}
 
-	createdExtToken, err := exttokenapi.CreateExtToken(client, extToken)
+// CreateExtToken creates an ext token with the TTL value provided using wrangler context and returns the created ext token object
+func CreateExtToken(client *rancher.Client, ttlValue int64) (*extapi.Token, error) {
+	createdExtToken, err := exttokenapi.CreateExtToken(client, NewExtTokenObject("", ttlValue))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create ext token: %w", err)
 	}
@@ -65,6 +68,22 @@ func CreateExtSessionToken(client *rancher.Client) (*extapi.Token, error) {
 	}
 
 	return createdExtSessionToken, nil
+}
+
+// CreateExtTokenDryRun sends a server-side dry-run create for the ext token and returns the response without persisting it
+func CreateExtTokenDryRun(client *rancher.Client, extToken *extapi.Token) (*extapi.Token, error) {
+    sharedCtrl, err := client.WranglerContext.ControllerFactory.ForObject(extToken)
+    if err != nil {
+        return nil, fmt.Errorf("failed to get shared controller for ext token: %w", err)
+    }
+
+    dryRunExtToken := &extapi.Token{}
+    err = sharedCtrl.Client().Create(context.TODO(), extToken.Namespace, extToken, dryRunExtToken, metav1.CreateOptions{DryRun: []string{metav1.DryRunAll}})
+    if err != nil {
+        return nil, fmt.Errorf("failed to dry-run create ext token: %w", err)
+    }
+
+    return dryRunExtToken, nil
 }
 
 // WaitForExtTokenStatusExpired polls until an ext token with the given name has an expired status or the timeout is reached
