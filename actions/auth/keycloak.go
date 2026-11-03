@@ -42,6 +42,9 @@ const (
 	keycloakNestedMemberCount        = 1
 	keycloakGroupMemberCount         = 2
 	keycloakUserPassword             = "SamlTestPassw0rd!"
+
+	KeycloakSAMLEmailField     = "email"
+	KeycloakSAMLGivenNameField = "givenName"
 )
 
 type keycloakAttributeField struct {
@@ -797,4 +800,40 @@ func rancherAPIHostFromConfig(client *rancher.Client) string {
 	}
 
 	return "https://" + host
+}
+
+// SetKeycloakSAMLFields switches the Keycloak SAML UID and username fields and returns a func that restores them along with the provider's enabled state
+func SetKeycloakSAMLFields(client *rancher.Client, uidField, userNameField string) (func() error, error) {
+	providerConfig := client.Auth.KeycloakSAML.Config
+	originalUIDField := providerConfig.UIDField
+	originalUserNameField := providerConfig.UserNameField
+
+	originalEnabled := false
+	if config, err := client.Management.AuthConfig.ByID(KeycloakSAML); err == nil {
+		originalEnabled = config.Enabled
+	}
+
+	logrus.Infof("Setting %q as the UID field and %q as the username field on the Keycloak SAML config", uidField, userNameField)
+	providerConfig.UIDField = uidField
+	providerConfig.UserNameField = userNameField
+
+	return func() error {
+		providerConfig.UIDField = originalUIDField
+		providerConfig.UserNameField = originalUserNameField
+
+		currentEnabled := false
+		if config, err := client.Management.AuthConfig.ByID(KeycloakSAML); err == nil {
+			currentEnabled = config.Enabled
+		}
+
+		if currentEnabled == originalEnabled {
+			return nil
+		}
+
+		if originalEnabled {
+			return EnsureAuthProviderEnabled(client, KeycloakSAML)
+		}
+
+		return client.Auth.KeycloakSAML.Disable()
+	}, nil
 }
