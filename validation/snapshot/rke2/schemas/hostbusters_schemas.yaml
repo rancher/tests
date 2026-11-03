@@ -260,3 +260,34 @@
     custom_field:
       "14": Validation
       "18": Hostbusters
+
+  - description: Upgrades the kubernetes version and restores a snapshot
+    title: RKE2_Imported_Restore_All
+    priority: 4
+    type: 8
+    is_flaky: 0
+    automation: 2
+    steps:
+    - action: Create a snapshot
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+    - action: Upgrade the kubernetes version
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+    - action: Restore to the snapshot
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+    custom_field:
+      "14": Validation
+      "18": Hostbusters
