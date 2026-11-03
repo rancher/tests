@@ -259,7 +259,7 @@ jobs:
             privateCertKeyPath: "${{ steps.setup-certs.outputs.private-cert-key-tfp-path }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
             awsConfig:
-              awsSubnetID: "<HB_AWS_IPV4_ONLY_SUBNET_ID>"
+              awsSubnetID: "<HB_AWS_SUBNET_ID>"
               etcdSnapshotEndpoint: "<HB_S3_ENDPOINT>"
 
             standalone:

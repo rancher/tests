@@ -96,7 +96,8 @@ The snapshot restore test validates that snapshots can be created and restored w
 #### Run Commands:
 1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestSnapshotRestoreEtcdImported -timeout=1h -v`
 2. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestSnapshotRestoreK8sUpgradeImported -timeout=1h -v`
-3. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestS3SnapshotRestoreImported -timeout=1h -v`
+3. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestSnapshotRestoreAll -timeout=1h -v`
+4. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/snapshot/rke2 --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestS3SnapshotRestoreImported -timeout=1h -v`
 
 
 ### Snapshot Retention Test
