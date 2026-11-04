@@ -73,12 +73,10 @@ func Setup(t *testing.T, clusterType string) *nodeScalingTest {
 	validationDir := filepath.Dir(nodescalingDir)
 	provisioningDir := filepath.Join(validationDir, "provisioning")
 
-	provisioningDefaults := config.LoadConfigFromFile(filepath.Join(provisioningDir, "defaults", "defaults.yaml"))
-	nodescalingDefaults := config.LoadConfigFromFile(filepath.Join(nodescalingDir, "defaults", "defaults.yaml"))
-	validationDefaults, err := defaults.DeepMerge(nodescalingDefaults, provisioningDefaults, true)
+	_, providerName, err := provisioning.GetProviderFromConfig(s.CattleConfig)
 	require.NoError(t, err)
 
-	s.CattleConfig, err = defaults.DeepMerge(s.CattleConfig, validationDefaults, true)
+	s.CattleConfig, err = defaults.LoadPackageDefaults(s.CattleConfig, filepath.Join(nodescalingDir, "defaults", providerName+".yaml"), providerName)
 	require.NoError(t, err)
 
 	loggingConfig := new(logging.Logging)
