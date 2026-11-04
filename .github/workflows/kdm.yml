@@ -268,7 +268,7 @@ jobs:
             defaultClusterRoleForProjectMembers: "true"
             enableNetworkPolicy: false
             localCluster: "${{ env.LOCAL_CLUSTER_TYPE }}"
-            generateV3Token: ${{ matrix.version == '13' || matrix.version == '12' }}
+            generateV3Token: ${{ matrix.version == '14' || matrix.version == '13' || matrix.version == '12' }}
             provider: "${{ vars.PROVIDER_AMAZON }}"
             downstreamClusterProvider: "${{ vars.PROVIDER_AMAZON }}"
             privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"

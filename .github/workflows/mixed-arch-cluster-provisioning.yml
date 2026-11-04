@@ -258,6 +258,7 @@ jobs:
             cni: "${{ vars.CNI }}"
             defaultClusterRoleForProjectMembers: "true"
             enableNetworkPolicy: false
+            generateV3Token: ${{ matrix.version == '14' }}
             localCluster: "${{ env.LOCAL_CLUSTER_TYPE }}"
             mixedArchitecture: true
             provider: "${{ vars.PROVIDER_AMAZON }}"
