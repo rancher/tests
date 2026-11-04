@@ -194,7 +194,6 @@ func (l *LonghornChartTestSuite) TestChartInstallStaticCustomConfig() {
 	require.NoError(l.T(), err)
 	require.NotEmpty(l.T(), nginxSpec.Template.Spec.Volumes)
 
-	// Even though the Longhorn default for number of replicas is 2, Rancher enforces its own default of 3.
 	volumeName := nginxSpec.Template.Spec.Volumes[0].Name
 	checkReplicasCommand := []string{"kubectl", "-n", charts.LonghornNamespace, "get", "volumes.longhorn.io", volumeName, `-o=jsonpath="{.spec.numberOfReplicas}"`}
 	settingValue, err := kubectl.Command(l.standardUserClient, nil, l.cluster.ID, checkReplicasCommand, "")

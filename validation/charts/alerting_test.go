@@ -52,31 +52,38 @@ func (a *AlertingTestSuite) SetupSuite() {
 }
 
 func (a *AlertingTestSuite) TestAlertingInstallation() {
-	latestAlertingVersion, err := a.client.Catalog.GetLatestChartVersion(
-		charts.RancherAlertingName,
-		catalog.RancherChartRepo,
-	)
+	alertingChart, err := shepherdCharts.GetChartStatus(a.client, a.cluster.ID, charts.RancherAlertingNamespace, charts.RancherAlertingName)
 	require.NoError(a.T(), err)
 
-	installOptions := &charts.InstallOptions{
-		Cluster:   a.cluster,
-		Version:   latestAlertingVersion,
-		ProjectID: a.project.ID,
+	if !alertingChart.IsAlreadyInstalled {
+		latestAlertingVersion, err := a.client.Catalog.GetLatestChartVersion(
+			charts.RancherAlertingName,
+			catalog.RancherChartRepo,
+		)
+		require.NoError(a.T(), err)
+
+		charts.UpdateClusterRepo(a.client, catalog.RancherChartRepo)
+
+		installOptions := &charts.InstallOptions{
+			Cluster:   a.cluster,
+			Version:   latestAlertingVersion,
+			ProjectID: a.project.ID,
+		}
+
+		featureOptions := &charts.RancherAlertingOpts{
+			SMS:   true,
+			Teams: false,
+		}
+
+		a.T().Logf(
+			"Installing Rancher Alerting chart on cluster [%s] with version [%s]",
+			a.cluster.Name,
+			latestAlertingVersion,
+		)
+
+		err = charts.InstallRancherAlertingChart(a.client, installOptions, featureOptions)
+		require.NoError(a.T(), err)
 	}
-
-	featureOptions := &charts.RancherAlertingOpts{
-		SMS:   true,
-		Teams: false,
-	}
-
-	a.T().Logf(
-		"Installing Rancher Alerting chart on cluster [%s] with version [%s]",
-		a.cluster.Name,
-		latestAlertingVersion,
-	)
-
-	err = charts.InstallRancherAlertingChart(a.client, installOptions, featureOptions)
-	require.NoError(a.T(), err)
 
 	a.T().Logf(
 		"Waiting for alerting deployments to become ready in namespace [%s]",
