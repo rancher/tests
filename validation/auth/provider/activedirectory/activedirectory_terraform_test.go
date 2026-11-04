@@ -118,6 +118,9 @@ func (a *ActiveDirectoryTerraformSuite) SetupSuite() {
 	adConfig.TestUsername = activeDirectory.Users.Admin.Username
 	adConfig.TestPassword = activeDirectory.Users.Admin.Password
 
+	logrus.Info("Making sure the Active Directory auth config record exists, since terraform reads it before it can manage the provider")
+	require.NoError(a.T(), authactions.EnsureAuthConfigPresent(a.client, authactions.ActiveDirectory), "Failed to ensure the Active Directory auth config exists")
+
 	logrus.Info("Setting up the terraform workspace for the Active Directory auth config resource")
 	a.terratestConfig.PathToRepo = filepath.Join(a.terratestConfig.PathToRepo, authproviders.AD)
 
