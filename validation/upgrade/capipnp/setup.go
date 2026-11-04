@@ -71,16 +71,14 @@ func Setup(t *testing.T, clusterType string) *upgradeTest {
 	require.True(t, ok)
 
 	capipnpDir := filepath.Dir(setupFile)
-	nodescalingDir := filepath.Dir(capipnpDir)
-	validationDir := filepath.Dir(nodescalingDir)
+	upgradeDir := filepath.Dir(capipnpDir)
+	validationDir := filepath.Dir(upgradeDir)
 	provisioningDir := filepath.Join(validationDir, "provisioning")
 
-	provisioningDefaults := config.LoadConfigFromFile(filepath.Join(provisioningDir, "defaults", "defaults.yaml"))
-	nodescalingDefaults := config.LoadConfigFromFile(filepath.Join(nodescalingDir, "defaults", "defaults.yaml"))
-	validationDefaults, err := defaults.DeepMerge(nodescalingDefaults, provisioningDefaults, true)
+	_, providerName, err := provisioning.GetProviderFromConfig(u.CattleConfig)
 	require.NoError(t, err)
 
-	u.CattleConfig, err = defaults.DeepMerge(u.CattleConfig, validationDefaults, true)
+	u.CattleConfig, err = defaults.LoadPackageDefaults(u.CattleConfig, filepath.Join(upgradeDir, "defaults", providerName+".yaml"), providerName)
 	require.NoError(t, err)
 
 	loggingConfig := new(logging.Logging)
