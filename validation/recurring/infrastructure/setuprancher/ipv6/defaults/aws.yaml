@@ -19,11 +19,11 @@ terraform:
     awsConfig:
       ami: "<HB_AWS_IPV6_AMI>"
       awsKeyName: "<HB_SSH_PRIVATE_KEY_NAME>"
-      awsInstanceType: "t3.xlarge"
+      awsInstanceType: "<HB_RANCHER_AWS_INSTANCE_TYPE>"
       awsVolumeType: "<HB_AWS_VOLUME_TYPE>"
       region: "<HB_AWS_REGION>"
-      awsSecurityGroups: ["<HB_AWS_SECURITY_GROUPS_COMMUNITY>"]
-      awsSecurityGroupNames: ["<HB_AWS_SECURITY_GROUP_NAMES_COMMUNITY>"]
+      awsSecurityGroups: ["<HB_AWS_SECURITY_GROUPS_PRIME>"]
+      awsSecurityGroupNames: ["<HB_AWS_SECURITY_GROUP_NAMES_PRIME>"]
       awsSubnetID: "<HB_AWS_SUBNET_ID>"
       awsVpcID: "<HB_AWS_VPC_ID>"
       awsZoneLetter: "<HB_IPV6_AWS_ZONE_LETTER>"
@@ -42,16 +42,16 @@ terraform:
   standalone:
     bootstrapPassword: "<HB_RANCHER_ADMIN_PASSWORD>"
     certManagerVersion: "<HB_CERT_MANAGER_VERSION>"
-    chartVersion: "<HB_RANCHER_CHART_VERSION>"
+    chartVersion: "<required>"
     osUser: "<HB_IPV6_OS_USER>"
     osGroup: "<HB_IPV6_OS_GROUP>"
-    rancherChartRepository: "<HB_RANCHER_HELM_CHART_URL>"
+    rancherChartRepository: "<HB_PRIME_HEAD_HELM_CHART_URL>"
     rancherHostname: "<HB_RANCHER_HOSTNAME>"
-    rancherImage: "<HB_RANCHER_IMAGE>"
-    rancherTagVersion: "<HB_RANCHER_VERSION>"
+    rancherImage: "<HB_PRIME_HEAD_RANCHER_IMAGE>"
+    rancherTagVersion: "<required>"
     registryPassword: "<HB_DOCKERHUB_PASSWORD>"
     registryUsername: "<HB_DOCKERHUB_USERNAME>"
-    repo: "<HB_RANCHER_REPO>"
+    repo: "<HB_PRIME_HEAD_REPO>"
     rke2Version: "<HB_RKE2_VERSION>"
 
 terratest:
