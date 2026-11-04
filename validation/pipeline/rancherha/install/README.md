@@ -52,7 +52,7 @@ qaInfraAutomation:
     chartVersion: "2.14.0"
     certManagerVersion: "v1.17.4"
     helmRepo: rancher-latest
-    helmRepoURL: https://releases.rancher.com/server-charts/latest
+    helmRepoURL: https://charts.optimus.rancher.io/server-charts/latest
     bootstrapPassword: admin
     password: "your-admin-password"
     cleanup: false
