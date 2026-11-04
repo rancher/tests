@@ -18,6 +18,7 @@ import (
 	"github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/nodes"
 	"github.com/rancher/shepherd/pkg/session"
+	actionsFleet "github.com/rancher/tests/actions/fleet"
 	projectsapi "github.com/rancher/tests/actions/projects"
 	"github.com/rancher/tests/actions/ssh"
 	"github.com/rancher/tests/interoperability/fleet"
@@ -79,7 +80,7 @@ func (u *UpgradeTestSuite) SetupSuite() {
 	knownHostKey, err := u.sshNode.ExecuteCommand(fmt.Sprintf("ssh-keyscan -H %s", u.sshNode.PublicIPAddress))
 	require.NoError(u.T(), err)
 
-	u.fleetSecretName, err = createFleetSSHSecret(u.client, u.sshNode.SSHKey, knownHostKey)
+	u.fleetSecretName, err = actionsFleet.CreateFleetSSHSecret(u.client, u.sshNode.SSHKey, knownHostKey, namegenerator.AppendRandomString("fleet-ssh"), fleet.Namespace)
 	require.NoError(u.T(), err)
 }
 
@@ -96,7 +97,11 @@ func (u *UpgradeTestSuite) TestNewCommitFleetRepo() {
 	require.NoError(u.T(), err)
 
 	log.Info("Creating Fleet repo")
-	repoObject, err := createLocalFleetGitRepo(u.client, u.sshNode, repoName, namespace.Name, u.clusterName, u.cluster.ID, u.fleetSecretName)
+	repoObject, err := actionsFleet.CreateLocalFleetGitRepo(u.client, u.sshNode, fleet.FleetMetaName+namegenerator.RandStringLower(5), repoName, namespace.Name, u.clusterName, u.fleetSecretName, fleet.Namespace)
+	require.NoError(u.T(), err)
+
+	log.Info("Verifying the Git repository")
+	err = fleet.VerifyGitRepo(u.client, repoObject.ID, u.cluster.ID, fmt.Sprintf("%s/%s", fleet.Namespace, u.clusterName))
 	require.NoError(u.T(), err)
 
 	log.Info("Getting GitRepoStatus")
@@ -107,13 +112,13 @@ func (u *UpgradeTestSuite) TestNewCommitFleetRepo() {
 	err = steveV1.ConvertToK8sType(gitRepo.Status, gitStatus)
 	require.NoError(u.T(), err)
 
-	err = gitPushCommit(u.client, u.sshNode, repoName)
+	err = actionsFleet.GitPushCommit(u.sshNode, repoName)
 	require.NoError(u.T(), err)
 
 	err = fleet.VerifyGitRepo(u.client, repoObject.ID, u.cluster.ID, fmt.Sprintf("%s/%s", fleet.Namespace, u.clusterName))
 	require.NoError(u.T(), err)
 
-	err = verifyNewGitCommit(u.client, gitStatus.Commit, repoObject.ID)
+	err = actionsFleet.VerifyNewGitCommit(u.client, gitStatus.Commit, repoObject.ID)
 	require.NoError(u.T(), err)
 }
 
@@ -130,7 +135,11 @@ func (u *UpgradeTestSuite) TestGitRepoForceUpdate() {
 	require.NoError(u.T(), err)
 
 	log.Info("Creating Fleet repo")
-	repoObject, err := createLocalFleetGitRepo(u.client, u.sshNode, repoName, namespace.Name, u.clusterName, u.cluster.ID, u.fleetSecretName)
+	repoObject, err := actionsFleet.CreateLocalFleetGitRepo(u.client, u.sshNode, fleet.FleetMetaName+namegenerator.RandStringLower(5), repoName, namespace.Name, u.clusterName, u.fleetSecretName, fleet.Namespace)
+	require.NoError(u.T(), err)
+
+	log.Info("Verifying the Git repository")
+	err = fleet.VerifyGitRepo(u.client, repoObject.ID, u.cluster.ID, fmt.Sprintf("%s/%s", fleet.Namespace, u.clusterName))
 	require.NoError(u.T(), err)
 
 	log.Info("Getting GitRepo")
@@ -153,7 +162,7 @@ func (u *UpgradeTestSuite) TestGitRepoForceUpdate() {
 	_, err = u.client.Steve.SteveType(extensionsfleet.FleetGitRepoResourceType).Update(lastRepoObject, gitRepo)
 	require.NoError(u.T(), err)
 
-	err = verifyRepoUpdate(u.client, repoObject.ID)
+	err = actionsFleet.VerifyRepoUpdate(u.client, repoObject.ID)
 	require.NoError(u.T(), err)
 
 	log.Info("Getting Last GitRepo")
@@ -189,7 +198,11 @@ func (u *UpgradeTestSuite) TestPauseFleetRepo() {
 	require.NoError(u.T(), err)
 
 	log.Info("Creating Fleet repo")
-	repoObject, err := createLocalFleetGitRepo(u.client, u.sshNode, repoName, namespace.Name, u.clusterName, u.cluster.ID, u.fleetSecretName)
+	repoObject, err := actionsFleet.CreateLocalFleetGitRepo(u.client, u.sshNode, fleet.FleetMetaName+namegenerator.RandStringLower(5), repoName, namespace.Name, u.clusterName, u.fleetSecretName, fleet.Namespace)
+	require.NoError(u.T(), err)
+
+	log.Info("Verifying the Git repository")
+	err = fleet.VerifyGitRepo(u.client, repoObject.ID, u.cluster.ID, fmt.Sprintf("%s/%s", fleet.Namespace, u.clusterName))
 	require.NoError(u.T(), err)
 
 	log.Info("Getting GitRepo")
@@ -205,7 +218,7 @@ func (u *UpgradeTestSuite) TestPauseFleetRepo() {
 	repoObject, err = u.client.Steve.SteveType(extensionsfleet.FleetGitRepoResourceType).Update(lastRepoObject, gitRepo)
 	require.NoError(u.T(), err)
 
-	err = verifyRepoPause(u.client, repoObject.ID, true)
+	err = actionsFleet.VerifyRepoPause(u.client, repoObject.ID, true)
 	require.NoError(u.T(), err)
 
 	log.Info("Fetching latest fleetGitRepo object")
@@ -222,7 +235,7 @@ func (u *UpgradeTestSuite) TestPauseFleetRepo() {
 	previousUpdateTime, err := time.Parse(time.RFC3339, gitRepo.Status.Conditions[0].LastUpdateTime)
 	require.NoError(u.T(), err)
 
-	err = gitPushCommit(u.client, u.sshNode, repoName)
+	err = actionsFleet.GitPushCommit(u.sshNode, repoName)
 	require.NoError(u.T(), err)
 
 	log.Info("Fetching latest fleetGitRepo object")
@@ -244,7 +257,7 @@ func (u *UpgradeTestSuite) TestPauseFleetRepo() {
 	repoObject, err = u.client.Steve.SteveType(extensionsfleet.FleetGitRepoResourceType).Update(repoObject, lastGitRepo)
 	require.NoError(u.T(), err)
 
-	err = verifyRepoPause(u.client, repoObject.ID, false)
+	err = actionsFleet.VerifyRepoPause(u.client, repoObject.ID, false)
 	require.NoError(u.T(), err)
 
 	log.Info("Fetching latest fleetGitRepo object")
@@ -266,7 +279,7 @@ func (u *UpgradeTestSuite) TestPauseFleetRepo() {
 	err = fleet.VerifyGitRepo(u.client, repoObject.ID, u.cluster.ID, fmt.Sprintf("%s/%s", fleet.Namespace, u.clusterName))
 	require.NoError(u.T(), err)
 
-	err = verifyNewGitCommit(u.client, gitRepo.Status.Commit, repoObject.ID)
+	err = actionsFleet.VerifyNewGitCommit(u.client, gitRepo.Status.Commit, repoObject.ID)
 	require.NoError(u.T(), err)
 }
 
