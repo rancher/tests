@@ -20,7 +20,7 @@ awsMachineConfigs:
     vpcId: "<HB_AWS_VPC_ID>"
     zone: "<HB_AWS_ZONE_LETTER>"
     subnetId: "<HB_AWS_SUBNET_ID>"
-    securityGroup: ["<HB_AWS_SECURITY_GROUP_NAMES_COMMUNITY>"]
+    securityGroup: ["<HB_AWS_SECURITY_GROUP_NAMES_PRIME>"]
     retries: "5"
     enablePrimaryIPv6: true
     httpProtocolIpv6: "enabled"
@@ -33,8 +33,8 @@ awsEC2Configs:
   awsEC2Config:
     - instanceType: "<HB_AWS_INSTANCE_TYPE>"
       awsAMI: "<HB_AWS_DUALSTACK_AMI>"
-      awsSecurityGroups: ["<HB_AWS_SECURITY_GROUPS_COMMUNITY>"]
-      awsSecurityGroupNames: ["<HB_AWS_SECURITY_GROUP_NAMES_COMMUNITY>"]
+      awsSecurityGroups: ["<HB_AWS_SECURITY_GROUPS_PRIME>"]
+      awsSecurityGroupNames: ["<HB_AWS_SECURITY_GROUP_NAMES_PRIME>"]
       awsSSHKeyName: "<HB_SSH_PRIVATE_KEY_NAME>.pem"
       awsCICDInstanceTag: "<HB_AWS_CICD_INSTANCE_TAG>"
       awsIAMProfile: "<HB_AWS_IAM_PROFILE>"
@@ -57,10 +57,10 @@ terraform:
     loadBalancerType: "dualstack"
     targetType: "instance"
     ipv6AddressCount: "1"
-    awsSecurityGroups: ["<HB_AWS_SECURITY_GROUPS_COMMUNITY>"]
-    awsSecurityGroupNames: ["<HB_AWS_SECURITY_GROUP_NAMES_COMMUNITY>"]
+    awsSecurityGroups: ["<HB_AWS_SECURITY_GROUPS_PRIME>"]
+    awsSecurityGroupNames: ["<HB_AWS_SECURITY_GROUP_NAMES_PRIME>"]
     networking:
-      stackPreference: "dual"
+      stackPreference: "<HB_STACK_PREFERENCE_DUAL>"
   standalone:
     osUser: "<HB_DUAL_STACK_AWS_USER>"
     osGroup: "<HB_DUAL_STACK_OS_GROUP>"

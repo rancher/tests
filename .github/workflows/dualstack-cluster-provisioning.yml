@@ -78,11 +78,12 @@ jobs:
         shell: bash
         run: |
           if [[ "$RUN_ALL_VERSIONS" == "true" || "$GITHUB_EVENT_NAME" == "schedule" ]]; then
-            versions='["16", "15"]'
+            versions='["16", "15", "14"]'
           else
             case "$RANCHER_VERSION_INPUT" in
               head) versions='["16"]' ;;
               v2.15-head) versions='["15"]' ;;
+              v2.14-head) versions='["14"]' ;;
               *) versions='[]' ;;
             esac
           fi
@@ -95,7 +96,7 @@ jobs:
       matrix: ${{ fromJSON(needs.prepare-matrix.outputs.matrix) }}
     name: v2-${{ matrix.version }}
     runs-on: ubuntu-latest
-    environment: head
+    environment: prime-head
     env:
       RANCHER2_PROVIDER_VERSION: "${{ vars[format('RANCHER2_PROVIDER_VERSION_2_{0}', matrix.version)] }}"
       HOSTNAME_PREFIX: "gha-ds-${{ matrix.version }}"
@@ -128,7 +129,7 @@ jobs:
           secret-ids: |
             AWS_ACCESS_KEY, ${{ secrets.AWS_ACCESS_KEY_ID }}
             AWS_SECRET_KEY, ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-            HB_AWS_MANAGED_PREFIX_LIST_ID, HB_AWS_MANAGED_PREFIX_LIST_ID
+            HB_AWS_MANAGED_PREFIX_LIST_ID_PRIME, HB_AWS_MANAGED_PREFIX_LIST_ID_PRIME
             HB_SSH_PRIVATE_KEY, HB_SSH_PRIVATE_KEY
             HB_SSH_PRIVATE_KEY_NAME, HB_SSH_PRIVATE_KEY_NAME
             HB_WINDOWS_SSH_PRIVATE_KEY, HB_WINDOWS_SSH_PRIVATE_KEY
@@ -143,15 +144,20 @@ jobs:
             HB_RANCHER_REPO, HB_RANCHER_REPO
             HB_RANCHER_VERSION_2_16_HEAD, HB_RANCHER_VERSION_2_16_HEAD
             HB_RANCHER_VERSION_2_15_HEAD, HB_RANCHER_VERSION_2_15_HEAD
+            HB_RANCHER_VERSION_2_14_HEAD, HB_RANCHER_VERSION_2_14_HEAD
             HB_RELEASED_RANCHER_CHART_VERSION_2_16, HB_RELEASED_RANCHER_CHART_VERSION_2_16
             HB_RELEASED_RANCHER_CHART_VERSION_2_15, HB_RELEASED_RANCHER_CHART_VERSION_2_15
+            HB_RELEASED_RANCHER_CHART_VERSION_2_14, HB_RELEASED_RANCHER_CHART_VERSION_2_14
             HB_RKE2_VERSION_2_16, HB_RKE2_VERSION_2_16
             HB_K3S_VERSION_2_16, HB_K3S_VERSION_2_16
             HB_RKE2_VERSION_2_15, HB_RKE2_VERSION_2_15
             HB_K3S_VERSION_2_15, HB_K3S_VERSION_2_15
+            HB_RKE2_VERSION_2_14, HB_RKE2_VERSION_2_14
+            HB_K3S_VERSION_2_14, HB_K3S_VERSION_2_14
             HB_K3S_VERSION_SUFFIX, HB_K3S_VERSION_SUFFIX
             HB_QASE_RECURRING_TEST_RUN_ID_2_16, HB_QASE_RECURRING_TEST_RUN_ID_2_16
             HB_QASE_RECURRING_TEST_RUN_ID_2_15, HB_QASE_RECURRING_TEST_RUN_ID_2_15
+            HB_QASE_RECURRING_TEST_RUN_ID_2_14, HB_QASE_RECURRING_TEST_RUN_ID_2_14
             HB_QA_PRIVATE_REGISTRY_NAME, HB_QA_PRIVATE_REGISTRY_NAME
             HB_QASE_AUTOMATION_TOKEN, HB_QASE_AUTOMATION_TOKEN
             HB_QASE_PROJECT_ID, HB_QASE_PROJECT_ID
@@ -185,7 +191,7 @@ jobs:
       - name: Whitelist Runner IP
         uses: ./.github/actions/whitelist-runner-ip
         with:
-          prefix-list-id: ${{ fromJSON(env.HB_AWS_MANAGED_PREFIX_LIST_ID).value }}
+          prefix-list-id: ${{ fromJSON(env.HB_AWS_MANAGED_PREFIX_LIST_ID_PRIME).value }}
           region: "${{ vars.AWS_REGION }}"
 
       - name: Set up SSH Keys
@@ -233,35 +239,18 @@ jobs:
               (github.event.inputs.run_all_versions == 'true' && fromJSON(env[format('HB_RELEASED_RANCHER_CHART_VERSION_2_{0}', matrix.version)]).value)
             }}
 
-      - name: Set Rancher repo
-        uses: ./.github/actions/set-rancher-repo
-        with:
-          rancher-version: ${{ env.RANCHER_VERSION }}
-          fallback-repo: ${{ fromJSON(env.HB_RANCHER_REPO).value }}
-          is-prime: false
-          release-community-version: "2.${{ matrix.version }}"
-
       - name: Get Qase ID
         id: get-qase-id
         uses: ./.github/actions/get-qase-id
         with:
           qase_recurring_id: ${{ fromJSON(env[format('HB_QASE_RECURRING_TEST_RUN_ID_2_{0}', matrix.version)]).value }}
 
-      - name: Set Rancher chart url
-        uses: ./.github/actions/set-rancher-chart-url
-        with:
-          rancher-repo: ${{ env.RANCHER_REPO }}
-          is-prime: false
-          community-chart-url: ${{ vars.COMMUNITY_HELM_CHART_URL }}
-          staging-chart-url: ${{ fromJSON(env.HB_STAGING_RANCHER_HELM_CHART_URL).value }}
-          fallback-chart-url: ${{ fromJSON(env.HB_RANCHER_HELM_CHART_URL).value }}
-
       - name: Create config.yaml
         run: |
           cat > config.yaml <<EOF
           rancher:
-            cleanup: ${{ env.CLEANUP_ENABLED }}
             host: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
+            cleanup: ${{ env.CLEANUP_ENABLED }}
 
           awsCredentials:
             accessKey: "$AWS_ACCESS_KEY"
@@ -269,6 +258,7 @@ jobs:
             defaultRegion: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
           terraform:
+            generateV3Token: ${{ matrix.version == '14' }}
             localCluster: "${{ env.LOCAL_CLUSTER_TYPE }}"
             privateKeyPath: "${{ steps.setup-ssh-keys.outputs.ssh-private-key-path }}"
             privateFullChainPath: "${{ steps.setup-certs.outputs.private-full-chain-tfp-path }}"
@@ -276,9 +266,7 @@ jobs:
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
             standalone:
               chartVersion: "${{ env.RANCHER_CHART_VERSION }}"
-              rancherChartRepository: "${{ env.RANCHER_HELM_CHART_URL }}"
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
-              repo: "${{ env.RANCHER_REPO }}"
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
               rancherHostname: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
@@ -374,8 +362,8 @@ jobs:
         if: always()
         uses: ./.github/actions/revoke-runner-ip
         with:
-          prefix-list-id: ${{ fromJSON(env.HB_AWS_MANAGED_PREFIX_LIST_ID).value }}
-          region: "${{ vars.AWS_REGION }}"
+          prefix-list-id: ${{ fromJSON(env.HB_AWS_MANAGED_PREFIX_LIST_ID_PRIME).value }}
+          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
       - name: Set job status output
         if: always()

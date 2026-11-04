@@ -55,6 +55,8 @@ func main() {
 		logrus.Fatalf("Cattle config verification failed: %v", err)
 	}
 
+	infraConfig.WriteConfigToFile(os.Getenv(config.ConfigEnvironmentKey), cattleConfig)
+
 	testSession := session.NewSession()
 
 	client, serverNodeOne, _, _, cattleConfig := setupipv6.SetupIPv6Rancher(t, testSession, keypath.IPv6KeyPath, cattleConfig)

@@ -6,21 +6,21 @@ import (
 	"os"
 	"testing"
 
-	"github.com/rancher/shepherd/clients/ec2"
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
-	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
-	"github.com/rancher/tests/actions/provisioninginput"
 	"github.com/rancher/tests/actions/qase"
 	"github.com/rancher/tests/actions/workloads/deployment"
 	"github.com/rancher/tests/actions/workloads/pods"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
 	infraConfig "github.com/rancher/tests/validation/recurring/infrastructure/config"
+	tfpConfig "github.com/rancher/tfp-automation/config"
+	"github.com/rancher/tfp-automation/framework/cleanup"
+	tfpCustom "github.com/rancher/tfp-automation/tests/infrastructure/downstream/custom"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
@@ -76,76 +76,62 @@ func customK3SIPv6Setup(t *testing.T) customK3SIPv6Test {
 
 func TestCustomK3SIPv6(t *testing.T) {
 	t.Parallel()
-	r := customK3SIPv6Setup(t)
+	k := customK3SIPv6Setup(t)
 
-	nodeRolesStandard := []provisioninginput.MachinePools{provisioninginput.EtcdMachinePool, provisioninginput.ControlPlaneMachinePool, provisioninginput.WorkerMachinePool}
+	nodeRolesStandard := []tfpConfig.Nodepool{{Quantity: 3, Etcd: true}, {Quantity: 2, Controlplane: true}, {Quantity: 3, Worker: true}}
 
-	nodeRolesStandard[0].MachinePoolConfig.Quantity = 3
-	nodeRolesStandard[1].MachinePoolConfig.Quantity = 2
-	nodeRolesStandard[2].MachinePoolConfig.Quantity = 3
-
-	clusterConfig := new(clusters.ClusterConfig)
-	operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
-
-	cidrStackPreference := &provisioninginput.Networking{
-		ClusterCIDR:     clusterConfig.Networking.ClusterCIDR,
-		ServiceCIDR:     clusterConfig.Networking.ServiceCIDR,
-		StackPreference: "ipv6",
-	}
+	_, terraform, _, _ := tfpConfig.LoadTFPConfigs(k.cattleConfig)
+	cidrCluster := terraform.AWSConfig.ClusterCIDR
+	cidrService := terraform.AWSConfig.ServiceCIDR
 
 	tests := []struct {
-		name         string
-		client       *rancher.Client
-		machinePools []provisioninginput.MachinePools
-		networking   *provisioninginput.Networking
+		name            string
+		client          *rancher.Client
+		nodePools       []tfpConfig.Nodepool
+		clusterCIDR     string
+		serviceCIDR     string
+		stackPreference string
 	}{
-		{"K3S_IPv6_Custom_CIDR_Stack_Preference", r.standardUserClient, nodeRolesStandard, cidrStackPreference},
+		{"K3S_IPv6_Custom_CIDR_Stack_Preference", k.standardUserClient, nodeRolesStandard, cidrCluster, cidrService, "ipv6"},
 	}
 
 	for _, tt := range tests {
 		t.Cleanup(func() {
 			logrus.Infof("Running cleanup (%s)", tt.name)
-			r.session.Cleanup()
+			k.session.Cleanup()
 		})
-
-		clusterConfig := new(clusters.ClusterConfig)
-		operations.LoadObjectFromMap(defaults.ClusterConfigKey, r.cattleConfig, clusterConfig)
-
-		clusterConfig.IPv6Cluster = true
-		clusterConfig.MachinePools = tt.machinePools
-		clusterConfig.Networking = tt.networking
-
-		for i := range clusterConfig.MachinePools {
-			clusterConfig.MachinePools[i].SpecifyCustomPublicIP = true
-			clusterConfig.MachinePools[i].SpecifyCustomPrivateIP = true
-		}
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			externalNodeProvider := provisioning.ExternalNodeProviderSetup(clusterConfig.NodeProvider)
+			rancherConfig, terraformConfig, terratestConfig, _ := tfpConfig.LoadTFPConfigs(k.cattleConfig)
+			terratestConfig.Nodepools = tt.nodePools
+			terraformConfig.AWSConfig.EnablePrimaryIPv6 = true
+			terraformConfig.AWSConfig.ClusterCIDR = tt.clusterCIDR
+			terraformConfig.AWSConfig.ServiceCIDR = tt.serviceCIDR
+			if terraformConfig.AWSConfig.Networking != nil {
+				terraformConfig.AWSConfig.Networking.StackPreference = tt.stackPreference
+			}
 
-			awsEC2Configs := new(ec2.AWSEC2Configs)
-			operations.LoadObjectFromMap(ec2.ConfigurationFileKey, r.cattleConfig, awsEC2Configs)
-
-			logrus.Info("Provisioning cluster")
-			cluster, err := provisioning.CreateProvisioningCustomCluster(tt.client, &externalNodeProvider, clusterConfig, awsEC2Configs)
-			require.NoError(t, err)
+			logrus.Info("Provisioning custom cluster")
+			nestedRancherModuleDir, perTestTerraformOptions, _, cluster := tfpCustom.CreateCustomCluster(t, tt.client, rancherConfig, terraformConfig, terratestConfig, defaults.K3S, "validation/provisioning/ipv6", false)
+			defer os.RemoveAll(nestedRancherModuleDir)
+			defer cleanup.Cleanup(t, perTestTerraformOptions, nestedRancherModuleDir)
 
 			logrus.Infof("Verifying the cluster is ready (%s)", cluster.Name)
-			err = provisioning.VerifyClusterReady(r.client, cluster)
+			err := provisioning.VerifyClusterReady(k.client, cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster deployments (%s)", cluster.Name)
-			err = deployment.VerifyClusterDeployments(r.client, cluster)
+			err = deployment.VerifyClusterDeployments(k.client, cluster)
 			require.NoError(t, err)
 
 			logrus.Infof("Verifying cluster pods (%s)", cluster.Name)
-			err = pods.VerifyClusterPods(r.client, cluster)
+			err = pods.VerifyClusterPods(k.client, cluster)
 			require.NoError(t, err)
 		})
 
-		params := provisioning.GetCustomSchemaParams(tt.client, r.cattleConfig)
+		params := provisioning.GetCustomSchemaParams(tt.client, k.cattleConfig)
 		err := qase.UpdateSchemaParameters(tt.name, params)
 		if err != nil {
 			logrus.Warningf("Failed to upload schema parameters %s", err)

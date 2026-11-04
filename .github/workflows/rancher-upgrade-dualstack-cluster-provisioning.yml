@@ -78,11 +78,12 @@ jobs:
         shell: bash
         run: |
           if [[ "$RUN_ALL_VERSIONS" == "true" || "$GITHUB_EVENT_NAME" == "schedule" ]]; then
-            versions='["16", "15"]'
+            versions='["16", "15", "14"]'
           else
             case "$RANCHER_VERSION_INPUT" in
               head) versions='["16"]' ;;
               v2.15-head) versions='["15"]' ;;
+              v2.14-head) versions='["14"]' ;;
               *) versions='[]' ;;
             esac
           fi
@@ -95,7 +96,7 @@ jobs:
       matrix: ${{ fromJSON(needs.prepare-matrix.outputs.matrix) }}
     name: v2-${{ matrix.version }}
     runs-on: ubuntu-latest
-    environment: upgrade-community-head
+    environment: upgrade-prime-prime-head
     env:
       RANCHER2_PROVIDER_VERSION: "${{ vars[format('RANCHER2_PROVIDER_VERSION_2_{0}', matrix.version)] }}"
       HOSTNAME_PREFIX: "ds-up-${{ matrix.version }}"
@@ -197,25 +198,26 @@ jobs:
       - name: Whitelist Runner IP
         uses: ./.github/actions/whitelist-runner-ip
         with:
-          prefix-list-id: ${{ secrets.AWS_MANAGED_PREFIX_LIST_ID }}
+          prefix-list-id: ${{ fromJSON(env.HB_AWS_MANAGED_PREFIX_LIST_ID_PRIME).value }}
           region: "${{ vars.AWS_REGION }}"
 
       - name: Set up SSH Keys
+        id: setup-ssh-keys
         uses: ./.github/actions/setup-ssh-keys
         with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-          ssh-private-key-name: ${{ secrets.SSH_PRIVATE_KEY_NAME }}
-          windows-ssh-private-key: ${{ secrets.WINDOWS_SSH_PRIVATE_KEY }}
-          windows-ssh-private-key-name: ${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}
+          ssh-private-key: ${{ fromJSON(env.HB_SSH_PRIVATE_KEY).value }}
+          ssh-private-key-name: ${{ fromJSON(env.HB_SSH_PRIVATE_KEY_NAME).value }}
+          windows-ssh-private-key: ${{ fromJSON(env.HB_WINDOWS_SSH_PRIVATE_KEY).value }}
+          windows-ssh-private-key-name: ${{ fromJSON(env.HB_WINDOWS_SSH_PRIVATE_KEY_NAME).value }}
 
       - name: Set up certificates
         id: setup-certs
         uses: ./.github/actions/setup-certs
         with:
-          private-full-chain: ${{ secrets.PRIVATE_FULL_CHAIN }}
-          private-full-chain-name: ${{ vars.PRIVATE_FULL_CHAIN_NAME }}
-          private-cert-key: ${{ secrets.PRIVATE_CERT_KEY }}
-          private-cert-key-name: ${{ vars.PRIVATE_CERT_KEY_NAME }}
+          private-full-chain: ${{ fromJSON(env.HB_PRIVATE_FULL_CHAIN).value }}
+          private-full-chain-name: ${{ fromJSON(env.HB_PRIVATE_FULL_CHAIN_NAME).value }}
+          private-cert-key: ${{ fromJSON(env.HB_PRIVATE_CERT_KEY).value }}
+          private-cert-key-name: ${{ fromJSON(env.HB_PRIVATE_CERT_KEY_NAME).value }}
 
       - name: Uniquify hostname prefix
         uses: ./.github/actions/uniquify-hostname
@@ -244,166 +246,56 @@ jobs:
               (github.event.inputs.run_all_versions == 'true' && fromJSON(env[format('HB_RELEASED_RANCHER_CHART_VERSION_2_{0}', matrix.version)]).value)
             }}
 
-      - name: Set upgraded Rancher repo
-        uses: ./.github/actions/set-rancher-repo
-        with:
-          rancher-version: ${{ env.UPGRADED_RANCHER_VERSION }}
-          fallback-repo: ${{ secrets.UPGRADED_RANCHER_REPO }}
-          is-prime: false
-          release-community-version: "2.${{ matrix.version }}"
-          env-var-name: UPGRADED_RANCHER_REPO
-
       - name: Get Qase ID
         id: get-qase-id
         uses: ./.github/actions/get-qase-id
         with:
-          qase_recurring_id: ${{ vars[format('HB_QASE_RECURRING_TEST_RUN_ID_2_{0}', matrix.version)] }}
-
-      - name: Set upgraded Rancher chart url
-        uses: ./.github/actions/set-rancher-chart-url
-        with:
-          rancher-repo: ${{ env.UPGRADED_RANCHER_REPO }}
-          is-prime: false
-          community-chart-url: ${{ vars.COMMUNITY_HELM_CHART_URL }}
-          staging-chart-url: ${{ secrets.STAGING_RANCHER_HELM_CHART_URL }}
-          fallback-chart-url: ${{ secrets.UPGRADED_RANCHER_HELM_CHART_URL }}
-          env-var-name: UPGRADED_RANCHER_HELM_CHART_URL
+          qase_recurring_id: ${{ fromJSON(env[format('HB_QASE_RECURRING_TEST_RUN_ID_2_{0}', matrix.version)]).value }}
 
       - name: Create config.yaml
         run: |
           cat > config.yaml <<EOF
           rancher:
-            host: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
-            adminPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
-            insecure: true
+            host: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
             cleanup: ${{ env.CLEANUP_ENABLED }}
+
+          awsCredentials:
+            accessKey: "$AWS_ACCESS_KEY"
+            secretKey: "$AWS_SECRET_KEY"
+            defaultRegion: "${{ fromJSON(env.HB_AWS_REGION).value }}"
+
           terraform:
-            cni: "${{ vars.CNI }}"
-            defaultClusterRoleForProjectMembers: "true"
-            enableNetworkPolicy: false
+            generateV3Token: ${{ matrix.version == '14' }}
             localCluster: "${{ env.LOCAL_CLUSTER_TYPE }}"
-            provider: "${{ vars.PROVIDER_AMAZON }}"
-            downstreamClusterProvider: "${{ vars.PROVIDER_AMAZON }}"
-            privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
+            privateKeyPath: "${{ steps.setup-ssh-keys.outputs.ssh-private-key-path }}"
             privateFullChainPath: "${{ steps.setup-certs.outputs.private-full-chain-tfp-path }}"
             privateCertKeyPath: "${{ steps.setup-certs.outputs.private-cert-key-tfp-path }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
-            awsCredentials:
-              awsAccessKey: "$AWS_ACCESS_KEY"
-              awsSecretKey: "$AWS_SECRET_KEY"
-            awsConfig:
-              ami: "${{ secrets.AWS_DUALSTACK_AMI }}"
-              awsKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}"
-              awsInstanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
-              awsVolumeType: "${{ vars.AWS_VOLUME_TYPE }}"
-              region: "${{ vars.AWS_REGION }}"
-              awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
-              awsSecurityGroupNames: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
-              awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
-              awsVpcID: "${{ secrets.AWS_VPC_ID }}"
-              awsZoneLetter: "${{ vars.AWS_ZONE_LETTER }}"
-              awsRootSize: ${{ vars.AWS_ROOT_SIZE }}
-              awsRoute53Zone: "${{ secrets.AWS_ROUTE_53_ZONE }}"
-              awsUser: "${{ vars.DUAL_STACK_AWS_USER }}"
-              clusterCIDR: "${{ vars.DUALSTACK_CLUSTER_CIDR }}"
-              serviceCIDR: "${{ vars.DUALSTACK_SERVICE_CIDR }}"
-              sshConnectionType: "${{ vars.SSH_CONNECTION_TYPE }}" 
-              timeout: "${{ vars.TIMEOUT }}"
-              ipAddressType: "${{ vars.IP_ADDRESS_TYPE }}"
-              loadBalancerType: "${{ vars.LOAD_BALANCER_DUALSTACK_TYPE }}"
-              targetType: "${{ vars.TARGET_TYPE }}"
+
             standalone:
-              bootstrapPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
-              certManagerVersion: "${{ vars.CERT_MANAGER_VERSION }}"
               chartVersion: "${{ fromJSON(env[format('HB_RELEASED_RANCHER_CHART_VERSION_2_{0}', matrix.version)]).value }}"
               k3sVersion: "${{ fromJSON(env[format('HB_K3S_VERSION_2_{0}', matrix.version)]).value }}${{ fromJSON(env.HB_K3S_VERSION_SUFFIX).value }}"
-              osUser: "${{ vars.DUAL_STACK_OS_USER }}"
-              osGroup: "${{ vars.DUAL_STACK_OS_GROUP }}"
-              rancherChartRepository: "${{ secrets.RANCHER_HELM_CHART_URL }}"
               rancherHostname: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
-              rancherImage: "${{ secrets.RANCHER_IMAGE }}"
               rancherTagVersion: "${{ fromJSON(env[format('HB_RELEASED_RANCHER_VERSION_2_{0}', matrix.version)]).value }}"
-              registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
-              registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
-              repo: "${{ secrets.RANCHER_REPO }}"
               rke2Version: "${{ fromJSON(env[format('HB_RKE2_VERSION_2_{0}', matrix.version)]).value }}"
-              upgradedRancherChartRepository: "${{ env.UPGRADED_RANCHER_HELM_CHART_URL }}"
               upgradedRancherChartVersion: "${{ env.UPGRADED_RANCHER_CHART_VERSION }}"
               upgradedRancherImage: "${{ secrets.UPGRADED_RANCHER_IMAGE }}"
-              upgradedRancherRepo: "${{ env.UPGRADED_RANCHER_REPO }}"
               upgradedRancherTagVersion: "${{ env.UPGRADED_RANCHER_VERSION }}"
-          terratest:
-            pathToRepo: "${{ secrets.PATH_TO_REPO }}"
-            standaloneLogging: ${{ vars.TERRAFORM_LOGGING }}
 
           clusterConfig:
-            resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
-            cni: "${{ vars.CNI }}"
-            provider: "${{ vars.PROVIDER_AMAZON }}"
-            nodeProvider: "ec2"
-            pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
-            networking:
-              clusterCIDR: "${{ vars.DUALSTACK_CLUSTER_CIDR }}"
-              serviceCIDR: "${{ vars.DUALSTACK_SERVICE_CIDR }}"
-              stackPreference: "${{ vars.STACK_PREFERENCE_DUAL }}"
-            advanced:
-              machineGlobalConfig:
-                flannel-ipv6-masq: true
             registries:
               rke2Password: "${{ env.DOCKERHUB_PASSWORD }}"
               rke2Username: "${{ env.DOCKERHUB_USERNAME }}"
               rke2Registries:
                 mirrors:
                   "docker.io":
-                    endpoint: ["https://${{ secrets.QA_PRIVATE_REGISTRY_NAME }}"]
+                    endpoint: ["https://${{ fromJSON(env.HB_QA_PRIVATE_REGISTRY_NAME).value }}"]
                 configs:
-                  "${{ secrets.QA_PRIVATE_REGISTRY_NAME }}":
+                  "${{ fromJSON(env.HB_QA_PRIVATE_REGISTRY_NAME).value }}":
                     "auth":
                       username: "${{ env.DOCKERHUB_USERNAME }}"
                       password: "${{ env.DOCKERHUB_PASSWORD }}"
                     insecureSkipVerify: true
-
-          logging:
-            level: "${{ vars.LOGGING_LEVEL }}"
-          
-          awsCredentials:
-            secretKey: "$AWS_SECRET_KEY"
-            accessKey: "$AWS_ACCESS_KEY"
-            defaultRegion: "${{ vars.AWS_REGION }}"
-
-          awsMachineConfigs:
-            region: "${{ vars.AWS_REGION }}"
-            awsMachineConfig:
-            - roles: ["etcd", "controlplane", "worker"]
-              ami: "${{ secrets.AWS_DUALSTACK_AMI }}"
-              instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
-              sshUser: "${{ vars.AWS_USER }}"
-              vpcId: "${{ secrets.AWS_VPC_ID }}"
-              volumeType: "${{ vars.AWS_VOLUME_TYPE }}"
-              zone: "${{ vars.AWS_ZONE_LETTER }}"
-              retries: "5"
-              rootSize: "${{ vars.AWS_ROOT_SIZE }}"
-              securityGroup: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
-              subnetId: "${{ secrets.AWS_SUBNET_ID }}"
-
-          awsEC2Configs:
-            region: "${{ vars.AWS_REGION }}"
-            awsSecretAccessKey: "$AWS_SECRET_KEY"
-            awsAccessKeyID: "$AWS_ACCESS_KEY"
-            awsEC2Config:
-              - awsRegionAZ: "${{ vars.AWS_REGION }}${{ vars.AWS_ZONE_LETTER }}"
-                awsAMI: "${{ secrets.AWS_DUALSTACK_AMI }}"
-                instanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
-                awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS }}]
-                awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
-                awsSSHKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}.pem"
-                awsCICDInstanceTag: "rancher-validation"
-                awsIAMProfile: "${{ secrets.AWS_IAM_PROFILE }}"
-                awsUser: "${{ vars.AWS_USER }}"
-                volumeSize: ${{ vars.AWS_ROOT_SIZE }}
-                roles: ["etcd", "controlplane", "worker"]
-          sshPath: 
-            sshPath: "${{ secrets.SSH_PRIVATE_KEY_PATH }}"
           EOF
 
       - name: Export CATTLE_TEST_CONFIG
@@ -424,7 +316,7 @@ jobs:
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@5e8dbf3c6d9deaf4193ca7a8fb23f2ac83bb6c85 #v4
         with:
-          terraform_version: "${{ vars.TERRAFORM_VERSION }}"
+          terraform_version: "${{ fromJSON(env.HB_TERRAFORM_VERSION).value }}"
           terraform_wrapper: false
 
       - name: Creating Rancher server
@@ -433,10 +325,10 @@ jobs:
       - name: Run Dualstack Provisioning tests
         env:
           QASE_TEST_RUN_ID: ${{ inputs.qase_test_run_id || steps.get-qase-id.outputs.id }}
-          QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
+          QASE_AUTOMATION_TOKEN: ${{ fromJSON(env.HB_QASE_AUTOMATION_TOKEN).value }}
           QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_SCHEMA_PREFIX: hostbusters
-          QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
+          QASE_PROJECT_ID: ${{ fromJSON(env.HB_QASE_PROJECT_ID).value }}
         uses: ./.github/actions/run-hostbusters-provisioning
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
@@ -479,8 +371,8 @@ jobs:
         if: always()
         uses: ./.github/actions/revoke-runner-ip
         with:
-          prefix-list-id: ${{ secrets.AWS_MANAGED_PREFIX_LIST_ID }}
-          region: "${{ vars.AWS_REGION }}"
+          prefix-list-id: ${{ fromJSON(env.HB_AWS_MANAGED_PREFIX_LIST_ID_PRIME).value }}
+          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
       - name: Set job status output
         if: always()
