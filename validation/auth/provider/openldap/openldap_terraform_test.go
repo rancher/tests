@@ -114,6 +114,9 @@ func (a *OpenLDAPTerraformSuite) SetupSuite() {
 	openLDAPConfig.TestUsername = openLDAP.Users.Admin.Username
 	openLDAPConfig.TestPassword = openLDAP.Users.Admin.Password
 
+	logrus.Info("Making sure the OpenLDAP auth config record exists, since terraform reads it before it can manage the provider")
+	require.NoError(a.T(), authactions.EnsureAuthConfigPresent(a.client, authactions.OpenLdap), "Failed to ensure the OpenLDAP auth config exists")
+
 	logrus.Info("Setting up the terraform workspace for the OpenLDAP auth config resource")
 	a.terratestConfig.PathToRepo = filepath.Join(a.terratestConfig.PathToRepo, authproviders.OpenLDAP)
 
