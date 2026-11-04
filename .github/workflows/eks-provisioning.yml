@@ -243,6 +243,7 @@ jobs:
             cni: "${{ vars.CNI }}"
             defaultClusterRoleForProjectMembers: "true"
             enableNetworkPolicy: false
+            generateV3Token: ${{ matrix.version == '14' }}
             localHostedCluster: true
             provider: "eks"
             privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
