@@ -23,8 +23,7 @@ if [[ "$BUILD_DOWNSTREAM_CLUSTER" == "true" ]]; then
     tofu -chdir="$RANCHER_CLUSTER_MODULE_DIR" init -input=false || echo "Warning: init for rancher/cluster module failed, destroy may fail."
 
     # Destroy the Rancher cluster module infrastructure
-    tofu -chdir="$RANCHER_CLUSTER_MODULE_DIR" destroy -auto-approve -var-file="$DOWNSTREAM_TFVARS_FILE" -var-file="$GENERATED_TFVARS_FILE"
-    if [ $? -ne 0 ]; then
+    if ! tofu -chdir="$RANCHER_CLUSTER_MODULE_DIR" destroy -auto-approve -var-file="$DOWNSTREAM_TFVARS_FILE" -var-file="$GENERATED_TFVARS_FILE"; then
         echo "Warning: Terraform destroy for rancher/cluster module failed. Continuing with cleanup."
     fi
 
