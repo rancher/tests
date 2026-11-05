@@ -19,6 +19,7 @@ jobs:
   test-cli:
     name: Run CLI Go Tests
     runs-on: ubuntu-latest
+    environment: rancher-cli-testing
     
     steps:
       - name: Checkout repository
@@ -37,7 +38,7 @@ jobs:
 
       - name: Install Latest Rancher CLI
         env:
-          GH_TOKEN: ${{ secrets.RANCHER_CLI_DOWNLOAD_TOKEN }}
+          GH_TOKEN: ${{ secrets.CLI_DOWNLOAD_TOKEN }}
         run: |
           chmod +x .github/scripts/platform-qa-install-rancher-cli.sh
           ./.github/scripts/platform-qa-install-rancher-cli.sh
