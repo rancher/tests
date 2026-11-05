@@ -253,7 +253,6 @@ jobs:
           rancher:
             host: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
             adminPassword: "<HB_RANCHER_ADMIN_PASSWORD>"
-            insecure: true
             cleanup: ${{ env.CLEANUP_ENABLED }}
 
           awsCredentials:
@@ -270,7 +269,6 @@ jobs:
             privateCertKeyPath: "${{ steps.setup-certs.outputs.private-cert-key-tfp-path }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
             awsConfig:
-              ami: "<HB_DEFAULT_AMI>"
               awsInstanceType: "<HB_AWS_INSTANCE_TYPE>"
               armAMI: "<HB_ARM64_AMI>"
               armInstanceType: "<HB_ARM64_INSTANCE_TYPE>"
@@ -307,30 +305,14 @@ jobs:
                     insecureSkipVerify: true
 
           awsMachineConfigs:
-            region: "<HB_AWS_REGION>"
             awsMachineConfig:
             - roles: ["etcd", "controlplane"]
-              iamInstanceProfile: "<HB_AWS_IAM_PROFILE>"
-              ami: "<HB_DEFAULT_AMI>"
-              instanceType: "<HB_AWS_INSTANCE_TYPE>"
-              volumeType: "<HB_AWS_VOLUME_TYPE>"
-              rootSize: "<HB_AWS_ROOT_SIZE>"
-              sshUser: "<HB_AWS_OS_USER>"
-              subnetId: "<HB_AWS_SUBNET_ID>"
-              vpcId: "<HB_AWS_VPC_ID>"
-              zone: "<HB_AWS_ZONE_LETTER>"
-              retries: "5"
             - roles: ["worker"]
-              iamInstanceProfile: "<HB_AWS_IAM_PROFILE>"
               ami: "<HB_ARM64_AMI>"
               instanceType: "<HB_ARM64_INSTANCE_TYPE>"
-              volumeType: "<HB_AWS_VOLUME_TYPE>"
-              rootSize: "<HB_AWS_ROOT_SIZE>"
-              sshUser: "<HB_AWS_OS_USER>"
-              subnetId: "<HB_AWS_SUBNET_ID>"
-              vpcId: "<HB_AWS_VPC_ID>"
-              zone: "<HB_AWS_ZONE_LETTER>"
-              retries: "5"
+
+          sshPath:
+            sshPath: "${{ github.workspace }}/.ssh"
           EOF
 
       - name: Export CATTLE_TEST_CONFIG

@@ -44,6 +44,7 @@ terraform:
     chartVersion: "<required>"
     osUser: "<HB_AWS_OS_USER>"
     osGroup: "<HB_AWS_OS_GROUP>"
+    rancherAgentImage: "<HB_RANCHER_AGENT_IMAGE>"
     rancherChartRepository: "<HB_PRIME_HEAD_HELM_CHART_URL>"
     rancherHostname: "<HB_RANCHER_HOSTNAME>"
     rancherImage: "<HB_PRIME_HEAD_RANCHER_IMAGE>"
