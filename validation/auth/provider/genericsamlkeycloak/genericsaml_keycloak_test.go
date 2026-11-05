@@ -4,9 +4,12 @@ package genericsamlkeycloak
 
 import (
 	"fmt"
+	"github.com/rancher/shepherd/extensions/defaults"
+	"net/http"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	managementv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/keycloak"
@@ -1228,6 +1231,27 @@ func (g *GenericSAMLKeycloakAuthProviderSuite) TestGenericSAMLKeycloakForceAuthn
 
 	err = authactions.VerifyUserLogins(g.client, authactions.GenericSAML, []authactions.User{g.authConfig.Users[0]}, "forceAuthn=true", true)
 	require.NoError(g.T(), err, "Login should still succeed when the AuthnRequest forces re-authentication at the identity provider")
+}
+
+func (g *GenericSAMLKeycloakAuthProviderSuite) TestGenericSAMLLoginTokenRecordsLastUsedAt() {
+	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(g.client, g.session, g.adminUser, authactions.GenericSAML)
+	require.NoError(g.T(), err, "Failed to setup authenticated test")
+	defer subSession.Cleanup()
+
+	credential, err := authactions.NewLoginCredential(authAdmin)
+	require.NoError(g.T(), err, "Failed to read the login token of the GenericSAML user")
+
+	planted, err := authactions.PlantLastUsedAt(g.client, credential.Target(), time.Now().Add(-defaults.TwoMinuteTimeout))
+	require.NoError(g.T(), err, "Failed to age the lastUsedAt of the login token")
+
+	request, err := authactions.NewRequester(g.client).Send(credential, authactions.ProxyPath)
+	require.NoError(g.T(), err, "Failed to make a request with the login token")
+	require.Equal(g.T(), http.StatusOK, request.StatusCode, "The login token should be accepted")
+
+	changed, err := authactions.WaitForLastUsedAtChange(g.client, credential.Target(), planted)
+	require.NoError(g.T(), err, "The lastUsedAt of the login token should be written by its first use")
+
+	require.NoError(g.T(), authactions.VerifyLastUsedAtNear(changed, request.At), "lastUsedAt should hold the time of the request")
 }
 
 func TestGenericSAMLKeycloakAuthProviderSuite(t *testing.T) {
