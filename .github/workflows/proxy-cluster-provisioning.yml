@@ -320,13 +320,6 @@ jobs:
               rootSize: "<HB_AWS_ROOT_SIZE>" 
 
           clusterConfig:
-            agentEnvVars:
-            - name: HTTP_PROXY
-              value: ""
-            - name: HTTPS_PROXY
-              value: ""
-            - name: NO_PROXY
-              value: localhost,127.0.0.0/8,10.0.0.0/8,172.0.0.0/8,192.168.0.0/16,.svc,.cluster.local,cattle-system.svc,169.254.169.254
             registries:
               rke2Password: "${{ env.DOCKERHUB_PASSWORD }}"
               rke2Username: "${{ env.DOCKERHUB_USERNAME }}"

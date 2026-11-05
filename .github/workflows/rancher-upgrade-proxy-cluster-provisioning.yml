@@ -334,13 +334,6 @@ jobs:
             provider: "${{ vars.PROVIDER_AMAZON }}"
             nodeProvider: "ec2"
             pathToRepo: "${{ secrets.PATH_TO_TESTS_REPO }}"
-            agentEnvVars:
-            - name: HTTP_PROXY
-              value: http://<replace me>:3228
-            - name: HTTPS_PROXY
-              value: http://<replace me>:3228
-            - name: NO_PROXY
-              value: localhost,127.0.0.0/8,10.0.0.0/8,172.0.0.0/8,192.168.0.0/16,.svc,.cluster.local,cattle-system.svc,169.254.169.254
             registries:
               rke2Password: "${{ env.DOCKERHUB_PASSWORD }}"
               rke2Username: "${{ env.DOCKERHUB_USERNAME }}"
