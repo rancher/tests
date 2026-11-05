@@ -7,6 +7,9 @@ on:
       rancher_host:
         description: "Rancher host to run tests against. Example: cluster1.qa.rancher.space"
         required: true
+      cluster_name:
+        description: "Existing downstream cluster name the tests target"
+        required: true
       test_package:
         description: "Path to the CLI test directory"
         required: true
@@ -52,12 +55,36 @@ jobs:
           chmod +x .github/scripts/platform-qa-create-rancher-token.sh
           ./.github/scripts/platform-qa-create-rancher-token.sh
 
-      - name: Run Go Tests
+      - name: Fetch Rancher CA certificate
         env:
           RANCHER_HOST: ${{ github.event.inputs.rancher_host }}
-          RANCHER_TOKEN: ${{ steps.create-token.outputs.RANCHER_ADMIN_TOKEN }}
         run: |
-          TEST_DIR="${{ github.event.inputs.test_package }}"
+          CA_FILE="${RUNNER_TEMP}/rancher-ca.pem"
+          openssl s_client -connect "${RANCHER_HOST}:443" -servername "${RANCHER_HOST}" -showcerts </dev/null 2>/dev/null \
+            | awk '/-----BEGIN CERTIFICATE-----/{p=1} p{print} /-----END CERTIFICATE-----/{p=0}' > "$CA_FILE"
+          if [ ! -s "$CA_FILE" ]; then
+            echo "❌ No certificate returned by ${RANCHER_HOST}"
+            exit 1
+          fi
+          echo "RANCHER_CA_FILE=$CA_FILE" >> "$GITHUB_ENV"
+
+      - name: Create cattle config
+        env:
+          RANCHER_HOST: ${{ github.event.inputs.rancher_host }}
+          RANCHER_ADMIN_TOKEN: ${{ steps.create-token.outputs.RANCHER_ADMIN_TOKEN }}
+          RANCHER_ADMIN_PASSWORD: ${{ secrets.PQA_RANCHER_ADMIN_PASSWORD }}
+          CLUSTER_NAME: ${{ github.event.inputs.cluster_name }}
+          RANCHER_CA_FILE: ${{ env.RANCHER_CA_FILE }}
+        run: bash .github/scripts/platform-qa-create-rancher-cli-cattle-config.sh
+
+      - name: Run Go Tests
+        env:
+          CATTLE_TEST_CONFIG: ${{ github.workspace }}/cattle-config.yaml
+          RANCHER_HOST: ${{ github.event.inputs.rancher_host }}
+          RANCHER_TOKEN: ${{ steps.create-token.outputs.RANCHER_ADMIN_TOKEN }}
+          TEST_PACKAGE: ${{ github.event.inputs.test_package }}
+        run: |
+          TEST_DIR="$TEST_PACKAGE"
 
           echo "Running CLI tests in $TEST_DIR against $RANCHER_HOST"
 
