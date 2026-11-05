@@ -3,8 +3,10 @@ package exttokens
 import (
 	"context"
 	"crypto/tls"
+	"encoding/base64"
 	"fmt"
 	"net/http"
+	"time"
 
 	extapi "github.com/rancher/rancher/pkg/apis/ext.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
@@ -13,6 +15,7 @@ import (
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	settingsapi "github.com/rancher/tests/actions/kubeapi/settings"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
@@ -22,6 +25,8 @@ const (
 	ExtTokenStatusExpiredValue                        = false
 	ExtTokenAPIPath                                   = "/v1/ext.cattle.io.tokens"
 	ExtTokenKindKubeconfig                            = "kubeconfig"
+	ExtTokenSecretNamespace                           = "cattle-tokens"
+	ExtTokenLastUsedAtField                           = "last-used-at"
 	TrueConditionStatus        metav1.ConditionStatus = "True"
 	FalseConditionStatus       metav1.ConditionStatus = "False"
 )
@@ -240,4 +245,36 @@ func CreateExtTokenOfKind(client *rancher.Client, kind string, ttlMillis int64) 
 	}
 
 	return createdToken, nil
+}
+
+// GetExtTokenLastUsedAt reads the lastUsedAt stored in the secret backing the named ext token, or nil when it is unset
+func GetExtTokenLastUsedAt(client *rancher.Client, name string) (*time.Time, error) {
+	secret, err := client.WranglerContext.Core.Secret().Get(ExtTokenSecretNamespace, name, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("reading the secret backing ext token %s: %w", name, err)
+	}
+
+	raw := string(secret.Data[ExtTokenLastUsedAtField])
+	if raw == "" {
+		return nil, nil
+	}
+
+	parsed, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		return nil, fmt.Errorf("parsing the stored %s %q of ext token %s: %w", ExtTokenLastUsedAtField, raw, name, err)
+	}
+
+	return &parsed, nil
+}
+
+// SetExtTokenLastUsedAt overwrites the lastUsedAt stored in the secret backing the named ext token
+func SetExtTokenLastUsedAt(client *rancher.Client, name string, at time.Time) error {
+	stamp := base64.StdEncoding.EncodeToString([]byte(at.UTC().Format(time.RFC3339)))
+	patch := []byte(fmt.Sprintf(`{"data":{%q:%q}}`, ExtTokenLastUsedAtField, stamp))
+
+	if _, err := client.WranglerContext.Core.Secret().Patch(ExtTokenSecretNamespace, name, types.MergePatchType, patch); err != nil {
+		return fmt.Errorf("setting lastUsedAt in the secret backing ext token %s: %w", name, err)
+	}
+
+	return nil
 }
