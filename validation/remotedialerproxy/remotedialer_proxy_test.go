@@ -13,10 +13,8 @@ import (
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/session"
-	"github.com/rancher/tests/actions/config/defaults"
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
-	"github.com/rancher/tests/actions/qase"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
@@ -38,11 +36,6 @@ func rdpSetup(t *testing.T) rdpTest {
 	r.client = client
 
 	r.cattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
-	_, providerName, err := provisioning.GetProviderFromConfig(r.cattleConfig)
-	require.NoError(t, err)
-
-	r.cattleConfig, err = defaults.LoadPackageDefaults(r.cattleConfig, "", providerName)
-	require.NoError(t, err)
 
 	logCfg := new(logging.Logging)
 	operations.LoadObjectFromMap(logging.LoggingKey, r.cattleConfig, logCfg)
@@ -80,7 +73,4 @@ func TestRemotedialerProxy(t *testing.T) {
 	t.Run("RemotedialerProxy_Validations", func(t *testing.T) {
 		remotedialerProxyValidations(t, r.client, cluster)
 	})
-
-	params := provisioning.GetProvisioningSchemaParams(r.client, r.cattleConfig)
-	_ = qase.UpdateSchemaParameters("RemotedialerProxy_Validations", params)
 }
