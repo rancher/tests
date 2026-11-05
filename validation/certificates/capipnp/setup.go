@@ -73,12 +73,10 @@ func Setup(t *testing.T, clusterType string) *certRotationTest {
 	validationDir := filepath.Dir(certificatesDir)
 	provisioningDir := filepath.Join(validationDir, "provisioning")
 
-	provisioningDefaults := config.LoadConfigFromFile(filepath.Join(provisioningDir, "defaults", "defaults.yaml"))
-	deletingDefaults := config.LoadConfigFromFile(filepath.Join(certificatesDir, "defaults", "defaults.yaml"))
-	validationDefaults, err := defaults.DeepMerge(deletingDefaults, provisioningDefaults, true)
+	_, providerName, err := provisioning.GetProviderFromConfig(c.CattleConfig)
 	require.NoError(t, err)
 
-	c.CattleConfig, err = defaults.DeepMerge(c.CattleConfig, validationDefaults, true)
+	c.CattleConfig, err = defaults.LoadPackageDefaults(c.CattleConfig, filepath.Join(certificatesDir, "defaults", providerName+".yaml"), providerName)
 	require.NoError(t, err)
 
 	loggingConfig := new(logging.Logging)

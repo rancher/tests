@@ -73,12 +73,10 @@ func Setup(t *testing.T, clusterType string) *encryptionKeyRotationTest {
 	validationDir := filepath.Dir(ekrDir)
 	provisioningDir := filepath.Join(validationDir, "provisioning")
 
-	provisioningDefaults := config.LoadConfigFromFile(filepath.Join(provisioningDir, "defaults", "defaults.yaml"))
-	deletingDefaults := config.LoadConfigFromFile(filepath.Join(ekrDir, "defaults", "defaults.yaml"))
-	validationDefaults, err := defaults.DeepMerge(deletingDefaults, provisioningDefaults, true)
+	_, providerName, err := provisioning.GetProviderFromConfig(e.CattleConfig)
 	require.NoError(t, err)
 
-	e.CattleConfig, err = defaults.DeepMerge(e.CattleConfig, validationDefaults, true)
+	e.CattleConfig, err = defaults.LoadPackageDefaults(e.CattleConfig, filepath.Join(ekrDir, "defaults", providerName+".yaml"), providerName)
 	require.NoError(t, err)
 
 	loggingConfig := new(logging.Logging)

@@ -74,12 +74,10 @@ func Setup(t *testing.T, clusterType string, defaultNodeRoles bool) *deleteTest 
 	validationDir := filepath.Dir(deletingDir)
 	provisioningDir := filepath.Join(validationDir, "provisioning")
 
-	provisioningDefaults := config.LoadConfigFromFile(filepath.Join(provisioningDir, "defaults", "defaults.yaml"))
-	deletingDefaults := config.LoadConfigFromFile(filepath.Join(deletingDir, "defaults", "defaults.yaml"))
-	validationDefaults, err := defaults.DeepMerge(deletingDefaults, provisioningDefaults, true)
+	_, providerName, err := provisioning.GetProviderFromConfig(d.CattleConfig)
 	require.NoError(t, err)
 
-	d.CattleConfig, err = defaults.DeepMerge(d.CattleConfig, validationDefaults, true)
+	d.CattleConfig, err = defaults.LoadPackageDefaults(d.CattleConfig, filepath.Join(deletingDir, "defaults", providerName+".yaml"), providerName)
 	require.NoError(t, err)
 
 	loggingConfig := new(logging.Logging)
