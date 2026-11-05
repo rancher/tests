@@ -3,7 +3,9 @@ package rancherserver
 import (
 	"context"
 	"fmt"
+	"maps"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -157,24 +159,61 @@ func IsRancherPrimeBuild(client *rancher.Client) (bool, error) {
 
 // ContainerLogs returns what the named container has logged on every Rancher server pod
 func ContainerLogs(client *rancher.Client, container string) (string, error) {
-	podList, err := ListRancherServerPods(client)
+	logsByPod, err := ContainerLogsByPod(client, container)
 	if err != nil {
 		return "", err
 	}
 
+	podNames := slices.Sorted(maps.Keys(logsByPod))
 	combined := strings.Builder{}
 
-	for _, pod := range podList {
-		logs, err := kubeconfig.GetPodContainerLogs(client, extclusterapi.LocalCluster, pod.Name, extdeployments.RancherDeploymentNamespace, container, rancherLogBuffer)
-		if err != nil {
-			return "", fmt.Errorf("reading the %s logs of %s/%s: %w", container, extdeployments.RancherDeploymentNamespace, pod.Name, err)
-		}
-
-		combined.WriteString(logs)
+	for _, podName := range podNames {
+		combined.WriteString(logsByPod[podName])
 		combined.WriteString("\n")
 	}
 
 	return combined.String(), nil
+}
+
+// ContainerLogsByPod returns what the named container logged on each Rancher server pod, keyed by pod name
+func ContainerLogsByPod(client *rancher.Client, container string) (map[string]string, error) {
+	podList, err := ListRancherServerPods(client)
+	if err != nil {
+		return nil, err
+	}
+
+	logsByPod := map[string]string{}
+
+	for _, pod := range podList {
+		logs, err := kubeconfig.GetPodContainerLogs(client, extclusterapi.LocalCluster, pod.Name, extdeployments.RancherDeploymentNamespace, container, rancherLogBuffer)
+		if err != nil {
+			return nil, fmt.Errorf("reading the %s logs of %s/%s: %w", container, extdeployments.RancherDeploymentNamespace, pod.Name, err)
+		}
+
+		logsByPod[pod.Name] = logs
+	}
+
+	return logsByPod, nil
+}
+
+// FindRancherServerPodsLogging returns the Rancher server pods whose named container logged the given substring
+func FindRancherServerPodsLogging(client *rancher.Client, container, substring string) ([]string, error) {
+	logsByPod, err := ContainerLogsByPod(client, container)
+	if err != nil {
+		return nil, err
+	}
+
+	found := []string{}
+
+	for pod, logs := range logsByPod {
+		if strings.Contains(logs, substring) {
+			found = append(found, pod)
+		}
+	}
+
+	slices.Sort(found)
+
+	return found, nil
 }
 
 // VerifyBuildType errors when the Rancher server does not report the expected build type

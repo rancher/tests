@@ -14,6 +14,7 @@ Your GO suite should be set to `-run ^Test<TestSuite>$`
 - To run the kubeapiauth_tokenreview_test.go, set the GO suite to `-run ^TestKubeAPIAuthTokenReviewSuite$`
 - To run the kubeapiauth_ace_test.go, set the GO suite to `-run ^TestKubeAPIAuthACESuite$`
 - To run the kubeapiauth_authprovider_test.go, set the GO suite to `-run ^TestKubeAPIAuthProviderSuite$`
+- To run the kubeapiauth_lastusedat_test.go, set the GO suite to `-run ^TestKubeAPIAuthLastUsedAtSuite$`
 
 In your config file, set the following:
 

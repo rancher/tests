@@ -20,6 +20,7 @@ import (
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	userapi "github.com/rancher/tests/actions/kubeapi/users"
 	"github.com/rancher/tests/actions/rbac"
+	tokenapi "github.com/rancher/tests/actions/tokens"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -1228,6 +1229,14 @@ func (g *GenericSAMLKeycloakAuthProviderSuite) TestGenericSAMLKeycloakForceAuthn
 
 	err = authactions.VerifyUserLogins(g.client, authactions.GenericSAML, []authactions.User{g.authConfig.Users[0]}, "forceAuthn=true", true)
 	require.NoError(g.T(), err, "Login should still succeed when the AuthnRequest forces re-authentication at the identity provider")
+}
+
+func (g *GenericSAMLKeycloakAuthProviderSuite) TestGenericSAMLLoginTokenRecordsLastUsedAt() {
+	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(g.client, g.session, g.adminUser, authactions.GenericSAML)
+	require.NoError(g.T(), err, "Failed to setup authenticated test")
+	defer subSession.Cleanup()
+
+	require.NoError(g.T(), tokenapi.VerifyLoginTokenRecordsLastUsedAt(g.client, authAdmin), "The first use of the GenericSAML login token should be written to its lastUsedAt")
 }
 
 func TestGenericSAMLKeycloakAuthProviderSuite(t *testing.T) {

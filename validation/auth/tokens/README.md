@@ -13,6 +13,7 @@ Your GO suite should be set to `-run ^Test<TestSuite>$`
 - To run the token_test.go, set the GO suite to `-run ^TestTokenTestSuite$`
 - To run the ext_token_test.go, set the GO suite to `-run ^TestExtTokenTestSuite$`
 - To run the ext_token_watchlist_test.go set the GO suite to `-run ^TestExtTokenWatchListTestSuite$`
+- To run the token_lastusedat_test.go, set the GO suite to `-run ^TestTokenLastUsedAtTestSuite$`
 
 In your config file, set the following:
 
