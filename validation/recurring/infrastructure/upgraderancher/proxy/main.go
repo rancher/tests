@@ -79,9 +79,6 @@ func main() {
 		logrus.Fatalf("Failed to replace proxy bastion: %v", err)
 	}
 
-	infraConfig.UpdateAgentEnvVar(cattleConfig, "HTTP_PROXY", "http://"+proxyBastion+":3228")
-	infraConfig.UpdateAgentEnvVar(cattleConfig, "HTTPS_PROXY", "http://"+proxyBastion+":3228")
-
 	cattleConfig, err = operations.ReplaceValue([]string{"rancher", "adminToken"}, client.RancherConfig.AdminToken, cattleConfig)
 	if err != nil {
 		logrus.Fatalf("Failed to replace admin token: %v", err)
