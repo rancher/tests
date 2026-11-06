@@ -221,6 +221,78 @@ func VerifyKubeAPIAuthLogged(client *rancher.Client, clusterID string, baseline 
 	return nil
 }
 
+// VerifyKubeAPIAuthRefused returns an error unless kube-api-auth logged exactly one info refusal line with the reason for the access key and no error line
+func VerifyKubeAPIAuthRefused(client *rancher.Client, clusterID, accessKey, reason string) error {
+	current, err := KubeAPIAuthLogs(client, clusterID)
+	if err != nil {
+		return err
+	}
+
+	refusals := 0
+	lastRefusal := ""
+	errorLines := []string{}
+
+	for _, logs := range current {
+		for _, line := range strings.Split(logs, "\n") {
+			if !strings.Contains(line, accessKey) {
+				continue
+			}
+
+			switch {
+			case strings.Contains(line, "level=error"):
+				errorLines = append(errorLines, line)
+			case strings.Contains(line, "level=info") && strings.Contains(line, "Authentication refused for "+accessKey+":"):
+				refusals++
+				lastRefusal = line
+			}
+		}
+	}
+
+	if len(errorLines) > 0 {
+		return fmt.Errorf("%s logged %d error lines for the refused token %s, the first being %q", KubeAPIAuthDaemonSet, len(errorLines), accessKey, errorLines[0])
+	}
+
+	if refusals != 1 {
+		return fmt.Errorf("%s logged the refusal of token %s %d times where one info line was expected", KubeAPIAuthDaemonSet, accessKey, refusals)
+	}
+
+	if !strings.Contains(lastRefusal, reason) {
+		return fmt.Errorf("%s logged the refusal of token %s without the reason %q: %q", KubeAPIAuthDaemonSet, accessKey, reason, lastRefusal)
+	}
+
+	return nil
+}
+
+// VerifyTokenReviewRefused returns an error unless kube-api-auth refuses the token under both apiVersions with a JSON TokenReview that names the reason and omits the secret
+func VerifyTokenReviewRefused(client *rancher.Client, clusterID, token, reason string) error {
+	_, secret, _ := strings.Cut(token, ":")
+
+	for _, apiVersion := range []string{TokenReviewAPIV1, TokenReviewAPIV1Beta} {
+		refusal, err := waitForTokenReviewRefusal(client, clusterID, apiVersion, token, reason)
+		if err != nil {
+			return err
+		}
+
+		if refusal.APIVersion != apiVersion {
+			return fmt.Errorf("the refusal carried apiVersion %q where %q was requested", refusal.APIVersion, apiVersion)
+		}
+
+		if !strings.Contains(refusal.Error, reason) {
+			return fmt.Errorf("the refusal under %s says %q where %q was expected", apiVersion, refusal.Error, reason)
+		}
+
+		if secret != "" && strings.Contains(refusal.Body, secret) {
+			return fmt.Errorf("the refusal under %s repeats the token secret", apiVersion)
+		}
+
+		if !strings.Contains(refusal.ContentType, "application/json") {
+			return fmt.Errorf("the refusal under %s was answered as %q rather than JSON", apiVersion, refusal.ContentType)
+		}
+	}
+
+	return nil
+}
+
 func logsSince(baseline, current string) string {
 	trimmed := strings.TrimRight(baseline, "\n")
 	if trimmed == "" {
