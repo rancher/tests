@@ -3,11 +3,17 @@
 package kubeapiauth
 
 import (
+	"context"
+	"maps"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rancher/shepherd/clients/rancher"
+	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/clusters"
+	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	authactions "github.com/rancher/tests/actions/auth"
 	"github.com/rancher/tests/actions/kubeapi/tokens/exttokens"
@@ -15,19 +21,29 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
-const activeClusterState = "active"
+const (
+	activeClusterState    = "active"
+	expiringTokenLifetime = 3 * time.Minute
+	longTokenLifetime     = time.Hour
+	jsonContentType       = "application/json"
+)
 
 type KubeAPIAuthTokenReviewSuite struct {
 	suite.Suite
 	session    *session.Session
 	client     *rancher.Client
 	clusterID  string
+	cluster    *management.Cluster
 	accessKey  string
 	validToken string
 	image      string
 	echoes     bool
+	refusals   bool
 	restoreACE func() error
 }
 
@@ -45,19 +61,19 @@ func (k *KubeAPIAuthTokenReviewSuite) SetupSuite() {
 	k.clusterID, err = clusters.GetClusterIDByName(k.client, clusterName)
 	require.NoError(k.T(), err, "Error getting cluster ID for cluster: %s", clusterName)
 
-	cluster, err := k.client.Management.Cluster.ByID(k.clusterID)
+	k.cluster, err = k.client.Management.Cluster.ByID(k.clusterID)
 	require.NoError(k.T(), err, "Failed to retrieve cluster by ID: %s", k.clusterID)
 
-	require.Equal(k.T(), activeClusterState, cluster.State,
+	require.Equal(k.T(), activeClusterState, k.cluster.State,
 		"Cluster [%v] is %v rather than %v; a TokenReview is sent through the downstream proxy, which answers only while the cluster is up",
-		clusterName, cluster.State, activeClusterState)
+		clusterName, k.cluster.State, activeClusterState)
 
 	logrus.Infof("Making sure the authorized cluster endpoint is on, which is what deploys the %v daemon set", authactions.KubeAPIAuthDaemonSet)
 	k.restoreACE, err = authactions.EnsureACEEnabled(k.client, k.clusterID)
 	require.NoError(k.T(), err, "Failed to enable the authorized cluster endpoint on cluster [%v]", clusterName)
 
 	logrus.Info("Creating the user whose token kube-api-auth is asked to review, bound to the cluster so Rancher syncs a cluster auth token for them")
-	_, userClient, err := rbac.AddUserWithRoleToCluster(k.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), cluster, nil)
+	_, userClient, err := rbac.AddUserWithRoleToCluster(k.client, rbac.StandardUser.String(), rbac.ClusterOwner.String(), k.cluster, nil)
 	require.NoError(k.T(), err, "Failed to create the user the TokenReview tests sign in as")
 
 	logrus.Info("Generating the authorized cluster endpoint kubeconfig, which is what mints the token kube-api-auth can resolve")
@@ -76,6 +92,9 @@ func (k *KubeAPIAuthTokenReviewSuite) SetupSuite() {
 	k.echoes, err = authactions.EchoesRequestAPIVersion(k.client, k.clusterID, k.validToken)
 	require.NoError(k.T(), err, "Failed to ask kube-api-auth which apiVersion it answers in")
 
+	k.refusals, err = authactions.AnswersRefusalsWithTokenReview(k.client, k.clusterID)
+	require.NoError(k.T(), err, "Failed to ask kube-api-auth how it answers a refused token")
+
 	logrus.Infof("Reviewing tokens against %v from a control plane node of cluster [%v], served by %v",
 		authactions.KubeAPIAuthEndpoint, clusterName, k.image)
 
@@ -83,12 +102,22 @@ func (k *KubeAPIAuthTokenReviewSuite) SetupSuite() {
 		logrus.Warnf("Image %v answers every TokenReview as %v rather than echoing the request, so it predates the fix for the apiVersion the request carried; the cases that cover that fix will be skipped",
 			k.image, authactions.TokenReviewAPIV1Beta)
 	}
+
+	if !k.refusals {
+		logrus.Warnf("Image %v answers a refused token with an empty 401 rather than a TokenReview, so it predates the fix for refusals; the cases that cover that fix will be skipped", k.image)
+	}
 }
 
 func (k *KubeAPIAuthTokenReviewSuite) skipOnPreFixImage() {
 	if !k.echoes {
 		k.T().Skipf("kube-api-auth image %v answers every TokenReview as %v and refuses with an empty body, so it predates the fix this case covers",
 			k.image, authactions.TokenReviewAPIV1Beta)
+	}
+}
+
+func (k *KubeAPIAuthTokenReviewSuite) skipWithoutRefusalFix() {
+	if !k.refusals {
+		k.T().Skipf("kube-api-auth image %v answers a refused token with an empty 401, so it predates the fix this case covers", k.image)
 	}
 }
 
@@ -194,6 +223,7 @@ func (k *KubeAPIAuthTokenReviewSuite) TestTokenReviewRefusesWrongSecret() {
 		require.Equal(k.T(), apiVersion, result.APIVersion, "A refusal must echo the apiVersion too, otherwise the apiserver logs an unknown conversion instead of an auth failure")
 		require.False(k.T(), result.Authenticated, "A wrong secret should not authenticate, got body [%v]", result.Body)
 		require.NotEmpty(k.T(), result.Error, "The refusal should say why, got body [%v]", result.Body)
+		require.NotContains(k.T(), result.Body, strings.SplitN(wrongSecret, ":", 2)[1], "A refusal must not repeat the secret it was given")
 	}
 }
 
@@ -211,6 +241,7 @@ func (k *KubeAPIAuthTokenReviewSuite) TestTokenReviewRefusesUnknownAccessKey() {
 		require.Equal(k.T(), 200, result.StatusCode, "An unknown access key should be refused rather than error, got body [%v]", result.Body)
 		require.Equal(k.T(), apiVersion, result.APIVersion, "A refusal must echo the apiVersion the request carried")
 		require.False(k.T(), result.Authenticated, "An unknown access key should not authenticate, got body [%v]", result.Body)
+		require.NotEmpty(k.T(), result.Error, "The refusal should say why, got body [%v]", result.Body)
 	}
 }
 
@@ -288,6 +319,189 @@ func (k *KubeAPIAuthTokenReviewSuite) TestTokenReviewRefusesAnExtTokenWithNoClus
 		require.Contains(k.T(), result.Error, extToken.Name,
 			"kube-api-auth should drop the %v prefix and look the token up by its name, so the refusal names [%v]", authactions.ExtTokenPrefix, extToken.Name)
 	}
+}
+
+func (k *KubeAPIAuthTokenReviewSuite) TestTokenReviewRefusesAnExpiredToken() {
+	k.skipWithoutRefusalFix()
+	k.skipOnPreFixImage()
+
+	subSession := k.session.NewSession()
+	defer subSession.Cleanup()
+
+	subClient, err := k.client.WithSession(subSession)
+	require.NoError(k.T(), err, "Failed to scope the client to the test session")
+
+	logrus.Infof("Minting a token scoped to the cluster that expires in %v", expiringTokenLifetime)
+	token, err := authactions.NewSyncedClusterScopedToken(subClient, k.clusterID, expiringTokenLifetime)
+	require.NoError(k.T(), err, "Failed to mint a short lived token")
+
+	before, err := authactions.ReviewToken(k.client, k.clusterID, authactions.TokenReviewAPIV1, authactions.TokenReviewKind, token)
+	require.NoError(k.T(), err, "Failed to send the TokenReview")
+	require.True(k.T(), before.Authenticated, "The token should authenticate until it expires, got status %d", before.StatusCode)
+
+	require.NoError(k.T(), authactions.VerifyTokenReviewRefused(k.client, k.clusterID, token, "expired"), "The token should be refused with a TokenReview")
+}
+
+func (k *KubeAPIAuthTokenReviewSuite) TestTokenReviewRefusesADisabledToken() {
+	k.skipWithoutRefusalFix()
+	k.skipOnPreFixImage()
+
+	subSession := k.session.NewSession()
+	defer subSession.Cleanup()
+
+	subClient, err := k.client.WithSession(subSession)
+	require.NoError(k.T(), err, "Failed to scope the client to the test session")
+
+	token, err := authactions.NewSyncedClusterScopedToken(subClient, k.clusterID, longTokenLifetime)
+	require.NoError(k.T(), err, "Failed to mint a token scoped to the cluster")
+
+	accessKey, _, _ := strings.Cut(token, ":")
+
+	before, err := authactions.ReviewToken(k.client, k.clusterID, authactions.TokenReviewAPIV1, authactions.TokenReviewKind, token)
+	require.NoError(k.T(), err, "Failed to send the TokenReview")
+	require.True(k.T(), before.Authenticated, "The token should authenticate while it is enabled, got status %d", before.StatusCode)
+
+	logrus.Infof("Disabling token [%v]", accessKey)
+	_, err = k.client.WranglerContext.Mgmt.Token().Patch(accessKey, types.MergePatchType, []byte(`{"enabled":false}`))
+	require.NoError(k.T(), err, "Failed to disable the token")
+
+	require.NoError(k.T(), authactions.VerifyTokenReviewRefused(k.client, k.clusterID, token, "token is not enabled"), "The token should be refused with a TokenReview")
+}
+
+func (k *KubeAPIAuthTokenReviewSuite) TestTokenReviewRefusesADeletedToken() {
+	k.skipWithoutRefusalFix()
+	k.skipOnPreFixImage()
+
+	subSession := k.session.NewSession()
+	defer subSession.Cleanup()
+
+	subClient, err := k.client.WithSession(subSession)
+	require.NoError(k.T(), err, "Failed to scope the client to the test session")
+
+	token, err := authactions.NewSyncedClusterScopedToken(subClient, k.clusterID, longTokenLifetime)
+	require.NoError(k.T(), err, "Failed to mint a token scoped to the cluster")
+
+	accessKey, _, _ := strings.Cut(token, ":")
+
+	before, err := authactions.ReviewToken(k.client, k.clusterID, authactions.TokenReviewAPIV1, authactions.TokenReviewKind, token)
+	require.NoError(k.T(), err, "Failed to send the TokenReview")
+	require.True(k.T(), before.Authenticated, "The token should authenticate before it is deleted, got status %d", before.StatusCode)
+
+	logrus.Infof("Deleting token [%v]", accessKey)
+	require.NoError(k.T(), k.client.WranglerContext.Mgmt.Token().Delete(accessKey, &metav1.DeleteOptions{}), "Failed to delete the token")
+	require.NoError(k.T(), authactions.WaitForClusterAuthTokenGone(k.client, k.clusterID, accessKey), "Rancher should withdraw the cluster auth token of a deleted token")
+
+	require.NoError(k.T(), authactions.VerifyTokenReviewRefused(k.client, k.clusterID, token, "not found"), "The token should be refused with a TokenReview")
+}
+
+func (k *KubeAPIAuthTokenReviewSuite) TestTokenReviewRefusesADisabledUser() {
+	k.skipWithoutRefusalFix()
+	k.skipOnPreFixImage()
+
+	subSession := k.session.NewSession()
+	defer subSession.Cleanup()
+
+	subClient, err := k.client.WithSession(subSession)
+	require.NoError(k.T(), err, "Failed to scope the client to the test session")
+
+	user, userClient, err := rbac.AddUserWithRoleToCluster(subClient, rbac.StandardUser.String(), rbac.ClusterOwner.String(), k.cluster, nil)
+	require.NoError(k.T(), err, "Failed to create a user bound to the cluster as %v", rbac.ClusterOwner)
+
+	token, err := authactions.ClusterAuthTokenFromKubeconfig(userClient, k.clusterID)
+	require.NoError(k.T(), err, "Failed to read a cluster auth token out of the generated kubeconfig")
+
+	accessKey, _, _ := strings.Cut(token, ":")
+	require.NoError(k.T(), authactions.WaitForClusterAuthToken(k.client, k.clusterID, accessKey), "The cluster auth token never reached the cluster")
+
+	before, err := authactions.ReviewToken(k.client, k.clusterID, authactions.TokenReviewAPIV1, authactions.TokenReviewKind, token)
+	require.NoError(k.T(), err, "Failed to send the TokenReview")
+	require.True(k.T(), before.Authenticated, "The user's token should authenticate while they are enabled, got status %d", before.StatusCode)
+
+	subSession.RegisterCleanupFunc(func() error {
+		return authactions.SetUserEnabled(k.client, user.ID, true)
+	})
+
+	logrus.Infof("Deactivating user [%v]", user.ID)
+	require.NoError(k.T(), authactions.SetUserEnabled(k.client, user.ID, false), "Failed to deactivate the user")
+
+	require.NoError(k.T(), authactions.VerifyTokenReviewRefused(k.client, k.clusterID, token, "user is not enabled"), "The token should be refused with a TokenReview")
+}
+
+func (k *KubeAPIAuthTokenReviewSuite) TestTokenReviewAnswersInJSON() {
+	k.skipWithoutRefusalFix()
+
+	answers := []struct {
+		description string
+		payload     string
+		status      int
+	}{
+		{"a valid token", authactions.NewTokenReviewPayload(authactions.TokenReviewAPIV1, authactions.TokenReviewKind, k.validToken), 200},
+		{"a wrong secret", authactions.NewTokenReviewPayload(authactions.TokenReviewAPIV1, authactions.TokenReviewKind, k.accessKey+":wrongsecret"), 200},
+		{"an unknown access key", authactions.NewTokenReviewPayload(authactions.TokenReviewAPIV1, authactions.TokenReviewKind, "nonexistent:secret"), 200},
+		{"a body that is not JSON", "{invalid", 400},
+	}
+
+	for _, answer := range answers {
+		logrus.Infof("Reviewing a request carrying %v", answer.description)
+
+		result, err := authactions.PostTokenReview(k.client, k.clusterID, answer.payload)
+		require.NoError(k.T(), err, "Failed to send the TokenReview carrying %v", answer.description)
+
+		require.Equal(k.T(), answer.status, result.StatusCode, "A request carrying %v was answered with the wrong status", answer.description)
+		require.Contains(k.T(), result.ContentType, jsonContentType, "The answer to a request carrying %v should say it is JSON rather than leave Go to sniff it", answer.description)
+	}
+}
+
+func (k *KubeAPIAuthTokenReviewSuite) TestTokenReviewLogsARefusalOnceAtInfoLevel() {
+	k.skipWithoutRefusalFix()
+
+	subSession := k.session.NewSession()
+	defer subSession.Cleanup()
+
+	subClient, err := k.client.WithSession(subSession)
+	require.NoError(k.T(), err, "Failed to scope the client to the test session")
+
+	token, err := authactions.NewSyncedClusterScopedToken(subClient, k.clusterID, longTokenLifetime)
+	require.NoError(k.T(), err, "Failed to mint a token scoped to the cluster")
+
+	accessKey, _, _ := strings.Cut(token, ":")
+
+	logrus.Infof("Reviewing token [%v] with a wrong secret", accessKey)
+	result, err := authactions.ReviewToken(k.client, k.clusterID, authactions.TokenReviewAPIV1, authactions.TokenReviewKind, accessKey+":wrongsecret")
+	require.NoError(k.T(), err, "Failed to send the TokenReview")
+	require.False(k.T(), result.Authenticated, "A wrong secret should not authenticate, got status %d", result.StatusCode)
+
+	require.NoError(k.T(), authactions.VerifyKubeAPIAuthRefused(k.client, k.clusterID, accessKey, "secretKey hash does not match"),
+		"A refusal is routine, so kube-api-auth should log it once as info and never as an error")
+}
+
+func (k *KubeAPIAuthTokenReviewSuite) TestTokenReviewRefusalThroughTheAuthorizedClusterEndpointIsLoggedOnce() {
+	k.skipWithoutRefusalFix()
+
+	subSession := k.session.NewSession()
+	defer subSession.Cleanup()
+
+	subClient, err := k.client.WithSession(subSession)
+	require.NoError(k.T(), err, "Failed to scope the client to the test session")
+
+	generated, err := authactions.SyncedACEKubeconfig(k.client, subClient, k.clusterID)
+	require.NoError(k.T(), err, "Failed to generate the kubeconfig the authorized cluster endpoint is reached with")
+
+	accessKey := namegen.AppendRandomString("kubeconfig-u-nosuchuser")
+
+	clientsets, err := authactions.ACEClientsetsWithToken(generated, accessKey+":secret")
+	require.NoError(k.T(), err, "Failed to build a client that authenticates with an unknown token")
+
+	name := slices.Sorted(maps.Keys(clientsets))[0]
+
+	logrus.Infof("Reaching the cluster with unknown token [%v] through context [%v]", accessKey, name)
+
+	_, err = clientsets[name].CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
+	require.Error(k.T(), err, "An unknown token should be refused by the authorized cluster endpoint context [%v]", name)
+	require.True(k.T(), apierrors.IsUnauthorized(err), "The refusal should be Unauthorized rather than anything else, got: %v", err)
+
+	require.NoError(k.T(), authactions.VerifyKubeAPIAuthRefused(k.client, k.clusterID, accessKey, "not found"),
+		"The kube-apiserver should hand a refused token to kube-api-auth once and get a refusal rather than a failed call")
 }
 
 func TestKubeAPIAuthTokenReviewSuite(t *testing.T) {
