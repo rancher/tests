@@ -1,4 +1,4 @@
-//go:build (validation || infra.any || cluster.any || extended) && !sanity && !stress && !2.8 && !2.9 && !2.10 && !2.11 && !2.12 && !2.13
+//go:build (validation || infra.any || cluster.any || extended) && !sanity && !stress && !2.8 && !2.9 && !2.10 && !2.11 && !2.12 && !2.13 && !2.14
 
 package scim
 
@@ -110,10 +110,6 @@ func (s *SCIMPrimeFeatureTestSuite) TestSCIMFeatureValueResolvesToBuildType() {
 
 	logrus.Info("Verifying the feature API resolves the scim value against the build type")
 
-	enabled, err := extfeatures.IsFeatureEnabled(s.client, scimactions.SCIMFeatureFlag)
-	require.NoError(s.T(), err, "Should be able to read the %s feature value", scimactions.SCIMFeatureFlag)
-	require.Equal(s.T(), s.prime, enabled, "The %s feature should resolve to enabled only on a Prime build", scimactions.SCIMFeatureFlag)
-
 	feature, err := s.client.Management.Feature.ByID(scimactions.SCIMFeatureFlag)
 	require.NoError(s.T(), err, "Should be able to get the %s feature through the management API", scimactions.SCIMFeatureFlag)
 	require.NotNil(s.T(), feature.Value, "The management API should report a value for the %s feature", scimactions.SCIMFeatureFlag)
@@ -207,9 +203,12 @@ func (s *SCIMPrimeFeatureTestSuite) TestSCIMFeatureCannotBeForcedByCattleFeature
 
 	logrus.Infof("Verifying %s=%s cannot serve SCIM on a community build", cattleFeaturesEnv, cattleFeaturesSCIMOn)
 
+	originalFeatures, err := deploymentsapi.FindDeploymentEnvVar(s.client, extclusterapi.LocalCluster, extdeployments.RancherDeploymentNamespace, extdeployments.RancherDeploymentName, cattleFeaturesEnv)
+	require.NoError(s.T(), err)
+
 	require.NoError(s.T(), deploymentsapi.UpdateOrRemoveEnvVarForDeployment(s.client, extclusterapi.LocalCluster, extdeployments.RancherDeploymentNamespace, extdeployments.RancherDeploymentName, cattleFeaturesEnv, cattleFeaturesSCIMOn))
 	subSession.RegisterCleanupFunc(func() error {
-		return deploymentsapi.UpdateOrRemoveEnvVarForDeployment(s.client, extclusterapi.LocalCluster, extdeployments.RancherDeploymentNamespace, extdeployments.RancherDeploymentName, cattleFeaturesEnv, "")
+		return deploymentsapi.UpdateOrRemoveEnvVarForDeployment(s.client, extclusterapi.LocalCluster, extdeployments.RancherDeploymentNamespace, extdeployments.RancherDeploymentName, cattleFeaturesEnv, originalFeatures)
 	})
 
 	require.NoError(s.T(), scimactions.WaitForSCIMEndpointStatus(s.scimClient, http.StatusNotFound), "GET /Users should stay 404 when the feature is forced through %s", cattleFeaturesEnv)

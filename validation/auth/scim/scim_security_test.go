@@ -1,4 +1,4 @@
-//go:build (validation || infra.any || cluster.any || extended) && !sanity && !stress && !2.8 && !2.9 && !2.10 && !2.11 && !2.12 && !2.13
+//go:build (validation || infra.any || cluster.any || extended) && !sanity && !stress && !2.8 && !2.9 && !2.10 && !2.11 && !2.12 && !2.13 && !2.14
 
 package scim
 
@@ -22,6 +22,7 @@ import (
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	authactions "github.com/rancher/tests/actions/auth"
+	actionsClusters "github.com/rancher/tests/actions/clusters"
 	rancherserverapi "github.com/rancher/tests/actions/kubeapi/rancherserver"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	scimactions "github.com/rancher/tests/actions/kubeapi/scim"
@@ -57,6 +58,7 @@ const (
 
 type SCIMSecurityTestSuite struct {
 	suite.Suite
+	atLeast216        bool
 	session           *session.Session
 	client            *rancher.Client
 	cluster           *v3.Cluster
@@ -71,6 +73,9 @@ func (s *SCIMSecurityTestSuite) SetupSuite() {
 	client, err := rancher.NewClient("", s.session)
 	require.NoError(s.T(), err, "Failed to create Rancher client")
 	s.client = client
+
+	s.atLeast216, err = actionsClusters.IsRancherVersionAbove(s.client, scimactions.RancherV216Floor)
+	require.NoError(s.T(), err, "Failed to read the Rancher server version")
 
 	logrus.Info("Getting cluster name from the config file")
 	clusterName := client.RancherConfig.ClusterName
@@ -689,6 +694,10 @@ func (s *SCIMSecurityTestSuite) TestSCIMRateLimitLeavesUnauthenticatedRequestsTo
 }
 
 func (s *SCIMSecurityTestSuite) TestSCIMUnauthenticatedAnswerHidesProviderState() {
+	if !s.atLeast216 {
+		s.T().Skip("Known issue: https://github.com/rancher/rancher/issues/58100")
+	}
+
 	subSession := s.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -723,6 +732,10 @@ func (s *SCIMSecurityTestSuite) TestSCIMUnauthenticatedAnswerHidesProviderState(
 }
 
 func (s *SCIMSecurityTestSuite) TestSCIMZExpiredTokenIsDeletedWithoutRequest() {
+	if !s.atLeast216 {
+		s.T().Skip("Known issue: https://github.com/rancher/rancher/issues/58100")
+	}
+
 	subSession := s.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -911,6 +924,10 @@ func (s *SCIMSecurityTestSuite) TestSCIMUserCreateAllowsUserNameHeldByLocalUser(
 }
 
 func (s *SCIMSecurityTestSuite) TestSCIMInvalidTokenIsRefusedOnEveryOperation() {
+	if !s.atLeast216 {
+		s.T().Skip("Known issue: https://github.com/rancher/rancher/issues/58100")
+	}
+
 	subSession := s.session.NewSession()
 	defer subSession.Cleanup()
 

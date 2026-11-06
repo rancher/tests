@@ -17,6 +17,14 @@ Prime or the community case per test, while the functional suites skip on a comm
 Set `scimInput.buildType` to the build you expect, and the suites fail instead of skipping when the server
 reports the other one. Leave it unset to run against whatever the server is.
 
+## Rancher Versions
+
+The SCIM suites do not build for v2.14 and older release lines.
+
+The audit log suite, the multi provider suite and a few single tests cover behaviour that is only in v2.16 and later, release candidate and head builds included:
+the audit log, the `multiple-auth-providers` feature, keeping the SCIM `userName` through a login, and refusing an
+invalid token before the provider state is read. On an older server they skip and say why.
+
 ## What Setup Creates
 
 Each suite prepares what it needs and puts the server back as it found it:
