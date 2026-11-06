@@ -16,6 +16,7 @@ import (
 	"github.com/sirupsen/logrus"
 	yamlv3 "gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/yaml"
 )
@@ -141,8 +142,11 @@ func WaitProviderPrerequisitesReady(client *rancher.Client, config *Config) erro
 	return provider.WaitProviderPrerequisitesFunc(client)
 }
 
-// CreateClusterManifestFromDefaults is a helper function that creates a cluster manifest from the provided defaults and machine pools.
-func CreateClusterManifestFromDefaults(config *Config, machinePools []provisioninginput.MachinePools, clusterName string) ([]byte, error) {
+// ClusterManifestCustomization modifies the Rancher provisioning Cluster after provider defaults are rendered.
+type ClusterManifestCustomization func(cluster *unstructured.Unstructured) error
+
+// CreateClusterManifestFromDefaults renders provider defaults, then applies optional provisioning Cluster customizations in order.
+func CreateClusterManifestFromDefaults(config *Config, machinePools []provisioninginput.MachinePools, clusterName string, customizations ...ClusterManifestCustomization) ([]byte, error) {
 	templateBytes, err := loadManifest(config.ClusterYAML)
 	if err != nil {
 		return nil, err
@@ -162,7 +166,49 @@ func CreateClusterManifestFromDefaults(config *Config, machinePools []provisioni
 		return nil, err
 	}
 
+	if len(customizations) > 0 {
+		if err := customizeProvisioningCluster(documents, customizations); err != nil {
+			return nil, err
+		}
+	}
+
 	return encodeManifestDocuments(documents)
+}
+
+func customizeProvisioningCluster(documents []map[string]any, customizations []ClusterManifestCustomization) error {
+	var cluster *unstructured.Unstructured
+
+	clusterIndex := -1
+	for index, document := range documents {
+		if document["apiVersion"] != "provisioning.cattle.io/v1" || document["kind"] != "Cluster" {
+			continue
+		}
+
+		if cluster != nil {
+			return fmt.Errorf("expected only one provisioning cluster in manifest, found multiple")
+		}
+
+		cluster = &unstructured.Unstructured{Object: document}
+		clusterIndex = index
+	}
+
+	if cluster == nil {
+		return fmt.Errorf("manifest does not contain a provisioning.cattle.io/v1 cluster")
+	}
+
+	for index, customize := range customizations {
+		if customize == nil {
+			return fmt.Errorf("cluster customization %d is nil", index+1)
+		}
+
+		if err := customize(cluster); err != nil {
+			return fmt.Errorf("customize provisioning cluster %q (customization %d): %w", cluster.GetName(), index+1, err)
+		}
+	}
+
+	documents[clusterIndex] = cluster.Object
+
+	return nil
 }
 
 func unmarshalSecret(data []byte, path string) (*corev1.Secret, error) {
