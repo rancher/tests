@@ -69,7 +69,7 @@ require (
 	github.com/rancher/rancher/pkg/apis v0.0.0
 	github.com/rancher/shepherd v0.0.0-20261104165213-a1e6175db325
 	github.com/rancher/tests/actions v0.0.0-20261008182219-05530174171d
-	github.com/rancher/tfp-automation v0.0.0-20261105173444-48ce1e28f99b
+	github.com/rancher/tfp-automation v0.0.0-20261106224416-2e7f6845720a
 	github.com/sirupsen/logrus v1.10.2
 	github.com/stretchr/testify v1.12.1
 	golang.org/x/crypto v0.58.0
