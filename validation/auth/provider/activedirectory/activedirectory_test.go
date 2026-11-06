@@ -4,8 +4,11 @@ package activedirectory
 
 import (
 	"fmt"
+	"github.com/rancher/shepherd/extensions/defaults"
+	"net/http"
 	"slices"
 	"testing"
+	"time"
 
 	managementv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/rancher"
@@ -866,6 +869,27 @@ func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryDisableRemovesExte
 	logrus.Infof("Verifying that user %s was removed rather than left behind holding only its local principal", attachedUser.Name)
 	err = userapi.WaitForUserDeletion(a.client, attachedUser.Name)
 	require.NoError(a.T(), err, "Disabling the provider should remove a user whose only external identity that provider emitted, leaving no record that could later be rebound")
+}
+
+func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryLoginTokenRecordsLastUsedAt() {
+	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.ActiveDirectory)
+	require.NoError(a.T(), err, "Failed to setup authenticated test")
+	defer subSession.Cleanup()
+
+	credential, err := authactions.NewLoginCredential(authAdmin)
+	require.NoError(a.T(), err, "Failed to read the login token of the ActiveDirectory user")
+
+	planted, err := authactions.PlantLastUsedAt(a.client, credential.Target(), time.Now().Add(-defaults.TwoMinuteTimeout))
+	require.NoError(a.T(), err, "Failed to age the lastUsedAt of the login token")
+
+	request, err := authactions.NewRequester(a.client).Send(credential, authactions.ProxyPath)
+	require.NoError(a.T(), err, "Failed to make a request with the login token")
+	require.Equal(a.T(), http.StatusOK, request.StatusCode, "The login token should be accepted")
+
+	changed, err := authactions.WaitForLastUsedAtChange(a.client, credential.Target(), planted)
+	require.NoError(a.T(), err, "The lastUsedAt of the login token should be written by its first use")
+
+	require.NoError(a.T(), authactions.VerifyLastUsedAtNear(changed, request.At), "lastUsedAt should hold the time of the request")
 }
 
 func TestActiveDirectoryAuthProviderSuite(t *testing.T) {

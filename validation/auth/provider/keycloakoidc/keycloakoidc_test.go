@@ -4,10 +4,13 @@ package keycloakoidc
 
 import (
 	"fmt"
+	"github.com/rancher/shepherd/extensions/defaults"
+	"net/http"
 	"net/url"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	managementv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/keycloak"
@@ -1054,6 +1057,27 @@ func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCFullGroupPathClaimGrants
 
 	err = authAdmin.WranglerContext.Mgmt.ClusterRoleTemplateBinding().Delete(crtb.Namespace, crtb.Name, &metav1.DeleteOptions{})
 	require.NoError(k.T(), err, "Failed to delete CRTB: %s/%s", crtb.Namespace, crtb.Name)
+}
+
+func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCLoginTokenRecordsLastUsedAt() {
+	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(k.client, k.session, k.adminUser, authactions.KeycloakOIDC)
+	require.NoError(k.T(), err, "Failed to setup authenticated test")
+	defer subSession.Cleanup()
+
+	credential, err := authactions.NewLoginCredential(authAdmin)
+	require.NoError(k.T(), err, "Failed to read the login token of the KeycloakOIDC user")
+
+	planted, err := authactions.PlantLastUsedAt(k.client, credential.Target(), time.Now().Add(-defaults.TwoMinuteTimeout))
+	require.NoError(k.T(), err, "Failed to age the lastUsedAt of the login token")
+
+	request, err := authactions.NewRequester(k.client).Send(credential, authactions.ProxyPath)
+	require.NoError(k.T(), err, "Failed to make a request with the login token")
+	require.Equal(k.T(), http.StatusOK, request.StatusCode, "The login token should be accepted")
+
+	changed, err := authactions.WaitForLastUsedAtChange(k.client, credential.Target(), planted)
+	require.NoError(k.T(), err, "The lastUsedAt of the login token should be written by its first use")
+
+	require.NoError(k.T(), authactions.VerifyLastUsedAtNear(changed, request.At), "lastUsedAt should hold the time of the request")
 }
 
 func TestKeycloakOIDCAuthProviderSuite(t *testing.T) {
