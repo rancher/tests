@@ -2,6 +2,7 @@
 set -e
 
 OUTPUT="${GITHUB_WORKSPACE}/cattle-config.yaml"
+CA_CERTS=$(sed 's/^/    /' "${RANCHER_CA_FILE}")
 cat > "$OUTPUT" <<EOF
 rancher:
   host: "${RANCHER_HOST}"
