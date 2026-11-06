@@ -27,6 +27,18 @@ Data Directories test verifies that files related to k8s, systemAgent and provis
 #### Run Commands:
 1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/capipnp/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestDataDirectories -timeout=1h -v`
 
+### PSACT Test
+
+PSACT(Pod Security Admission Configuration Template) Test verfies that various node driver clusters with different psact configurations provision properly.
+
+#### Table Tests
+1. `CAPI_K3S_Rancher_Privileged|3_etcd|2_cp|3_worker`
+2. `CAPI_K3S_Rancher_Restricted|3_etcd|2_cp|3_worker`
+3. `CAPI_K3S_Rancher_Baseline|3_etcd|2_cp|3_worker`
+
+#### Run Command
+`gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/provisioning/capipnp/k3s --junitfile results.xml --jsonfile results.json -- -tags=validation -run TestPSACT -timeout=1h -v`
+
 ### Provisioning Test
 
 #### Description: 
