@@ -54,6 +54,10 @@ func Setup(t *testing.T, clusterType string) capipnpTest {
 	c.StandardUserClient = standardUserClient
 
 	c.CattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
+
+	c.CattleConfig, err = defaults.LoadSecretsManagerDefaults(c.CattleConfig)
+	require.NoError(t, err)
+
 	operations.LoadObjectFromMap(capipnp.ConfigurationFileKey, c.CattleConfig, c.CapiConfig)
 
 	loggingConfig := new(logging.Logging)

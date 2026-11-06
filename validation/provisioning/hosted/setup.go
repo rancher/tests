@@ -51,6 +51,9 @@ func Setup(t *testing.T) *hostedTest {
 	h.CattleConfig, err = defaults.LoadPackageDefaults(h.CattleConfig, "", providerName)
 	require.NoError(t, err)
 
+	h.CattleConfig, err = defaults.LoadSecretsManagerDefaults(h.CattleConfig)
+	require.NoError(t, err)
+
 	loggingConfig := new(logging.Logging)
 	operations.LoadObjectFromMap(logging.LoggingKey, h.CattleConfig, loggingConfig)
 

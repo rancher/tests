@@ -86,6 +86,16 @@ func getProviderName(provider string) (string, error) {
 		return AWSProvider, nil
 	}
 
+	// Hosted cluster configs set the Terraform provider to the hosted service name.
+	switch provider {
+	case "eks":
+		return AWSProvider, nil
+	case "aks":
+		return AzureProvider, nil
+	case "gke":
+		return GoogleProvider, nil
+	}
+
 	for _, supportedProvider := range []string{AWSProvider, VsphereProvider, AzureProvider, HarvesterProvider, LinodeProvider, GoogleProvider, DOProvider} {
 		if strings.Contains(provider, supportedProvider) {
 			return supportedProvider, nil

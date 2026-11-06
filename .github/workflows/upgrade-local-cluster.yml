@@ -336,8 +336,9 @@ jobs:
           terraform_version: "${{ vars.TERRAFORM_VERSION }}"
           terraform_wrapper: false
 
-      - name: Create Rancher, upgrade Rancher and upgrade Kubernetes version
-        run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/upgraderancher/standard/main.go
+      - name: Creating Rancher server
+        working-directory: tfp-automation
+        run: go run tests/infrastructure/main.go --standard upgrade
 
       - name: Cleanup Infrastructure
         if: always() && env.CLEANUP_ENABLED == 'true'

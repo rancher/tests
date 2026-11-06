@@ -262,7 +262,6 @@ jobs:
           rancher:
             host: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
             adminPassword: "<HB_RANCHER_ADMIN_PASSWORD>"
-            insecure: true
             cleanup: ${{ env.CLEANUP_ENABLED }}
 
           awsCredentials:
@@ -285,7 +284,6 @@ jobs:
               windows2019Password: "<HB_AWS_WINDOWS_2019_PASSWORD>"
               windowsInstanceType: "<HB_AWS_WINDOWS_INSTANCE_TYPE>"
               windowsKeyName: "<HB_WINDOWS_SSH_PRIVATE_KEY_NAME>"
-
             standalone:
               chartVersion: "${{ env.RANCHER_CHART_VERSION }}"
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
@@ -296,33 +294,20 @@ jobs:
               k3sVersion: "${{ fromJSON(env[format('HB_K3S_VERSION_2_{0}', matrix.version)]).value }}${{ fromJSON(env.HB_K3S_VERSION_SUFFIX).value }}"
 
           awsMachineConfigs:
-            region: "<HB_AWS_REGION>"
             awsMachineConfig:
-            - roles: ["etcd","controlplane","worker"]
-              iamInstanceProfile: "<HB_AWS_IAM_PROFILE>"
-              ami: "<HB_DEFAULT_AMI>"
-              instanceType: "<HB_AWS_INSTANCE_TYPE>"
-              volumeType: "<HB_AWS_VOLUME_TYPE>"
-              rootSize: "<HB_AWS_ROOT_SIZE>"
+            - ami: "<HB_DEFAULT_AMI>"
               sshUser: "<HB_AWS_OS_USER>"
               subnetId: "<HB_AWS_SUBNET_ID>"
-              vpcId: "<HB_AWS_VPC_ID>"
               securityGroup: ["<HB_AWS_SECURITY_GROUP_NAMES_PRIME>"]
               zone: "<HB_AWS_ZONE_LETTER>"
-              retries: "5"
             - roles: ["windows"]
-              iamInstanceProfile: "<HB_AWS_IAM_PROFILE>"
               ami: "<HB_DEFAULT_AMI>"
               instanceType: "<HB_AWS_INSTANCE_TYPE>"
               sshUser: "<HB_AWS_OS_USER>"
               subnetId: "<HB_AWS_SUBNET_ID>"
-              vpcId: "<HB_AWS_VPC_ID>"
               securityGroup: ["<HB_AWS_SECURITY_GROUP_NAMES_PRIME>"]
-              volumeType: "<HB_AWS_VOLUME_TYPE>"
               zone: "<HB_AWS_ZONE_LETTER>"
-              retries: "5"
-              rootSize: "<HB_AWS_ROOT_SIZE>" 
-              
+
           clusterConfig:
             registries:
               rke2Password: "${{ env.DOCKERHUB_PASSWORD }}"

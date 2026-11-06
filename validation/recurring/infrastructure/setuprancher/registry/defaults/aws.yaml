@@ -1,6 +1,6 @@
 rancher:
   host: "<required>"
-  adminPassword: "<required>"
+  adminPassword: "<HB_RANCHER_ADMIN_PASSWORD>"
   insecure: true
   cleanup: true
 
@@ -15,48 +15,58 @@ terraform:
   cni: "<HB_CNI>"
   defaultClusterRoleForProjectMembers: "true"
   enableNetworkPolicy: false
-  provider: "aws"
+  provider: "<HB_PROVIDER>"
   privateKeyPath: "<HB_TFP_SSH_PRIVATE_KEY_PATH>"
   resourcePrefix: "<HB_HOSTNAME_PREFIX>"
   awsConfig:
-    ami: "<HB_AWS_AMI>"
+    ami: "<HB_DEFAULT_AMI>"
     awsKeyName: "<HB_SSH_PRIVATE_KEY_NAME>"
     awsInstanceType: "<HB_RANCHER_AWS_INSTANCE_TYPE>"
     awsVolumeType: "<HB_AWS_VOLUME_TYPE>"
     region: "<HB_AWS_REGION>"
-    awsSecurityGroups: ["<HB_AWS_SECURITY_GROUPS>"]
-    awsSecurityGroupNames: ["<HB_AWS_SECURITY_GROUP_NAMES>"]
+    awsSecurityGroups: ["<HB_AWS_SECURITY_GROUPS_PRIME>"]
+    awsSecurityGroupNames: ["<HB_AWS_SECURITY_GROUP_NAMES_PRIME>"]
     awsSubnetID: "<HB_AWS_SUBNET_ID>"
     awsVpcID: "<HB_AWS_VPC_ID>"
     awsZoneLetter: "<HB_AWS_ZONE_LETTER>"
     awsRootSize: "<HB_AWS_ROOT_SIZE>"
-    registryRootSize: "<HB_AWS_ROOT_SIZE_REGISTRY>"
+    registryRootSize: "<HB_AWS_REGISTRY_ROOT_SIZE>"
     awsRoute53Zone: "<HB_AWS_ROUTE_53_ZONE>"
-    awsUser: "<HB_AWS_USER>"
+    awsUser: "<HB_AWS_OS_USER>"
     sshConnectionType: "<HB_SSH_CONNECTION_TYPE>"
-    timeout: "<HB_TIMEOUT>"
+    timeout: "<HB_SSH_TIMEOUT>"
     ipAddressType: "<HB_IP_ADDRESS_TYPE>"
     loadBalancerType: "<HB_LOAD_BALANCER_TYPE>"
     targetType: "<HB_TARGET_TYPE>"
   standalone:
     bootstrapPassword: "<HB_RANCHER_ADMIN_PASSWORD>"
     certManagerVersion: "<HB_CERT_MANAGER_VERSION>"
-    chartVersion: "<HB_RANCHER_CHART_VERSION>"
-    osUser: "<HB_OS_USER>"
-    osGroup: "<HB_OS_GROUP>"
-    rancherChartRepository: "<HB_RANCHER_HELM_CHART_URL>"
+    chartVersion: "<required>"
+    osUser: "<HB_AWS_OS_USER>"
+    osGroup: "<HB_AWS_OS_GROUP>"
+    rancherAgentImage: "<HB_RANCHER_AGENT_IMAGE>"
+    rancherChartRepository: "<HB_PRIME_HEAD_HELM_CHART_URL>"
     rancherHostname: "<HB_RANCHER_HOSTNAME>"
-    rancherImage: "<HB_RANCHER_IMAGE>"
-    rancherTagVersion: "<HB_RANCHER_VERSION>"
+    rancherImage: "<HB_PRIME_HEAD_RANCHER_IMAGE>"
+    rancherTagVersion: "<required>"
     registryUsername: "<HB_PRIVATE_REGISTRY_USERNAME>"
     registryPassword: "<HB_PRIVATE_REGISTRY_PASSWORD>"
-    repo: "<HB_RANCHER_REPO>"
-    rke2Version: "<HB_RKE2_VERSION>"
+    repo: "<HB_PRIME_HEAD_REPO>"
+    rke2Version: "<required>"
   standaloneRegistry:
-    assetsPath: "<HB_ASSETS_PATH>"
+    assetsPath: "<HB_ASSETS_PATH_PRIME>"
     registryName: "<HB_HOSTNAME_PREFIX>"
-    registryPassword: "<HB_REGISTRY_PASSWORD>"
-    registryUsername: "<HB_REGISTRY_USERNAME>"
+    registryPassword: "<required>"
+    registryUsername: "<required>"
     ecrUsername: "<HB_ECR_USERNAME>"
-    ecrPassword: "<HB_ECR_PASSWORD>"
+    ecrPassword: "<required>"
     ecrURI: "<HB_ECR_URI>"
+    useAuthGlobalRegistry: false
+
+terratest:
+  pathToRepo: "<HB_PATH_TO_TFP_REPO>"
+  standaloneLogging: false
+  tfLogging: false
+
+logging:
+  level: "<HB_LOGGING_LEVEL>"
