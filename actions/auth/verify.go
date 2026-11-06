@@ -14,6 +14,7 @@ import (
 	v3 "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/pkg/clientbase"
+	"k8s.io/apimachinery/pkg/runtime"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
@@ -215,6 +216,137 @@ func VerifyKubeAPIAuthLogged(client *rancher.Client, clusterID string, baseline 
 	for _, reason := range reasons {
 		if !strings.Contains(appended.String(), reason) {
 			return fmt.Errorf("no %s pod gained an entry naming %q, which is where a request refused with an empty body says why", KubeAPIAuthDaemonSet, reason)
+		}
+	}
+
+	return nil
+}
+
+// VerifyKubeAPIAuthRefused polls until kube-api-auth logs the refusal of the access key after the baseline and returns an error unless it is exactly one info line with the reason and no error line
+func VerifyKubeAPIAuthRefused(client *rancher.Client, clusterID string, baseline map[string]string, accessKey, reason string) error {
+	var refusals []string
+
+	var errorLines []string
+
+	var lastErr error
+
+	readRefusals := func() {
+		current, err := KubeAPIAuthLogs(client, clusterID)
+		if err != nil {
+			lastErr = err
+
+			return
+		}
+
+		refusals, errorLines = nil, nil
+
+		for pod, logs := range current {
+			for _, line := range strings.Split(logsSince(baseline[pod], logs), "\n") {
+				switch {
+				case strings.Contains(line, "level=error"):
+					errorLines = append(errorLines, line)
+				case strings.Contains(line, "level=info") && strings.Contains(line, "Authentication refused for "+accessKey+":"):
+					refusals = append(refusals, line)
+				}
+			}
+		}
+	}
+
+	pollErr := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.TwoMinuteTimeout, true,
+		func(context.Context) (bool, error) {
+			readRefusals()
+
+			return len(refusals) > 0 || len(errorLines) > 0, nil
+		})
+	if pollErr != nil {
+		return fmt.Errorf("%s never logged the refusal of token %s (last read error: %v): %w", KubeAPIAuthDaemonSet, accessKey, lastErr, pollErr)
+	}
+
+	pollErr = kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.TenSecondTimeout, false,
+		func(context.Context) (bool, error) {
+			readRefusals()
+
+			return len(refusals) > 1 || len(errorLines) > 0, nil
+		})
+	if pollErr != nil && !kwait.Interrupted(pollErr) {
+		return fmt.Errorf("reading the %s logs for token %s again: %w", KubeAPIAuthDaemonSet, accessKey, pollErr)
+	}
+
+	if len(errorLines) > 0 {
+		return fmt.Errorf("%s logged %d error lines while refusing token %s, the first being %q", KubeAPIAuthDaemonSet, len(errorLines), accessKey, errorLines[0])
+	}
+
+	if len(refusals) != 1 {
+		return fmt.Errorf("%s logged the refusal of token %s %d times where one info line was expected", KubeAPIAuthDaemonSet, accessKey, len(refusals))
+	}
+
+	if !strings.Contains(refusals[0], reason) {
+		return fmt.Errorf("%s logged the refusal of token %s without the reason %q: %q", KubeAPIAuthDaemonSet, accessKey, reason, refusals[0])
+	}
+
+	return nil
+}
+
+// VerifyTokenReviewRefused returns an error unless kube-api-auth refuses the token under both apiVersions with a JSON TokenReview that names the reason and omits the secret
+func VerifyTokenReviewRefused(client *rancher.Client, clusterID, token, reason string) error {
+	_, secret, found := strings.Cut(token, ":")
+	if !found || secret == "" {
+		return fmt.Errorf("the token should look like accessKey:secret so the refusal can be checked for the secret")
+	}
+
+	for _, apiVersion := range []string{TokenReviewAPIV1, TokenReviewAPIV1Beta} {
+		var refusal *TokenReviewResult
+
+		var lastErr error
+
+		pollErr := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.FiveMinuteTimeout, true,
+			func(context.Context) (bool, error) {
+				result, err := ReviewToken(client, clusterID, apiVersion, TokenReviewKind, token)
+				if err != nil {
+					lastErr = err
+
+					return false, nil
+				}
+
+				refusal = result
+
+				return result.StatusCode != http.StatusOK || (!result.Authenticated && strings.Contains(result.Error, reason)), nil
+			})
+		if kwait.Interrupted(pollErr) && refusal == nil {
+			return fmt.Errorf("no TokenReview under %s on cluster %s succeeded, the last error was %v: %w", apiVersion, clusterID, lastErr, pollErr)
+		}
+
+		if kwait.Interrupted(pollErr) {
+			return fmt.Errorf("kube-api-auth never refused the token under %s for %q, its last answer was status %d with authenticated=%t and error %q (last review error: %v): %w",
+				apiVersion, reason, refusal.StatusCode, refusal.Authenticated, refusal.Error, lastErr, pollErr)
+		}
+
+		if pollErr != nil {
+			return fmt.Errorf("reviewing the token under %s on cluster %s: %w", apiVersion, clusterID, pollErr)
+		}
+
+		if refusal.StatusCode != http.StatusOK {
+			return fmt.Errorf("kube-api-auth answered the refusal under %s with status %d rather than a TokenReview", apiVersion, refusal.StatusCode)
+		}
+
+		if refusal.Kind != TokenReviewKind {
+			return fmt.Errorf("the refusal under %s carried kind %q where %q was expected", apiVersion, refusal.Kind, TokenReviewKind)
+		}
+
+		if refusal.APIVersion != apiVersion {
+			return fmt.Errorf("the refusal carried apiVersion %q where %q was requested", refusal.APIVersion, apiVersion)
+		}
+
+		if !strings.Contains(refusal.Error, reason) {
+			return fmt.Errorf("the refusal under %s says %q where %q was expected", apiVersion, refusal.Error, reason)
+		}
+
+		if strings.Contains(refusal.Body, secret) {
+			return fmt.Errorf("the refusal under %s repeats the token secret", apiVersion)
+		}
+
+		if !strings.Contains(refusal.ContentType, runtime.ContentTypeJSON) {
+			return fmt.Errorf("the refusal under %s was answered as %q rather than JSON", apiVersion, refusal.ContentType)
 		}
 	}
 
