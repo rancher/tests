@@ -43,6 +43,7 @@ const (
 	SCIMTokenSecretNamespace = "cattle-system"
 	SCIMSecretDataKey        = "token"
 	SCIMTokenExpirySetting   = "expire-scim-tokens-after"
+	RancherV216Floor         = "v2.16.0-0"
 
 	SCIMConfigEnabledKey          = "enabled"
 	SCIMConfigPausedKey           = "paused"
@@ -187,6 +188,15 @@ func ResolveSCIMTokenNamespace(client *rancher.Client, providerName string) (str
 		return namespace, nil
 	}
 
+	probeable, err := scimNamespaceProbeable(client)
+	if err != nil {
+		return "", err
+	}
+
+	if !probeable {
+		return SCIMTokenSecretNamespace, nil
+	}
+
 	namespace, err := probeSCIMTokenNamespace(client, providerName)
 	if err != nil {
 		return "", err
@@ -196,6 +206,19 @@ func ResolveSCIMTokenNamespace(client *rancher.Client, providerName string) (str
 	tokenNamespaceCache[key] = namespace
 
 	return namespace, nil
+}
+
+func scimNamespaceProbeable(client *rancher.Client) (bool, error) {
+	feature, err := client.Management.Feature.ByID(SCIMFeatureFlag)
+	if err != nil {
+		return false, err
+	}
+
+	if feature.Status == nil || !feature.Status.Prime {
+		return true, nil
+	}
+
+	return rancherserver.IsRancherPrimeBuild(client)
 }
 
 // probeSCIMTokenNamespace plants a token secret in the legacy namespace and reports which namespace the Rancher server honours

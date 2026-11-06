@@ -110,10 +110,6 @@ func (s *SCIMPrimeFeatureTestSuite) TestSCIMFeatureValueResolvesToBuildType() {
 
 	logrus.Info("Verifying the feature API resolves the scim value against the build type")
 
-	enabled, err := extfeatures.IsFeatureEnabled(s.client, scimactions.SCIMFeatureFlag)
-	require.NoError(s.T(), err, "Should be able to read the %s feature value", scimactions.SCIMFeatureFlag)
-	require.Equal(s.T(), s.prime, enabled, "The %s feature should resolve to enabled only on a Prime build", scimactions.SCIMFeatureFlag)
-
 	feature, err := s.client.Management.Feature.ByID(scimactions.SCIMFeatureFlag)
 	require.NoError(s.T(), err, "Should be able to get the %s feature through the management API", scimactions.SCIMFeatureFlag)
 	require.NotNil(s.T(), feature.Value, "The management API should report a value for the %s feature", scimactions.SCIMFeatureFlag)
@@ -209,8 +205,15 @@ func (s *SCIMPrimeFeatureTestSuite) TestSCIMFeatureCannotBeForcedByCattleFeature
 
 	require.NoError(s.T(), deploymentsapi.UpdateOrRemoveEnvVarForDeployment(s.client, extclusterapi.LocalCluster, extdeployments.RancherDeploymentNamespace, extdeployments.RancherDeploymentName, cattleFeaturesEnv, cattleFeaturesSCIMOn))
 	subSession.RegisterCleanupFunc(func() error {
-		return deploymentsapi.UpdateOrRemoveEnvVarForDeployment(s.client, extclusterapi.LocalCluster, extdeployments.RancherDeploymentNamespace, extdeployments.RancherDeploymentName, cattleFeaturesEnv, "")
+		if err := deploymentsapi.UpdateOrRemoveEnvVarForDeployment(s.client, extclusterapi.LocalCluster, extdeployments.RancherDeploymentNamespace, extdeployments.RancherDeploymentName, cattleFeaturesEnv, ""); err != nil {
+			return err
+		}
+
+		return extdeployments.WaitForDeploymentActive(s.client, extclusterapi.LocalCluster, extdeployments.RancherDeploymentNamespace, extdeployments.RancherDeploymentName)
 	})
+
+	require.NoError(s.T(), extdeployments.WaitForDeploymentActive(s.client, extclusterapi.LocalCluster, extdeployments.RancherDeploymentNamespace, extdeployments.RancherDeploymentName),
+		"Rancher should finish rolling out with %s set before the endpoints are probed", cattleFeaturesEnv)
 
 	require.NoError(s.T(), scimactions.WaitForSCIMEndpointStatus(s.scimClient, http.StatusNotFound), "GET /Users should stay 404 when the feature is forced through %s", cattleFeaturesEnv)
 

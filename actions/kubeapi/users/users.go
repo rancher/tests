@@ -19,6 +19,7 @@ import (
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/util/retry"
 )
 
 const (
@@ -406,4 +407,49 @@ func FindUserPrincipalName(user *v3.User, providerName string) (string, error) {
 	}
 
 	return "", fmt.Errorf("user %q holds no %s principal", user.Username, providerName)
+}
+
+// RefreshUserAttributeDuring asks for a provider refresh of the user, runs the given write after the delay, and waits for the refresh to finish
+func RefreshUserAttributeDuring(client *rancher.Client, userID string, delay time.Duration, during func() error) error {
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		attribute, getErr := client.WranglerContext.Mgmt.UserAttribute().Get(userID, metav1.GetOptions{})
+		if getErr != nil {
+			return getErr
+		}
+
+		attribute.NeedsRefresh = true
+		_, updateErr := client.WranglerContext.Mgmt.UserAttribute().Update(attribute)
+
+		return updateErr
+	})
+	if err != nil {
+		return fmt.Errorf("asking for a refresh of user %s: %w", userID, err)
+	}
+
+	<-time.After(delay)
+
+	if err := during(); err != nil {
+		return err
+	}
+
+	var lastRead, lastErr string
+
+	err = kwait.PollUntilContextTimeout(context.Background(), defaults.FiveHundredMillisecondTimeout, defaults.TwoMinuteTimeout, true,
+		func(context.Context) (bool, error) {
+			current, getErr := client.WranglerContext.Mgmt.UserAttribute().Get(userID, metav1.GetOptions{})
+			if getErr != nil {
+				lastErr = getErr.Error()
+
+				return false, nil
+			}
+
+			lastRead = fmt.Sprintf("needsRefresh=%t lastRefresh=%q", current.NeedsRefresh, current.LastRefresh)
+
+			return !current.NeedsRefresh, nil
+		})
+	if err != nil {
+		return fmt.Errorf("waiting for the refresh of user %s to finish, last read %s (last read error %q): %w", userID, lastRead, lastErr, err)
+	}
+
+	return nil
 }

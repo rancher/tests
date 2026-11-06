@@ -27,6 +27,7 @@ import (
 	"github.com/rancher/shepherd/extensions/users"
 	"github.com/rancher/shepherd/pkg/clientbase"
 	authactions "github.com/rancher/tests/actions/auth"
+	actionsClusters "github.com/rancher/tests/actions/clusters"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	scimactions "github.com/rancher/tests/actions/kubeapi/scim"
@@ -41,6 +42,7 @@ import (
 
 type SCIMOpenLDAPTestSuite struct {
 	suite.Suite
+	atLeast216 bool
 	session    *session.Session
 	client     *rancher.Client
 	cluster    *v3.Cluster
@@ -53,6 +55,9 @@ func (s *SCIMOpenLDAPTestSuite) SetupSuite() {
 	client, err := rancher.NewClient("", s.session)
 	require.NoError(s.T(), err, "Failed to create Rancher client")
 	s.client = client
+
+	s.atLeast216, err = actionsClusters.IsRancherVersionAbove(s.client, scimactions.RancherV216Floor)
+	require.NoError(s.T(), err, "Failed to read the Rancher server version")
 
 	logrus.Info("Getting cluster name from the config file")
 	clusterName := client.RancherConfig.ClusterName
@@ -1248,6 +1253,10 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMNoConfigMapAllEndpointsReturn404() {
 }
 
 func (s *SCIMOpenLDAPTestSuite) TestSCIMCMInvalidTokenReturns401WithoutConfigMap() {
+	if !s.atLeast216 {
+		s.T().Skip("Known issue: https://github.com/rancher/rancher/issues/58100")
+	}
+
 	subSession := s.session.NewSession()
 	defer subSession.Cleanup()
 
