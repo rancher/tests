@@ -17,6 +17,14 @@ Prime or the community case per test, while the functional suites skip on a comm
 Set `scimInput.buildType` to the build you expect, and the suites fail instead of skipping when the server
 reports the other one. Leave it unset to run against whatever the server is.
 
+## Rancher Versions
+
+The SCIM suites do not build for v2.14 and older release lines.
+
+The audit log suite, the multi provider suite, the Keycloak SAML userName suite and the tests in scim_login_username_test.go,
+scim_openldap_invalid_token_test.go and scim_security_token_test.go cover behaviour that is only in v2.16 and later, so their
+build tags leave them out of v2.15.
+
 ## What Setup Creates
 
 Each suite prepares what it needs and puts the server back as it found it:
