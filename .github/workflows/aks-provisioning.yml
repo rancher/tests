@@ -261,7 +261,7 @@ jobs:
             generateV3Token: ${{ matrix.version == '14' }}
             localHostedCluster: true
             provider: "aks"
-            privateKeyPath: "<HB_TFP_SSH_PRIVATE_KEY_PATH>"
+            privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
             privateFullChainPath: "${{ steps.setup-certs.outputs.private-full-chain-tfp-path }}"
             privateCertKeyPath: "${{ steps.setup-certs.outputs.private-cert-key-tfp-path }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"

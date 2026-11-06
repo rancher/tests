@@ -61,6 +61,7 @@ terraform:
     ecrUsername: "<HB_ECR_USERNAME>"
     ecrPassword: "<required>"
     ecrURI: "<HB_ECR_URI>"
+    useAuthGlobalRegistry: false
 
 terratest:
   pathToRepo: "<HB_PATH_TO_TFP_REPO>"
