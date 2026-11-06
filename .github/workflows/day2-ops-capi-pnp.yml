@@ -373,19 +373,12 @@ jobs:
           prefix: "${{ env.HOSTNAME_PREFIX }}"
           region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
-      - name: AWS Custodian Downstream Cleanup - Node driver
+      - name: AWS Custodian Downstream Cleanup
         if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "auto-${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
-
-      - name: AWS Custodian Downstream Cleanup - Custom
-        if: always() && env.CLEANUP_ENABLED == 'true'
-        uses: ./.github/actions/aws-cleanup
-        with:
-          prefix: "rancher-validation${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
+          region: "${{ fromJSON(env.HB_AWS_CAPA_REGION).value }}"
 
       - name: Revoke Runner IP
         if: always()
