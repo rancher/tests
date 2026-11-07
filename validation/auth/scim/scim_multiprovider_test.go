@@ -13,6 +13,7 @@ import (
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	authactions "github.com/rancher/tests/actions/auth"
+	actionsClusters "github.com/rancher/tests/actions/clusters"
 	scimactions "github.com/rancher/tests/actions/kubeapi/scim"
 	usersapi "github.com/rancher/tests/actions/kubeapi/users"
 
@@ -41,6 +42,12 @@ func (s *SCIMMultiProviderTestSuite) SetupSuite() {
 	s.client = client
 
 	require.NoError(s.T(), scimactions.VerifyExpectedBuildType(s.client), "The Rancher build type should match the one the config expects")
+
+	atLeast216, err := actionsClusters.IsRancherVersionAbove(s.client, scimactions.RancherV216Floor)
+	require.NoError(s.T(), err, "Failed to read the Rancher server version")
+	if !atLeast216 {
+		s.T().Skip("Known issue: https://github.com/rancher/rancher/issues/52402")
+	}
 
 	multiAuth, err := extfeatures.IsFeatureEnabled(s.client, authactions.MultiAuthProvidersFeatureFlag)
 	require.NoError(s.T(), err, "Failed to read the %s feature", authactions.MultiAuthProvidersFeatureFlag)
