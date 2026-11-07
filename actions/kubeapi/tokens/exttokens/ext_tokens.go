@@ -11,6 +11,7 @@ import (
 	"github.com/rancher/shepherd/extensions/defaults"
 	exttokenapi "github.com/rancher/shepherd/extensions/kubeapi/tokens"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
+	settingsapi "github.com/rancher/tests/actions/kubeapi/settings"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
@@ -20,9 +21,9 @@ const (
 	ExtTokenStatusCurrentValue                        = false
 	ExtTokenStatusExpiredValue                        = false
 	ExtTokenAPIPath                                   = "/v1/ext.cattle.io.tokens"
+	ExtTokenKindKubeconfig                            = "kubeconfig"
 	TrueConditionStatus        metav1.ConditionStatus = "True"
 	FalseConditionStatus       metav1.ConditionStatus = "False"
-
 )
 
 // NewExtTokenObject returns an unpersisted ext token with a generated name, the given kind, and the given TTL
@@ -72,18 +73,18 @@ func CreateExtSessionToken(client *rancher.Client) (*extapi.Token, error) {
 
 // CreateExtTokenDryRun sends a server-side dry-run create for the ext token and returns the response without persisting it
 func CreateExtTokenDryRun(client *rancher.Client, extToken *extapi.Token) (*extapi.Token, error) {
-    sharedCtrl, err := client.WranglerContext.ControllerFactory.ForObject(extToken)
-    if err != nil {
-        return nil, fmt.Errorf("failed to get shared controller for ext token: %w", err)
-    }
+	sharedCtrl, err := client.WranglerContext.ControllerFactory.ForObject(extToken)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get shared controller for ext token: %w", err)
+	}
 
-    dryRunExtToken := &extapi.Token{}
-    err = sharedCtrl.Client().Create(context.TODO(), extToken.Namespace, extToken, dryRunExtToken, metav1.CreateOptions{DryRun: []string{metav1.DryRunAll}})
-    if err != nil {
-        return nil, fmt.Errorf("failed to dry-run create ext token: %w", err)
-    }
+	dryRunExtToken := &extapi.Token{}
+	err = sharedCtrl.Client().Create(context.TODO(), extToken.Namespace, extToken, dryRunExtToken, metav1.CreateOptions{DryRun: []string{metav1.DryRunAll}})
+	if err != nil {
+		return nil, fmt.Errorf("failed to dry-run create ext token: %w", err)
+	}
 
-    return dryRunExtToken, nil
+	return dryRunExtToken, nil
 }
 
 // WaitForExtTokenStatusExpired polls until an ext token with the given name has an expired status or the timeout is reached
@@ -125,6 +126,26 @@ func WaitForExtTokenToDisable(client *rancher.Client, name string, expectedState
 		return false, nil
 	})
 	return disabledToken, err
+}
+
+// WaitForExtTokenUpdateTTL waits for an ext token's TTL to be updated to the expected value.
+func WaitForExtTokenUpdateTTL(client *rancher.Client, token *extapi.Token, expectedTTLMillis int64) (*extapi.Token, error) {
+	var updated *extapi.Token
+
+	err := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveHundredMillisecondTimeout, defaults.OneMinuteTimeout, true, func(ctx context.Context) (bool, error) {
+		var updateErr error
+		updated, updateErr = exttokenapi.UpdateExtToken(client, token)
+		if updateErr != nil {
+			return false, updateErr
+		}
+		return updated.Spec.TTL == expectedTTLMillis, nil
+	})
+
+	if err != nil && updated != nil {
+		return updated, fmt.Errorf("timed out waiting for ext token %s TTL to reach %d ms, last observed value was %d ms: %w", token.Name, expectedTTLMillis, updated.Spec.TTL, err)
+	}
+
+	return updated, err
 }
 
 // AuthenticateWithExtToken creates an R_SESS cookie using the value from the ext token given by name and authenticates against an endpoint
@@ -199,4 +220,24 @@ func DeleteLegacyTokenWithExtToken(client *rancher.Client, legacyTokenID string,
 	}
 
 	return nil
+}
+
+// MinutesToMilliseconds converts minutes to the millisecond unit used by general and v3 token TTLs.
+func MinutesToMilliseconds(minutes int64) int64 {
+	return minutes * settingsapi.MillisecondsPerMinute
+}
+
+// MinutesToSeconds converts minutes to the second unit used by kubeconfig token TTLs.
+func MinutesToSeconds(minutes int64) int64 {
+	return minutes * settingsapi.SecondsPerMinute
+}
+
+// CreateExtTokenOfKind creates an ext token of the given kind with the given TTL, in milliseconds.
+func CreateExtTokenOfKind(client *rancher.Client, kind string, ttlMillis int64) (*extapi.Token, error) {
+	createdToken, err := exttokenapi.CreateExtToken(client, NewExtTokenObject(kind, ttlMillis))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create ext token of kind %s: %w", kind, err)
+	}
+
+	return createdToken, nil
 }
