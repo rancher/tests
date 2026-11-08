@@ -77,9 +77,12 @@ const (
 	JSONContentType          = "application/json"
 	SCIMLocalClusterPrefix   = "/k8s/clusters/local"
 
-	UserAttributeExternalIDKey = "externalid"
-	UserAttributeEmailKey      = "email"
-	UserAttributeUserNameKey   = "username"
+	UserAttributeExternalIDKey  = "externalid"
+	UserAttributeEmailKey       = "email"
+	UserAttributeUserNameKey    = "username"
+	UserAttributePrincipalIDKey = "principalid"
+	UserExtraRequestTokenIDKey  = "requesttokenid"
+	UserExtraRequestHostKey     = "requesthost"
 
 	scimSecretKindLabel     = "cattle.io/kind"
 	scimSecretKindValue     = "scim-auth-token"
