@@ -51,21 +51,18 @@ runs:
         for release in ${SANITIZED_RELEASES//,/ }; do
           ALL_PASSED=true
           FAILED_WORKFLOWS=""
-          JOB_KEY="v${release:1:1}-${release:2}"
+          
+          MATRIX_VERSION=""
+          case "$release" in
+            v215) MATRIX_VERSION="15" ;;
+            v214) MATRIX_VERSION="14" ;;
+          esac
+          JOB_NAME="v2-${MATRIX_VERSION}"
           JOB_VERSION="v${release:1:1}.${release:2}-head"
           
           echo "Checking $release jobs..."
           for workflow in ${WORKFLOWS//,/ }; do
-            MATRIX_SELECTOR="$JOB_VERSION"
-            if [[ "$release" == "v215" ]]; then
-              MATRIX_SELECTOR="v2.15-head"
-            elif [[ "$release" == "v214" ]]; then
-              MATRIX_SELECTOR="v2.14-head"
-            elif [[ "$release" == "v213" ]]; then
-              MATRIX_SELECTOR="v2.13-head"
-            fi
-
-            if ! workflow_applies_to_head_release "$workflow" "$JOB_VERSION" "$MATRIX_SELECTOR"; then
+            if ! workflow_applies_to_head_release "$workflow" "$JOB_VERSION" "$JOB_VERSION"; then
               echo "  - $workflow does not run for $JOB_VERSION, skipping..."
               continue
             fi
@@ -84,7 +81,7 @@ runs:
             JOB_FOUND=""
             for RUN_ID in $RUN_IDS; do
               JOB_SUCCESS=$(gh api repos/${{ github.repository }}/actions/runs/${RUN_ID}/jobs \
-                --jq ".jobs[] | select((.name==\"${JOB_KEY}\" or .name==\"${JOB_VERSION}\" or .name==\"${MATRIX_SELECTOR}\" or (.name | endswith(\"${MATRIX_SELECTOR}\"))) and .conclusion==\"success\") | .name" 2>/dev/null)
+                --jq ".jobs[] | select(.name==\"${JOB_NAME}\" and .conclusion==\"success\") | .name" 2>/dev/null)
               if [[ -n "$JOB_SUCCESS" ]]; then
                 JOB_FOUND="true"
                 break
