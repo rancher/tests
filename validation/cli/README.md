@@ -12,7 +12,7 @@ Ensure you have an existing cluster that the user has access to. If you do not h
 ## Test Setup
 Your GO suite should be set to `-run ^Test<TestSuite>$`
 To run the new Rancher CLI tests in clai_test.go, set the GO suite to `-run ^TestCLAITestSuite$`
-The legacy CLI tests in cli_test.go run with `-run ^TestCLITestSuite$` and need `rancherCLI: true`.
+The legacy CLI tests in cli_test.go run with `-run ^TestCLITestSuite$` and need `rancherCLI: true`. The CLAI suite is skipped unless `rancherCLAI: true` is set.
 
 In your config file set the following:
 
@@ -23,7 +23,8 @@ rancher:
   clusterName: "existing-downstream-cluster"
   cleanup: true
   insecure: # false for self-signed cert
-  rancherCLI: # true for legacy CLI; false for CLAI
+  rancherCLI: # true for legacy CLI; false otherwise
+  rancherCLAI: # true for new Rancher CLI (CLAI) tests; false otherwise
   caCerts: |
     -----BEGIN CERTIFICATE-----
     ...
@@ -38,4 +39,4 @@ Cleanup is session-based. Each `CLIClient` has a child session of the session pa
 
 Publicly trusted endpoints can omit both CA settings. The suite does not dynamically retrieve certificates or disable TLS verification.
 
-For the Rancher CLAI tests, do not set `rancherCLI: true`. That option initializes Shepherd's client for the older CLI and uses its legacy login syntax.
+For the Rancher CLAI tests, set `rancherCLAI: true` and leave `rancherCLI` false. `rancherCLI: true` initializes Shepherd's client for the older CLI and uses its legacy login syntax.

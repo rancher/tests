@@ -71,6 +71,12 @@ func (c *CLAITestSuite) setupCLIClient(subSession *session.Session, name, token 
 func (c *CLAITestSuite) SetupSuite() {
 	c.session = session.NewSession()
 
+	settings := new(cliapi.CLAISettings)
+	shepherdconfig.LoadConfig(rancher.ConfigurationFileKey, settings)
+	if !settings.RancherCLAI {
+		c.T().Skip("set rancherCLAI: true in the cattle config to run the Rancher CLAI test suite")
+	}
+
 	rancherConfig := new(rancher.Config)
 	shepherdconfig.LoadConfig(rancher.ConfigurationFileKey, rancherConfig)
 	rancherConfig.RancherCLI = false
@@ -245,12 +251,19 @@ func (c *CLAITestSuite) TestAccessCommands() {
 			require.NoError(c.T(), err)
 			require.Contains(c.T(), string(allowed.Data), "allowed")
 
+			c.T().Logf("Granting standard user cluster-member on cluster %s so it can see the cluster", target.name)
+			require.NoError(c.T(), cliapi.GrantClusterRole(adminCLI, target.id, rbac.ClusterMember.String(), c.standardUser.ID))
+			kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.TwoMinuteTimeout, true, func(ctx context.Context) (bool, error) {
+				_, pollErr := standardUserCLI.Run(ctx, "get", "cluster", target.id)
+				return pollErr == nil, nil
+			})
+			require.NoError(c.T(), err, "Standard user CLI did not recognize cluster access in time")
+
 			c.T().Logf("Verifying standard user is denied from deleting nodes on cluster %s", target.name)
 			deniedResult, err := standardUserCLI.Run(context.Background(), "access", "can", "delete", "nodes", cliapi.ClusterFlag, target.id, "-o", ranchercli.JSONOutput)
 			require.Error(c.T(), err)
 			exitCode, ok := ranchercli.ExitCodeOf(err)
 			require.True(c.T(), ok)
-
 
 			require.Contains(c.T(), []int{ranchercli.ExitAccessDenied, ranchercli.ExitRBAC}, exitCode)
 			if exitCode == ranchercli.ExitAccessDenied {
@@ -312,7 +325,7 @@ func (c *CLAITestSuite) TestAdminProjectAndNamespaceCRUD() {
 			require.NoError(c.T(), cliapi.WaitForResourceListed(adminCLI, cliapi.NamespaceResource, target.id, namespaceName))
 			require.NoError(c.T(), namespaceapi.WaitForProjectIDUpdate(c.client, target.id, project.Name, namespaceName))
 
-			_, err = adminCLI.RunJSON(context.Background(), "project", "remove-namespace", namespaceName, "--project", projectName, cliapi.ClusterFlag, target.id, "--apply")
+			_, err = adminCLI.RunJSON(context.Background(), "project", "remove-namespace", namespaceName, cliapi.ClusterFlag, target.id, "--apply")
 			require.NoError(c.T(), err)
 			require.NoError(c.T(), namespaceapi.WaitForProjectIDRemoved(c.client, target.id, namespaceName))
 

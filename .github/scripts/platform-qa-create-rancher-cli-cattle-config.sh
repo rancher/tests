@@ -12,4 +12,5 @@ rancher:
   adminPassword: "${RANCHER_ADMIN_PASSWORD}"
   caFile: "${RANCHER_CA_FILE:-}"
   rancherCLI: false
+  rancherCLAI: true
 EOF
