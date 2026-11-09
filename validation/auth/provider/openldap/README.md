@@ -27,6 +27,7 @@ These tests validate:
 - User authentication with different access modes (unrestricted, restricted, required)
 - Group membership and nested group inheritance
 - Cluster and project role bindings with LDAP groups
+- Configurable user and group principal ID attributes
 - Access control for authorized and unauthorized users
 - Enabling, disabling and destroying the provider through the `rancher/rancher2` Terraform provider,
   with the resulting state validated over the Rancher API
@@ -110,6 +111,15 @@ Your GO suite should be set to -run ^TestOpenLDAPAuthProviderSuite$
 ```bash
 gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/auth/provider/openldap --junitfile results.xml -- -timeout=60m -tags=validation -v -run ^TestOpenLDAPAuthProviderSuite$
 ```
+
+**Run OpenLDAP Principal ID Tests**
+
+`TestOpenLDAPPrincipalIDTestSuite` enables OpenLDAP with `uid` and `cn` as the user and group principal ID
+attributes and puts the provider back the way it found it. It creates its own OUs, users and groups under the
+configured search bases and removes them afterwards, so `openLDAP.serviceAccount` must be allowed to write to the
+directory. It needs Rancher v2.16 or later and skips on older servers.
+
+Your GO suite should be set to -run ^TestOpenLDAPPrincipalIDTestSuite$
 
 ## Terraform Tests
 

@@ -19,11 +19,13 @@ import (
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/util/retry"
 )
 
 const (
-	DummyUserName = "dummyuser1"
-	DummyPassword = "DummyPassword1!"
+	ProviderRefreshErrorAnnotation = "cattle.io/provider-refresh-error"
+	DummyUserName                  = "dummyuser1"
+	DummyPassword                  = "DummyPassword1!"
 )
 
 // CreateUser creates a user using wrangler context
@@ -406,4 +408,64 @@ func FindUserPrincipalName(user *v3.User, providerName string) (string, error) {
 	}
 
 	return "", fmt.Errorf("user %q holds no %s principal", user.Username, providerName)
+}
+
+// TriggerUserAttributeRefresh marks the user's UserAttribute for a provider refresh
+func TriggerUserAttributeRefresh(client *rancher.Client, userID string) error {
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		attribute, err := client.WranglerContext.Mgmt.UserAttribute().Get(userID, metav1.GetOptions{})
+		if err != nil {
+			return err
+		}
+
+		attribute.NeedsRefresh = true
+		_, err = client.WranglerContext.Mgmt.UserAttribute().Update(attribute)
+
+		return err
+	})
+}
+
+// WaitForUserAttributeAnnotation polls the user's UserAttribute until it carries the given annotation and returns the UserAttribute
+func WaitForUserAttributeAnnotation(client *rancher.Client, userID, key string) (*v3.UserAttribute, error) {
+	var attribute *v3.UserAttribute
+
+	err := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.FiveMinuteTimeout, true,
+		func(ctx context.Context) (bool, error) {
+			var getErr error
+			attribute, getErr = client.WranglerContext.Mgmt.UserAttribute().Get(userID, metav1.GetOptions{})
+			if getErr != nil {
+				return false, getErr
+			}
+
+			_, found := attribute.Annotations[key]
+
+			return found, nil
+		})
+	if kwait.Interrupted(err) {
+		return nil, fmt.Errorf("the UserAttribute of %s never carried annotation %s: %w", userID, key, err)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("reading the UserAttribute of %s: %w", userID, err)
+	}
+
+	return attribute, nil
+}
+
+// VerifyUserRetained polls the user for the given period and errors if it is deleted before the period ends
+func VerifyUserRetained(client *rancher.Client, userID string, period time.Duration) error {
+	err := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, period, true,
+		func(ctx context.Context) (bool, error) {
+			_, err := client.WranglerContext.Mgmt.User().Get(userID, metav1.GetOptions{})
+			if k8serrors.IsNotFound(err) {
+				return false, fmt.Errorf("user %s was deleted", userID)
+			}
+
+			return false, err
+		})
+	if kwait.Interrupted(err) {
+		return nil
+	}
+
+	return err
 }

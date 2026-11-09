@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/rancher/shepherd/clients/rancher"
@@ -21,37 +22,38 @@ import (
 )
 
 const (
-	AuthProvCleanupAnnotationKey         = "management.cattle.io/auth-provider-cleanup"
-	AuthProvCleanupAnnotationValLocked   = "rancher-locked"
-	AuthProvCleanupAnnotationValUnlocked = "unlocked"
-	OpenLdapAuthInput                    = "openLdapAuthInput"
-	ActiveDirectoryAuthInput             = "activeDirectoryAuthInput"
-	AccessModeUnrestricted               = "unrestricted"
-	AccessModeRestricted                 = "restricted"
-	AccessModeRequired                   = "required"
-	OpenLdap                             = "openldap"
-	ActiveDirectory                      = "activedirectory"
-	KeycloakSAML                         = "keycloak"
-	GenericSAML                          = "genericsaml"
-	KeycloakOIDC                         = "keycloakoidc"
-	OpenLdapPasswordSecretID             = "openldapconfig-serviceaccountpassword"
-	ActiveDirectoryPasswordSecretID      = "activedirectoryconfig-serviceaccountpassword"
-	KeycloakSAMLKeySecretID              = "keycloakconfig-spkey"
-	GenericSAMLKeySecretID               = "genericsamlconfig-spkey"
-	KeycloakOIDCClientSecretID           = "keycloakoidcconfig-clientsecret"
-	MultiAuthProvidersFeatureFlag        = "multiple-auth-providers"
-	PrincipalTypeUser                    = "user"
-	PrincipalTypeGroup                   = "group"
-	AccessModeMissingRequiredError       = "accessMode=MissingRequired"
-	NotNullableError                     = "code=NotNullable"
-	AccessModeFieldError                 = "fieldName=accessMode"
-	InvalidOptionError                   = "code=InvalidOption"
-	NameIDFormatFieldError               = "fieldName=nameIDFormat"
-	SignatureMethodFieldError            = "fieldName=signatureMethod"
-	PermissionDeniedError                = "PermissionDenied"
-	LocalPrincipalPrefix                 = "local://"
-	TerraformWorkspacePermissions        = 0o700
-	AuthProviderPort                     = 389
+	AuthProvCleanupAnnotationKey           = "management.cattle.io/auth-provider-cleanup"
+	AuthProvCleanupAnnotationValLocked     = "rancher-locked"
+	AuthProvCleanupAnnotationValUnlocked   = "unlocked"
+	AuthProvCleanupAnnotationValUserLocked = "user-locked"
+	OpenLdapAuthInput                      = "openLdapAuthInput"
+	ActiveDirectoryAuthInput               = "activeDirectoryAuthInput"
+	AccessModeUnrestricted                 = "unrestricted"
+	AccessModeRestricted                   = "restricted"
+	AccessModeRequired                     = "required"
+	OpenLdap                               = "openldap"
+	ActiveDirectory                        = "activedirectory"
+	KeycloakSAML                           = "keycloak"
+	GenericSAML                            = "genericsaml"
+	KeycloakOIDC                           = "keycloakoidc"
+	OpenLdapPasswordSecretID               = "openldapconfig-serviceaccountpassword"
+	ActiveDirectoryPasswordSecretID        = "activedirectoryconfig-serviceaccountpassword"
+	KeycloakSAMLKeySecretID                = "keycloakconfig-spkey"
+	GenericSAMLKeySecretID                 = "genericsamlconfig-spkey"
+	KeycloakOIDCClientSecretID             = "keycloakoidcconfig-clientsecret"
+	MultiAuthProvidersFeatureFlag          = "multiple-auth-providers"
+	PrincipalTypeUser                      = "user"
+	PrincipalTypeGroup                     = "group"
+	AccessModeMissingRequiredError         = "accessMode=MissingRequired"
+	NotNullableError                       = "code=NotNullable"
+	AccessModeFieldError                   = "fieldName=accessMode"
+	InvalidOptionError                     = "code=InvalidOption"
+	NameIDFormatFieldError                 = "fieldName=nameIDFormat"
+	SignatureMethodFieldError              = "fieldName=signatureMethod"
+	PermissionDeniedError                  = "PermissionDenied"
+	LocalPrincipalPrefix                   = "local://"
+	TerraformWorkspacePermissions          = 0o700
+	AuthProviderPort                       = 389
 )
 
 var samlProviders = map[string]saml.Provider{
@@ -327,6 +329,22 @@ func EnsureAuthProviderDisabled(client *rancher.Client, providerName string) err
 	return nil
 }
 
+// DisableAuthProviderAndWait disables the auth provider when it is enabled and waits for Rancher to lock its auth config
+func DisableAuthProviderAndWait(client *rancher.Client, providerName string) error {
+	enabled, err := authconfigsapi.AuthConfigEnabled(client, providerName)
+	if err != nil || !enabled {
+		return err
+	}
+
+	if err := EnsureAuthProviderDisabled(client, providerName); err != nil {
+		return err
+	}
+
+	_, err = WaitForAuthProviderAnnotationUpdate(client, providerName, AuthProvCleanupAnnotationValLocked)
+
+	return err
+}
+
 // WaitForNamespaceReady polls until the namespace is available within the specified timeout
 func WaitForNamespaceReady(client *rancher.Client, namespaceName string) error {
 	return kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.OneMinuteTimeout, false, func(context.Context) (bool, error) {
@@ -434,4 +452,26 @@ func SetupExternalRequiredAccessModePrincipals(authAdmin *rancher.Client, cluste
 	}
 
 	return principalIDs, nil
+}
+
+// FormatPrincipalID joins a provider, principal type and value into a principal ID
+func FormatPrincipalID(authConfigID, principalType, value string) string {
+	return fmt.Sprintf("%s_%s://%s", authConfigID, principalType, value)
+}
+
+// AuthProviderServer returns the hostname of an auth provider server, falling back to its IP when no hostname is configured
+func AuthProviderServer(hostname, ip string) string {
+	if hostname != "" {
+		return hostname
+	}
+
+	return ip
+}
+
+func submitTestAndApply(client *rancher.Client, schema, provider string, input any) error {
+	url := fmt.Sprintf("%s/%s/%s?action=testAndApply", client.Management.Opts.URL, schema, provider)
+
+	var response map[string]any
+
+	return client.Management.Ops.DoModify(http.MethodPost, url, input, &response)
 }
