@@ -59,6 +59,7 @@ replace (
 )
 
 require (
+	github.com/go-ldap/ldap/v3 v3.4.15
 	github.com/gruntwork-io/terratest v1.0.1
 	github.com/harvester/harvester v1.5.0
 	github.com/mattn/go-sqlite3 v1.14.28
@@ -82,6 +83,7 @@ require (
 require (
 	dario.cat/mergo v1.0.2 // indirect; indirectirect
 	github.com/Azure/go-ansiterm v0.0.0-20261006220739-8c912ac31dd4 // indirect
+	github.com/Azure/go-ntlmssp v0.1.1 // indirect
 	github.com/MakeNowJust/heredoc v1.0.0 // indirect
 	github.com/Masterminds/semver/v3 v3.5.0 // indirect
 	github.com/agext/levenshtein v1.2.3 // indirect
@@ -100,6 +102,7 @@ require (
 	github.com/exponent-io/jsonpath v0.0.0-20210407135951-1de76d718b3f // indirect
 	github.com/fatih/camelcase v1.0.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.3 // indirect
+	github.com/go-asn1-ber/asn1-ber v1.5.8 // indirect
 	github.com/go-errors/errors v1.5.1 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-openapi/jsonpointer v1.0.0 // indirect
