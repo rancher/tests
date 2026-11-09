@@ -93,4 +93,4 @@ jobs:
             --junitfile "$GITHUB_WORKSPACE/results-cli.xml" \
             --jsonfile "$GITHUB_WORKSPACE/results-cli.json" \
             --packages="github.com/rancher/tests/$TEST_DIR" \
-            -- -v -tags=validation -timeout 60m
+            -- -v -tags=validation -run '^TestCLAITestSuite$' -timeout 60m
