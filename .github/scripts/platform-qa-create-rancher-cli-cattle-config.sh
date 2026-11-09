@@ -15,4 +15,5 @@ rancher:
   caCerts: |
 ${CA_CERTS}
   rancherCLI: false
+  rancherCLAI: true
 EOF

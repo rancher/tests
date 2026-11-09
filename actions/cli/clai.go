@@ -16,21 +16,24 @@ import (
 const (
 	ProjectResource   = "project"
 	NamespaceResource = "namespace"
-
-	ProjectKind   = "Project"
-	NamespaceKind = "Namespace"
-
-	CreateCommand = "create"
-	DeleteCommand = "delete"
-	GetCommand    = "get"
-	GrantCommand  = "grant"
-	ClusterFlag   = "--cluster"
-	RoleFlag      = "--role"
-	ProjectFlag   = "--project"
-	ApplyFlag     = "--apply"
-	YesFlag       = "--yes"
-	OutputFlag    = "-o"
+	ProjectKind       = "Project"
+	NamespaceKind     = "Namespace"
+	CreateCommand     = "create"
+	DeleteCommand     = "delete"
+	GetCommand        = "get"
+	GrantCommand      = "grant"
+	ClusterFlag   	  = "--cluster"
+	RoleFlag      	  = "--role"
+	ProjectFlag       = "--project"
+	ApplyFlag         = "--apply"
+	YesFlag           = "--yes"
+	OutputFlag        = "-o"
 )
+
+// CLAISettings reads the CLAI opt-in flag; rancherCLI stays reserved for the legacy CLI.
+type CLAISettings struct {
+	RancherCLAI bool `yaml:"rancherCLAI" json:"rancherCLAI"`
+}
 
 // listResource maps a resource to the plural name its CLI list command uses.
 var listResource = map[string]string{
@@ -68,6 +71,17 @@ func CreateNamespace(cli *ranchercli.CLIClient, clusterID, projectName, namespac
 	}
 
 	return checkCreatedKind(result, NamespaceKind, namespaceName)
+}
+
+// GrantClusterRole grants a cluster role to a subject through the CLI
+func GrantClusterRole(cli *ranchercli.CLIClient, clusterID, roleID, subject string) error {
+	args := []string{RoleFlag, roleID, ClusterFlag, clusterID, ApplyFlag, YesFlag, subject}
+	logrus.Infof("Running: rancher %s %s", GrantCommand, strings.Join(args, " "))
+	if _, err := cli.Grant(context.Background(), args...); err != nil {
+		return fmt.Errorf("failed to grant role %q on cluster %q to %q with the Rancher CLI: %w", roleID, clusterID, subject, err)
+	}
+
+	return nil
 }
 
 // GrantProjectRole grants a project role to a subject through the CLI
