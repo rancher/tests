@@ -298,6 +298,7 @@ jobs:
               rke2Version: "${{ fromJSON(env[format('HB_RKE2_VERSION_2_{0}', matrix.version)]).value }}"
               upgradedRancherAgentImage: "<HB_RANCHER_AGENT_IMAGE>"
               upgradedRancherChartVersion: "${{ env.UPGRADED_RANCHER_CHART_VERSION }}"
+              upgradedRancherImage: "${{ matrix.version == '16' && '<HB_PRIME_HEAD_RANCHER_SERVER_IMAGE>' || '<HB_PRIME_HEAD_RANCHER_IMAGE>' }}"
               upgradedRancherTagVersion: "${{ env.UPGRADED_RANCHER_VERSION }}"
 
             standaloneRegistry:
