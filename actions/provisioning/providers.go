@@ -33,6 +33,10 @@ const (
 	GoogleProvider       = "google"
 	VsphereProvider      = "vsphere"
 	VsphereCloudProvider = "rancher-vsphere"
+
+	AKSProvider = "aks"
+	EKSProvider = "eks"
+	GKEProvider = "gke"
 )
 
 type CloudCredFunc func(rancherClient *rancher.Client, credentials cloudcredentials.CloudCredential) (*v1.SteveAPIObject, error)
@@ -84,6 +88,18 @@ func getProviderName(provider string) (string, error) {
 	provider = strings.ToLower(strings.TrimSpace(provider))
 	if provider == "" || defaults.IsSinglePlaceholderString(provider) {
 		return AWSProvider, nil
+	}
+
+	if provider == AKSProvider {
+		return AzureProvider, nil
+	}
+
+	if provider == EKSProvider {
+		return AWSProvider, nil
+	}
+
+	if provider == GKEProvider {
+		return GoogleProvider, nil
 	}
 
 	for _, supportedProvider := range []string{AWSProvider, VsphereProvider, AzureProvider, HarvesterProvider, LinodeProvider, GoogleProvider, DOProvider} {
