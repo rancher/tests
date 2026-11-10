@@ -26,7 +26,7 @@ on:
         default: "OS"
         type: string
       qase_test_run_id:
-        description: "Optional Qase test run ID override"
+        description: 'Optional Qase test run ID override. Use JSON format: {"16":"1234","15":"5678"}'
         required: false
         type: string
       environment_cleanup:
@@ -114,7 +114,7 @@ jobs:
             versions='["16", "15", "14"]'
           else
             case "$RANCHER_VERSION_INPUT" in
-              head) versions='["16"]' ;;
+              v2.16-head) versions='["16"]' ;;
               v2.15-head) versions='["15"]' ;;
               v2.14-head) versions='["14"]' ;;
               *) versions='[]' ;;
