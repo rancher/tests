@@ -38,7 +38,8 @@ const (
 func CreateRancherBaselinePSACT(client *rancher.Client, psact string) error {
 	_, err := client.Steve.SteveType(clusters.PodSecurityAdmissionSteveResourceType).ByID(psact)
 	if err == nil {
-		return err
+		logrus.Debugf("Rancher baseline PSACT %q already exists, skipping creation", psact)
+		return nil
 	}
 
 	template := &v3.PodSecurityAdmissionConfigurationTemplate{
@@ -85,8 +86,11 @@ func CreateRancherBaselinePSACT(client *rancher.Client, psact string) error {
 
 	_, err = client.Steve.SteveType(clusters.PodSecurityAdmissionSteveResourceType).Create(template)
 	if err != nil {
+		logrus.Warnf("Failed to create rancher baseline PSACT %q: %v", psact, err)
 		return err
 	}
+
+	logrus.Debugf("Successfully created rancher baseline PSACT %q", psact)
 
 	return nil
 }

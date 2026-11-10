@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -27,6 +28,8 @@ import (
 	nodestat "github.com/rancher/shepherd/extensions/nodes"
 	"github.com/rancher/shepherd/extensions/sshkeys"
 	"github.com/rancher/shepherd/extensions/workloads/pods"
+	"github.com/rancher/shepherd/pkg/config/operations"
+	"github.com/rancher/shepherd/pkg/nodes"
 	"github.com/rancher/shepherd/pkg/wait"
 	"github.com/rancher/tests/actions/clusters"
 	"github.com/rancher/tests/actions/provisioninginput"
@@ -875,9 +878,10 @@ func VerifyHostnameLength(t *testing.T, client *rancher.Client, clusterObject *s
 			limit = clusterSpec.RKEConfig.MachinePoolDefaults.HostnameLengthLimit
 		}
 
-		require.True(t, len(capiMachine.Status.NodeRef.Name) <= limit)
+		require.LessOrEqual(t, len(capiMachine.Status.NodeRef.Name), limit)
+
 		if len(infraResource.Name) < limit {
-			require.True(t, capiMachine.Status.NodeRef.Name == infraResource.Name)
+			require.Equal(t, infraResource.Name, capiMachine.Status.NodeRef.Name)
 		}
 
 		logrus.Debugf("Hostname: %s, HostnameLimit: %v", capiMachine.Status.NodeRef.Name, limit)
@@ -892,10 +896,34 @@ func VerifyUpgrade(t *testing.T, updatedCluster *bundledclusters.BundledCluster,
 	assert.Equalf(t, upgradedVersion, clusterSpec.KubernetesVersion, "[%v]: %v", updatedCluster.Meta.Name, logMessageKubernetesVersion)
 }
 
-// VerifyDataDirectories validates that data is being distributed properly across data directories.
-func VerifyDataDirectories(t *testing.T, client *rancher.Client, cluster *steveV1.SteveAPIObject) {
+// VerifyDataDirectories validates data directories. Optional config loads capipnp.awsTemplate.sshKeyName from sshPath.sshPath and connects as ubuntu.
+func VerifyDataDirectories(t *testing.T, client *rancher.Client, cluster *steveV1.SteveAPIObject, cattleConfig ...map[string]any) {
+	t.Helper()
+	require.LessOrEqual(t, len(cattleConfig), 1)
+
+	var sshKey []byte
+	var err error
+
+	if len(cattleConfig) == 1 {
+		sshPath := new(nodes.SSHPath)
+		operations.LoadObjectFromMap(nodes.SSHPathConfigurationKey, cattleConfig[0], sshPath)
+		require.NotEmpty(t, sshPath.SSHPath)
+
+		keyNameValue, err := operations.GetValue([]string{"capipnp", "awsTemplate", "sshKeyName"}, cattleConfig[0])
+		require.NoError(t, err)
+
+		keyName := keyNameValue.(string)
+		require.NotEmpty(t, keyName)
+		if !strings.HasSuffix(keyName, ".pem") {
+			keyName += ".pem"
+		}
+
+		sshKey, err = os.ReadFile(filepath.Join(sshPath.SSHPath, keyName))
+		require.NoError(t, err)
+	}
+
 	clusterSpec := &provv1.ClusterSpec{}
-	err := steveV1.ConvertToK8sType(cluster.Spec, clusterSpec)
+	err = steveV1.ConvertToK8sType(cluster.Spec, clusterSpec)
 	require.NoError(t, err)
 	require.NotNil(t, clusterSpec.RKEConfig.DataDirectories)
 
@@ -913,8 +941,28 @@ func VerifyDataDirectories(t *testing.T, client *rancher.Client, cluster *steveV
 	require.NoError(t, err)
 
 	for _, machine := range nodesSteveObjList.Data {
-		clusterNode, err := sshkeys.GetSSHNodeFromMachine(client, &machine)
-		require.NoError(t, err)
+		var clusterNode *nodes.Node
+		if len(cattleConfig) == 0 {
+			clusterNode, err = sshkeys.GetSSHNodeFromMachine(client, &machine)
+			require.NoError(t, err)
+		} else {
+			nodeStatus := new(corev1.NodeStatus)
+			err = steveV1.ConvertToK8sType(machine.Status, nodeStatus)
+			require.NoError(t, err)
+			clusterNode = &nodes.Node{NodeID: machine.ID, SSHUser: "ubuntu", SSHKey: sshKey}
+			for _, addressType := range []corev1.NodeAddressType{corev1.NodeExternalIP, corev1.NodeInternalIP} {
+				for _, address := range nodeStatus.Addresses {
+					if address.Type == addressType && address.Address != "" {
+						clusterNode.PublicIPAddress = address.Address
+						break
+					}
+				}
+				if clusterNode.PublicIPAddress != "" {
+					break
+				}
+			}
+			require.NotEmpty(t, clusterNode.PublicIPAddress, "node %q has no IP for SSH", machine.Name)
+		}
 
 		_, err = clusterNode.ExecuteCommand(fmt.Sprintf("sudo ls %s", clusterSpec.RKEConfig.DataDirectories.K8sDistro))
 		assert.NoError(t, err)

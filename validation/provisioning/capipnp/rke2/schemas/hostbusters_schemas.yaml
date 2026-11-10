@@ -130,3 +130,172 @@
     customfield:
       "14": Validation
       "18": Hostbusters
+
+  - description: Provisions a cluster with psact set to rancher privilaged
+    title: CAPI_RKE2_Rancher_Privileged|3_etcd|2_cp|3_worker
+    priority: 5
+    type: 8
+    automation: 2
+    attachments: []
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+      steps: []
+    - action: Provision a psact RKE2 cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+      steps: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+      steps: []
+    tags: []
+    params: {}
+    parameters: []
+    customfield:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a cluster with psact set to rancher restricted
+    title: CAPI_RKE2_Rancher_Restricted|3_etcd|2_cp|3_worker
+    priority: 5
+    type: 8
+    automation: 2
+    attachments: []
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+      steps: []
+    - action: Provision a psact RKE2 cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+      steps: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+      steps: []
+    tags: []
+    params: {}
+    parameters: []
+    customfield:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a cluster with psact set to rancher baseline
+    title: CAPI_RKE2_Rancher_Baseline|3_etcd|2_cp|3_worker
+    priority: 5
+    type: 8
+    automation: 2
+    attachments: []
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+      steps: []
+    - action: Provision a psact RKE2 cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+      steps: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+      steps: []
+    tags: []
+    params: {}
+    parameters: []
+    customfield:
+      "14": Validation
+      "18": Hostbusters
+
+  - description: Provisions a 3 node split roles cluster with custom data directories
+    title: CAPI_RKE2_Split_Data_Directories
+    priority: 5
+    type: 8
+    automation: 2
+    attachments: []
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+      steps: []
+    - action: Provision a RKE2 cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+      steps: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+      steps: []
+    - action: Verify data directories on each node
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+      steps: []
+    tags: []
+    params: {}
+    parameters: []
+    customfield:
+      "14": Validation
+      "18": Hostbusters
+  - description: Provisions a 3 node split roles cluster with custom data directories
+    title: CAPI_RKE2_Grouped_Data_Directories
+    priority: 5
+    type: 8
+    automation: 2
+    attachments: []
+    steps:
+    - action: Create rancher provider credentials
+      expectedresult: ""
+      data: ""
+      position: 1
+      attachments: []
+      steps: []
+    - action: Provision a RKE2 cluster
+      expectedresult: ""
+      data: ""
+      position: 2
+      attachments: []
+      steps: []
+    - action: Verify cluster state
+      expectedresult: ""
+      data: ""
+      position: 3
+      attachments: []
+      steps: []
+    - action: Verify data directories on each node
+      expectedresult: ""
+      data: ""
+      position: 4
+      attachments: []
+      steps: []
+    tags: []
+    params: {}
+    parameters: []
+    customfield:
+      "14": Validation
+      "18": Hostbusters
