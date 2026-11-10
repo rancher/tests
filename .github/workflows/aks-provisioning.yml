@@ -21,7 +21,7 @@ on:
         default: false
         type: boolean
       qase_test_run_id:
-        description: "Optional Qase test run ID override"
+        description: 'Optional Qase test run ID override. Use JSON format: {"16":"1234","15":"5678"}'
         required: false
         type: string
       environment_cleanup:
@@ -67,7 +67,7 @@ jobs:
             versions='["16", "15", "14"]'
           else
             case "$RANCHER_VERSION_INPUT" in
-              head) versions='["16"]' ;;
+              v2.16-head) versions='["16"]' ;;
               v2.15-head) versions='["15"]' ;;
               v2.14-head) versions='["14"]' ;;
               *) versions='[]' ;;
@@ -236,7 +236,7 @@ jobs:
         id: get-qase-id
         uses: ./.github/actions/get-qase-id
         with:
-          qase_recurring_id: ${{ vars[format('HB_QASE_RECURRING_TEST_RUN_ID_2_{0}', matrix.version)] }}
+          qase_recurring_id: ${{ (github.event.inputs.qase_test_run_id && fromJSON(github.event.inputs.qase_test_run_id)[matrix.version]) || fromJSON(env[format('HB_QASE_RECURRING_TEST_RUN_ID_2_{0}', matrix.version)]).value }}
 
       - name: Create config.yaml
         run: |
@@ -375,9 +375,17 @@ jobs:
       - name: Creating Rancher server
         run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/hosted/main.go
 
+      - name: Extract Qase Test Run ID
+        id: extract-qase-id
+        uses: ./.github/actions/extract-qase-id
+        with:
+          qase_test_run_id: ${{ github.event.inputs.qase_test_run_id || inputs.qase_test_run_id }}
+          version: ${{ matrix.version }}
+          default_id: ${{ steps.get-qase-id.outputs.id }}
+
       - name: Run Provisioning tests
         env:
-          QASE_TEST_RUN_ID: ${{ inputs.qase_test_run_id || steps.get-qase-id.outputs.id }}
+          QASE_TEST_RUN_ID: ${{ steps.extract-qase-id.outputs.id }}
           QASE_AUTOMATION_TOKEN: ${{ fromJSON(env.HB_QASE_AUTOMATION_TOKEN).value }}
           QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_SCHEMA_PREFIX: hostbusters

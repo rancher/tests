@@ -75,7 +75,7 @@ jobs:
             versions='["16", "15", "14"]'
           else
             case "$RANCHER_VERSION_INPUT" in
-              head) versions='["16"]' ;;
+              v2.16-head) versions='["16"]' ;;
               v2.15-head) versions='["15"]' ;;
               v2.14-head) versions='["14"]' ;;
               *) versions='[]' ;;
