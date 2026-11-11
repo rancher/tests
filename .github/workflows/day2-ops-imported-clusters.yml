@@ -268,6 +268,7 @@ jobs:
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
               rancherHostname: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
+              rancherImage: "${{ matrix.version >= '16' && '<HB_PRIME_HEAD_RANCHER_SERVER_IMAGE>' || '<HB_PRIME_HEAD_RANCHER_IMAGE>' }}"
               rke2Version: "${{ fromJSON(env[format('HB_RKE2_VERSION_2_{0}', matrix.version)]).value }}"
               k3sVersion: "${{ fromJSON(env[format('HB_K3S_VERSION_2_{0}', matrix.version)]).value }}${{ fromJSON(env.HB_K3S_VERSION_SUFFIX).value }}"
 

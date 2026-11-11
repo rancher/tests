@@ -307,7 +307,7 @@ jobs:
               rancherAgentImage: "${{ secrets.RANCHER_AGENT_IMAGE }}"
               rancherChartRepository: "${{ secrets.RANCHER_HELM_CHART_URL }}"
               rancherHostname: "${{ env.HOSTNAME_PREFIX }}.${{ vars.AZURE_LOCATION }}.cloudapp.azure.com"
-              rancherImage: "${{ secrets.RANCHER_IMAGE }}"
+              rancherImage: "${{ matrix.version >= '16' && secrets.RANCHER_SERVER_IMAGE || secrets.RANCHER_IMAGE }}"
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
