@@ -318,7 +318,7 @@ jobs:
               upgradedRancherAgentImage: "${{ secrets.UPGRADED_RANCHER_AGENT_IMAGE }}"
               upgradedRancherChartRepository: "${{ secrets.UPGRADED_RANCHER_HELM_CHART_URL }}"
               upgradedRancherChartVersion: "${{ env.UPGRADED_RANCHER_CHART_VERSION }}"
-              upgradedRancherImage: "${{ secrets.UPGRADED_RANCHER_IMAGE }}"
+              upgradedRancherImage: "${{ matrix.version >= '16' && secrets.UPGRADED_RANCHER_SERVER_IMAGE || secrets.UPGRADED_RANCHER_IMAGE }}"
               upgradedRancherRepo: "${{ secrets.UPGRADED_RANCHER_REPO }}"
               upgradedRancherTagVersion: "${{ env.UPGRADED_RANCHER_VERSION }}"
           terratest:
