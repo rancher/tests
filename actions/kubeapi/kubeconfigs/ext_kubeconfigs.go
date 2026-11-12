@@ -3,20 +3,24 @@ package kubeconfigs
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	extapi "github.com/rancher/rancher/pkg/apis/ext.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/defaults"
 	extkubeconfigapi "github.com/rancher/shepherd/extensions/kubeapi/kubeconfigs"
+	exttokenapi "github.com/rancher/shepherd/extensions/kubeapi/tokens"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
 	clientcmd "k8s.io/client-go/tools/clientcmd"
+	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
 
 const (
+	KubeconfigKind                                      = "Kubeconfig"
 	TokenKind                                           = "Token"
 	SecretKind                                          = "Secret"
 	ExtTokenPrefix                                      = "ext/"
@@ -95,6 +99,53 @@ func GetBackingExtTokensForKubeconfig(client *rancher.Client, kubeconfigName str
 	return client.WranglerContext.Ext.Token().List(metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("%s=%s", KubeconfigIDLabel, kubeconfigName),
 	})
+}
+
+// GetFirstBackingExtToken waits for and returns the first backing ext token created for a kubeconfig.
+func GetFirstBackingExtToken(client *rancher.Client, kubeconfigName string) (*extapi.Token, error) {
+	if err := WaitForBackingExtTokenCreation(client, kubeconfigName); err != nil {
+		return nil, err
+	}
+
+	tokens, err := GetBackingExtTokensForKubeconfig(client, kubeconfigName)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(tokens.Items) == 0 {
+		return nil, fmt.Errorf("expected at least one backing token for kubeconfig %s", kubeconfigName)
+	}
+
+	return &tokens.Items[0], nil
+}
+
+// FetchKubeconfigsAndBackingTokensCount returns the number of ext.Kubeconfigs and kubeconfig-kind ext.Tokens that currently exist.
+func FetchKubeconfigsAndBackingTokensCount(client *rancher.Client) (int, int, error) {
+	kubeconfigs, err := extkubeconfigapi.ListKubeconfigs(client, metav1.ListOptions{})
+	if err != nil {
+		return 0, 0, err
+	}
+
+	tokens, err := exttokenapi.ListExtTokens(client, metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("%s=%s", KindLabel, KindLabelKubeconfigValue),
+	})
+
+	if err != nil {
+		return 0, 0, err
+	}
+
+	return len(kubeconfigs.Items), len(tokens.Items), nil
+}
+
+// ExtractBearerToken returns the first user auth token with the ext-token-specific prefix stripped so the value can be used as a bearer credential.
+func ExtractBearerToken(rawConfig clientcmdapi.Config) (string, error) {
+	for _, authInfo := range rawConfig.AuthInfos {
+		if authInfo.Token != "" {
+			return strings.TrimPrefix(authInfo.Token, ExtTokenPrefix), nil
+		}
+	}
+
+	return "", fmt.Errorf("no user token found in kubeconfig")
 }
 
 // GetMapClusterNameToID maps cluster names to their IDs from expectedClusterIDs.

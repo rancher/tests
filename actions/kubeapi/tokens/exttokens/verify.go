@@ -2,10 +2,15 @@ package exttokens
 
 import (
 	"fmt"
+	"time"
 
 	extapi "github.com/rancher/rancher/pkg/apis/ext.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
+	"github.com/rancher/shepherd/extensions/defaults"
 	exttokenapi "github.com/rancher/shepherd/extensions/kubeapi/tokens"
+	extuserapi "github.com/rancher/shepherd/extensions/kubeapi/users"
+	"github.com/rancher/shepherd/pkg/session"
+	settingsapi "github.com/rancher/tests/actions/kubeapi/settings"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
@@ -110,5 +115,73 @@ func VerifySessionTokenCreateRejected(client *rancher.Client) error {
 		return fmt.Errorf("expected HTTP 400 on dry-run, got: %w", err)
 	}
 
+	return nil
+}
+
+// VerifyTokenAuthenticates checks that the given bearer token can successfully authenticate with the Rancher API.
+func VerifyTokenAuthenticates(bearerToken string) error {
+	probeSession := session.NewSession()
+	defer probeSession.Cleanup()
+
+	testClient, err := rancher.NewClient(bearerToken, probeSession)
+	if err != nil {
+		return fmt.Errorf("token does not authenticate: %w", err)
+	}
+
+	if _, err := extuserapi.CreateSelfUserRequest(testClient); err != nil {
+		return fmt.Errorf("token does not authenticate: %w", err)
+	}
+
+	return nil
+}
+
+// VerifyExpiresAtMatchesTTL verifies that the given expiresAt timestamp is within defaults.TwoMinuteTimeout of the current time plus the specified TTL.
+func VerifyExpiresAtMatchesTTL(expiresAt string, ttl time.Duration) error {
+	if expiresAt == "" {
+		return fmt.Errorf("expected status.expiresAt to be populated")
+	}
+
+	parsed, err := time.Parse(time.RFC3339, expiresAt)
+	if err != nil {
+		return fmt.Errorf("failed to parse status.expiresAt %q: %w", expiresAt, err)
+	}
+
+	diff := parsed.Sub(time.Now().Add(ttl))
+	if diff < 0 {
+		diff = -diff
+	}
+	if diff > defaults.TwoMinuteTimeout {
+		return fmt.Errorf("expected expiresAt %q to be within %s of now+%s, got a drift of %s", expiresAt, defaults.TwoMinuteTimeout, ttl, diff)
+	}
+	return nil
+}
+
+// VerifyExpiresAtMatchesTTLMillis verifies that the given expiresAt timestamp is within defaults.TwoMinuteTimeout of the current time plus the specified TTL in milliseconds.
+func VerifyExpiresAtMatchesTTLMillis(expiresAt string, ttlMillis int64) error {
+	if expiresAt == "" {
+		return fmt.Errorf("expected status.expiresAt to be populated")
+	}
+
+	parsed, err := time.Parse(time.RFC3339, expiresAt)
+	if err != nil {
+		return fmt.Errorf("failed to parse status.expiresAt %q: %w", expiresAt, err)
+	}
+
+	expectedUnix := time.Now().Unix() + ttlMillis/settingsapi.MillisecondsPerSecond
+	diffSeconds := parsed.Unix() - expectedUnix
+	if diffSeconds < 0 {
+		diffSeconds = -diffSeconds
+	}
+	if toleranceSeconds := int64(defaults.TwoMinuteTimeout / time.Second); diffSeconds > toleranceSeconds {
+		return fmt.Errorf("expected expiresAt %q to be within %s of now+%dms, got a drift of %ds", expiresAt, defaults.TwoMinuteTimeout, ttlMillis, diffSeconds)
+	}
+	return nil
+}
+
+// VerifyNoExpiry returns an error unless expiresAt indicates the token/kubeconfig does not expire.
+func VerifyNoExpiry(expiresAt string) error {
+	if expiresAt != "" {
+		return fmt.Errorf("expected status.expiresAt to be empty for a non-expiring token, got %q", expiresAt)
+	}
 	return nil
 }
