@@ -15,7 +15,6 @@ import (
 	"github.com/rancher/norman/types"
 	provv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
-	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	managementv3 "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
 	shepherdclusters "github.com/rancher/shepherd/extensions/clusters"
@@ -25,17 +24,14 @@ import (
 	"github.com/rancher/shepherd/extensions/defaults/namespaces"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/extensions/kubeconfig"
-	nodestat "github.com/rancher/shepherd/extensions/nodes"
 	"github.com/rancher/shepherd/extensions/sshkeys"
-	"github.com/rancher/shepherd/extensions/workloads/pods"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/shepherd/pkg/nodes"
-	"github.com/rancher/shepherd/pkg/wait"
-	"github.com/rancher/tests/actions/clusters"
+	"github.com/rancher/tests/actions/machines"
+	actionNodes "github.com/rancher/tests/actions/nodes"
 	"github.com/rancher/tests/actions/provisioninginput"
 	psadeploy "github.com/rancher/tests/actions/psact"
 	"github.com/rancher/tests/actions/registries"
-	"github.com/rancher/tests/actions/reports"
 	wranglername "github.com/rancher/wrangler/pkg/name"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -98,21 +94,34 @@ func VerifyClusterReady(client *rancher.Client, cluster *steveV1.SteveAPIObject)
 		}
 
 		if !clusterStatus.Ready || cluster.State.Name != "active" || cluster.State.Error == true {
-			lastErr = err
+			lastErr = fmt.Errorf("cluster not ready: message=%q", cluster.State.Message)
 			return false, nil
 		}
 
 		return true, nil
 	})
 	if err != nil {
+		if lastErr != nil {
+			logrus.Errorf("Cluster (%s) was not ready before timeout: %v", clusterName, lastErr)
+			dumpCtx, dumpCancel := context.WithTimeout(context.Background(), defaults.FiveMinuteTimeout)
+			defer dumpCancel()
+
+			dumpProvisioningClusterState(dumpCtx, client, clusterName, lastErr)
+
+			return fmt.Errorf("%w: last observed: %v", err, lastErr)
+		}
 		return err
 	}
 
 	logrus.Debugf("Waiting for all machines to be ready on cluster (%s)", clusterName)
-	err = nodestat.AllMachineReady(client, clusterID, defaults.FiveMinuteTimeout)
+	err = machines.VerifyMachinesReady(client, clusterID, defaults.FiveMinuteTimeout)
 	if err != nil {
-		logrus.Errorf("Cluster (%s) failed to become ready: %v", clusterName, err)
-		dumpProvisioningClusterState(ctx, client, clusterName, lastErr)
+		logrus.Errorf("Cluster (%s) machines failed to become ready: %v", clusterName, err)
+		dumpCtx, dumpCancel := context.WithTimeout(context.Background(), defaults.FiveMinuteTimeout)
+		defer dumpCancel()
+
+		dumpProvisioningClusterState(dumpCtx, client, clusterName, err)
+
 		return err
 	}
 
@@ -171,13 +180,21 @@ func VerifyClusterReadyV3(client *rancher.Client, clusterID string) error {
 	})
 
 	if err != nil {
+		if lastErr != nil {
+			logrus.Errorf("Cluster (%s) was not ready before timeout: %v", clusterID, lastErr)
+			dumpClusterStateV3(client, clusterID, lastErr)
+
+			return fmt.Errorf("%w: last observed: %v", err, lastErr)
+		}
+
 		return err
 	}
 
-	err = allNodesReadyV3(client, clusterID, defaults.TenMinuteTimeout)
+	err = actionNodes.VerifyNodesReady(client, clusterID, defaults.TenMinuteTimeout)
 	if err != nil {
 		logrus.Errorf("Cluster (%s) nodes failed readiness: %v", clusterID, err)
-		dumpClusterStateV3(ctx, client, clusterID, lastErr)
+		dumpClusterStateV3(client, clusterID, err)
+
 		return err
 	}
 
@@ -264,9 +281,7 @@ func dumpProvisioningClusterState(ctx context.Context, client *rancher.Client, c
 		return
 	}
 
-	clusterObj, err := kubeProvisioningClient.
-		Clusters(namespaces.FleetDefault).
-		Get(ctx, clusterName, metav1.GetOptions{})
+	clusterObj, err := kubeProvisioningClient.Clusters(namespaces.FleetDefault).Get(ctx, clusterName, metav1.GetOptions{})
 	if err != nil {
 		logrus.Errorf("Log dump: unable to fetch provisioning cluster: %v", err)
 		return
@@ -451,39 +466,6 @@ func VerifyDynamicCluster(t *testing.T, client *rancher.Client, cluster *steveV1
 	if clusterSpec.LocalClusterAuthEndpoint.Enabled {
 		VerifyACE(t, adminClient, cluster)
 	}
-}
-
-// VerifyHostedCluster validates that the hosted cluster and its resources are in a good state, matching a given config.
-func VerifyHostedCluster(t *testing.T, client *rancher.Client, cluster *management.Cluster) {
-	client, err := client.ReLogin()
-	require.NoError(t, err)
-
-	adminClient, err := rancher.NewClient(client.RancherConfig.AdminToken, client.Session)
-	require.NoError(t, err)
-
-	watchInterface, err := adminClient.GetManagementWatchInterface(management.ClusterType, metav1.ListOptions{
-		FieldSelector:  "metadata.name=" + cluster.ID,
-		TimeoutSeconds: &defaults.WatchTimeoutSeconds,
-	})
-	reports.TimeoutRKEReport(cluster, err)
-	require.NoError(t, err)
-
-	checkFunc := shepherdclusters.IsHostedProvisioningClusterReady
-
-	err = wait.WatchWait(watchInterface, checkFunc)
-	reports.TimeoutRKEReport(cluster, err)
-	require.NoError(t, err)
-
-	err = clusters.VerifyServiceAccountTokenSecret(client, cluster.Name)
-	reports.TimeoutRKEReport(cluster, err)
-	require.NoError(t, err)
-
-	err = nodestat.AllManagementNodeReady(client, cluster.ID, defaults.ThirtyMinuteTimeout)
-	reports.TimeoutRKEReport(cluster, err)
-	require.NoError(t, err)
-
-	podErrors := pods.StatusPods(client, cluster.ID)
-	require.Empty(t, podErrors)
 }
 
 // VerifyDeleteRKE2K3SCluster validates that a non-rke1 cluster and its resources are deleted.
@@ -1026,53 +1008,8 @@ func VerifyKubernetesVersion(client *rancher.Client, cluster *steveV1.SteveAPIOb
 	return nil
 }
 
-func allNodesReadyV3(client *rancher.Client, clusterID string, timeout time.Duration) error {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	return kwait.PollUntilContextTimeout(ctx, 5*time.Second, timeout, false,
-		func(ctx context.Context) (bool, error) {
-
-			nodes, err := client.Management.Node.List(&types.ListOpts{
-				Filters: map[string]interface{}{
-					"clusterId": clusterID,
-				},
-			})
-			if err != nil {
-				return false, err
-			}
-
-			if len(nodes.Data) == 0 {
-				return false, nil
-			}
-
-			readyNodes := 0
-
-			for _, n := range nodes.Data {
-				isReady := false
-
-				for _, cond := range n.Conditions {
-					if cond.Type == "Ready" && cond.Status == "True" {
-						isReady = true
-						break
-					}
-				}
-
-				if isReady {
-					readyNodes++
-				}
-			}
-
-			if readyNodes != len(nodes.Data) {
-				return false, nil
-			}
-
-			return true, nil
-		})
-}
-
 // dumpClusterStateV3 is a helper function, called by VerifyClusterReadyV3, that log dumps the state of a provisioning cluster
-func dumpClusterStateV3(ctx context.Context, client *rancher.Client, clusterID string, lastErr error) {
+func dumpClusterStateV3(client *rancher.Client, clusterID string, lastErr error) {
 	adminClient, err := client.ReLogin()
 	if err != nil {
 		logrus.Errorf("Log dump: unable to relogin: %v", err)
@@ -1108,7 +1045,7 @@ func dumpClusterStateV3(ctx context.Context, client *rancher.Client, clusterID s
 	}
 
 	nodes, err := adminClient.Management.Node.List(&types.ListOpts{
-		Filters: map[string]interface{}{
+		Filters: map[string]any{
 			"clusterId": clusterID,
 		},
 	})
