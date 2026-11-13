@@ -275,11 +275,6 @@ jobs:
             privateFullChainPath: "${{ steps.setup-certs.outputs.private-full-chain-tfp-path }}"
             privateCertKeyPath: "${{ steps.setup-certs.outputs.private-cert-key-tfp-path }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
-            awsConfig:
-              windowsAWSUser: "<HB_AWS_WINDOWS_USER>"
-              windows2022AMI: "<HB_WINDOWS_2022_AMI>"
-              windowsInstanceType: "<HB_AWS_WINDOWS_INSTANCE_TYPE>"
-              windowsKeyName: "<HB_WINDOWS_SSH_PRIVATE_KEY_NAME>"
             proxy:
               proxyBastion: ""
             standalone:
@@ -334,6 +329,7 @@ jobs:
                       username: "${{ env.DOCKERHUB_USERNAME }}"
                       password: "${{ env.DOCKERHUB_PASSWORD }}"
                     insecureSkipVerify: true
+
           sshPath:
             sshPath: "${{ github.workspace }}/.ssh"
           EOF
@@ -356,7 +352,7 @@ jobs:
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@5e8dbf3c6d9deaf4193ca7a8fb23f2ac83bb6c85 #v4
         with:
-          terraform_version: "${{ vars.TERRAFORM_VERSION }}"
+          terraform_version: "${{ fromJSON(env.HB_TERRAFORM_VERSION).value }}"
           terraform_wrapper: false
 
       - name: Creating Rancher server

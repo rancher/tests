@@ -252,10 +252,10 @@ jobs:
         run: |
           cat > config.yaml <<EOF
           rancher:
-            cleanup: ${{ env.CLEANUP_ENABLED }}
             host: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
             adminPassword: "<HB_RANCHER_ADMIN_PASSWORD>"
             insecure: true
+            cleanup: ${{ env.CLEANUP_ENABLED }}
 
           awsCredentials:
             accessKey: "$AWS_ACCESS_KEY"
@@ -269,7 +269,6 @@ jobs:
             privateFullChainPath: "${{ steps.setup-certs.outputs.private-full-chain-tfp-path }}"
             privateCertKeyPath: "${{ steps.setup-certs.outputs.private-cert-key-tfp-path }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
-
             standalone:
               chartVersion: "${{ env.RANCHER_CHART_VERSION }}"
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
@@ -279,6 +278,22 @@ jobs:
               rancherImage: "${{ matrix.version >= '16' && '<HB_PRIME_HEAD_RANCHER_SERVER_IMAGE>' || '<HB_PRIME_HEAD_RANCHER_IMAGE>' }}"
               rke2Version: "${{ fromJSON(env[format('HB_RKE2_VERSION_2_{0}', matrix.version)]).value }}"
               k3sVersion: "${{ fromJSON(env[format('HB_K3S_VERSION_2_{0}', matrix.version)]).value }}${{ fromJSON(env.HB_K3S_VERSION_SUFFIX).value }}"
+
+          awsMachineConfigs:
+            region: "<HB_AWS_REGION>"
+            awsMachineConfig:
+            - roles: ["etcd","controlplane","worker"]
+              iamInstanceProfile: "<HB_AWS_IAM_PROFILE>"
+              ami: "<HB_DEFAULT_AMI>"
+              instanceType: "<HB_AWS_INSTANCE_TYPE>"
+              volumeType: "<HB_AWS_VOLUME_TYPE>"
+              rootSize: "<HB_AWS_ROOT_SIZE>"
+              sshUser: "<HB_AWS_OS_USER>"
+              subnetId: "<HB_AWS_SUBNET_ID>"
+              vpcId: "<HB_AWS_VPC_ID>"
+              securityGroup: ["<HB_AWS_SECURITY_GROUP_NAMES_PRIME>"]
+              zone: "<HB_AWS_ZONE_LETTER>"
+              retries: "5"
 
           clusterConfig:
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
@@ -299,22 +314,6 @@ jobs:
 
           logging:
             level: "<HB_LOGGING_LEVEL>"
-
-          awsMachineConfigs:
-            region: "<HB_AWS_REGION>"
-            awsMachineConfig:
-            - roles: ["etcd","controlplane","worker"]
-              iamInstanceProfile: "<HB_AWS_IAM_PROFILE>"
-              ami: "<HB_DEFAULT_AMI>"
-              instanceType: "<HB_AWS_INSTANCE_TYPE>"
-              volumeType: "<HB_AWS_VOLUME_TYPE>"
-              rootSize: "<HB_AWS_ROOT_SIZE>"
-              sshUser: "<HB_AWS_OS_USER>"
-              subnetId: "<HB_AWS_SUBNET_ID>"
-              vpcId: "<HB_AWS_VPC_ID>"
-              securityGroup: ["<HB_AWS_SECURITY_GROUP_NAMES_PRIME>"]
-              zone: "<HB_AWS_ZONE_LETTER>"
-              retries: "5"
           EOF
 
       - name: Export CATTLE_TEST_CONFIG
@@ -352,10 +351,10 @@ jobs:
       - name: Run Test Suites
         env:
           QASE_TEST_RUN_ID: ${{ steps.extract-qase-id.outputs.id }}
-          QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
+          QASE_AUTOMATION_TOKEN: ${{ fromJSON(env.HB_QASE_AUTOMATION_TOKEN).value }}
           QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_SCHEMA_PREFIX: hostbusters
-          QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
+          QASE_PROJECT_ID: ${{ fromJSON(env.HB_QASE_PROJECT_ID).value }}
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
         uses: ./.github/actions/run-hostbusters-prime-test-suites

@@ -1,0 +1,48 @@
+rancher:
+  insecure: true
+
+#AWS resources used by the hosted setup to provision the Rancher server (terraform provider: eks/aws)
+terraform:
+  cni: "<HB_CNI>"
+  defaultClusterRoleForProjectMembers: "true"
+  enableNetworkPolicy: false
+  localHostedCluster: true
+  privateKeyPath: "<HB_TFP_SSH_PRIVATE_KEY_PATH>"
+  awsConfig:
+    ami: "<HB_EKS_AMI>"
+    awsKeyName: "<HB_SSH_PRIVATE_KEY_NAME>"
+    awsInstanceType: "<HB_AWS_INSTANCE_TYPE>"
+    awsVolumeType: "<HB_AWS_VOLUME_TYPE>"
+    eksRegion: "<HB_EKS_REGION>"
+    region: "<HB_EKS_REGION>"
+    awsSecurityGroups: ["<HB_EKS_SECURITY_GROUPS>"]
+    awsSecurityGroupNames: ["<HB_AWS_SECURITY_GROUP_NAMES_PRIME>"]
+    awsSubnetID: "<HB_EKS_SUBNET_ID>"
+    rancherSubnetID: "<HB_EKS_SUBNET_ID>"
+    awsVpcID: "<HB_EKS_VPC_ID>"
+    awsZoneLetter: "<HB_AWS_ZONE_LETTER>"
+    awsRootSize: "<HB_AWS_ROOT_SIZE>"
+    awsRoute53Zone: "<HB_AWS_ROUTE_53_ZONE>"
+    awsUser: "<HB_AWS_OS_USER>"
+    sshConnectionType: "<HB_SSH_CONNECTION_TYPE>"
+    timeout: "<HB_SSH_TIMEOUT>"
+    ipAddressType: "<HB_IP_ADDRESS_TYPE>"
+    loadBalancerType: "<HB_LOAD_BALANCER_TYPE>"
+    targetType: "<HB_TARGET_TYPE>"
+    publicAccess: true
+    privateAccess: true
+  standalone:
+    bootstrapPassword: "<HB_RANCHER_ADMIN_PASSWORD>"
+    certManagerVersion: "<HB_CERT_MANAGER_VERSION>"
+    osUser: "<HB_AWS_OS_USER>"
+    osGroup: "<HB_AWS_OS_GROUP>"
+    rancherChartRepository: "<HB_PRIME_HEAD_HELM_CHART_URL>"
+    rancherImage: "<HB_PRIME_HEAD_RANCHER_IMAGE>"
+    repo: "<HB_PRIME_HEAD_REPO>"
+
+terratest:
+  pathToRepo: "<HB_PATH_TO_TFP_REPO>"
+  standaloneLogging: false
+
+logging:
+  level: "<HB_LOGGING_LEVEL>"

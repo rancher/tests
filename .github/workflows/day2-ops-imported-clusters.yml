@@ -261,7 +261,6 @@ jobs:
             awsConfig:
               awsSubnetID: "<HB_AWS_SUBNET_ID>"
               etcdSnapshotEndpoint: "<HB_S3_ENDPOINT>"
-
             standalone:
               chartVersion: "${{ env.RANCHER_CHART_VERSION }}"
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
@@ -314,10 +313,10 @@ jobs:
       - name: Run Test Suites
         env:
           QASE_TEST_RUN_ID: ${{ steps.extract-qase-id.outputs.id }}
-          QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
+          QASE_AUTOMATION_TOKEN: ${{ fromJSON(env.HB_QASE_AUTOMATION_TOKEN).value }}
           QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_SCHEMA_PREFIX: hostbusters
-          QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
+          QASE_PROJECT_ID: ${{ fromJSON(env.HB_QASE_PROJECT_ID).value }}
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
           tags: imported

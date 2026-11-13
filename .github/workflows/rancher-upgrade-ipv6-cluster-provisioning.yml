@@ -132,6 +132,7 @@ jobs:
         uses: aws-actions/aws-secretsmanager-get-secrets@3a411b6ec5cace3d626412dd917e7bfeac242cfa #v3
         with:
           secret-ids: |
+            HB_AWS_ROUTE_53_ZONE, HB_AWS_ROUTE_53_ZONE
             AWS_ACCESS_KEY, ${{ secrets.AWS_ACCESS_KEY_ID }}
             AWS_SECRET_KEY, ${{ secrets.AWS_SECRET_ACCESS_KEY }}
             HB_AWS_MANAGED_PREFIX_LIST_ID_PRIME, HB_AWS_MANAGED_PREFIX_LIST_ID_PRIME
@@ -271,16 +272,15 @@ jobs:
             privateFullChainPath: "${{ steps.setup-certs.outputs.private-full-chain-tfp-path }}"
             privateCertKeyPath: "${{ steps.setup-certs.outputs.private-cert-key-tfp-path }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
-
             standalone:
               chartVersion: "${{ fromJSON(env[format('HB_RELEASED_RANCHER_CHART_VERSION_2_{0}', matrix.version)]).value }}"
               k3sVersion: "${{ fromJSON(env[format('HB_K3S_VERSION_2_{0}', matrix.version)]).value }}${{ fromJSON(env.HB_K3S_VERSION_SUFFIX).value }}"
-              rancherHostname: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
+              rancherHostname: "${{ env.HOSTNAME_PREFIX }}.${{ fromJSON(env.HB_AWS_ROUTE_53_ZONE).value }}"
               rancherImage: "${{ matrix.version >= '16' && '<HB_PRIME_HEAD_RANCHER_SERVER_IMAGE>' || '<HB_PRIME_HEAD_RANCHER_IMAGE>' }}"
               rancherTagVersion: "${{ fromJSON(env[format('HB_RELEASED_RANCHER_VERSION_2_{0}', matrix.version)]).value }}"
               rke2Version: "${{ fromJSON(env[format('HB_RKE2_VERSION_2_{0}', matrix.version)]).value }}"
               upgradedRancherChartVersion: "${{ env.UPGRADED_RANCHER_CHART_VERSION }}"
-              upgradedRancherImage: "${{ secrets.UPGRADED_RANCHER_IMAGE }}"
+              upgradedRancherImage: "<HB_UPGRADED_PRIME_HEAD_RANCHER_IMAGE>"
               upgradedRancherTagVersion: "${{ env.UPGRADED_RANCHER_VERSION }}"
 
           clusterConfig:
@@ -394,7 +394,7 @@ jobs:
         with:
           rancher-version: ${{ env.UPGRADED_RANCHER_VERSION }}
           job-status: ${{ steps.set-job-status.outputs.job_status }}
-          slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          slack-webhook-url: ${{ fromJSON(env.HB_SLACK_WEBHOOK_URL).value }}
 
       - name: Save test result weekly summary
         if: always() && github.event_name == 'schedule'

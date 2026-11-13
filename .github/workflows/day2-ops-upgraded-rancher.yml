@@ -288,7 +288,6 @@ jobs:
               windows2022AMI: "<HB_WINDOWS_2022_AMI>"
               windowsInstanceType: "<HB_AWS_WINDOWS_INSTANCE_TYPE>"
               windowsKeyName: "<HB_WINDOWS_SSH_PRIVATE_KEY_NAME>"
-
             standalone:
               chartVersion: "${{ fromJSON(env[format('HB_RELEASED_RANCHER_CHART_VERSION_2_{0}', matrix.version)]).value }}"
               rancherTagVersion: "${{ fromJSON(env[format('HB_RELEASED_RANCHER_VERSION_2_{0}', matrix.version)]).value }}"
@@ -301,8 +300,21 @@ jobs:
               upgradedRancherChartVersion: "${{ env.UPGRADED_RANCHER_CHART_VERSION }}"
               upgradedRancherTagVersion: "${{ env.UPGRADED_RANCHER_VERSION }}"
 
-          scalingInput:
-            nodeProvider: "<HB_NODE_PROVIDER>"
+          awsMachineConfigs:
+            region: "<HB_AWS_REGION>"
+            awsMachineConfig:
+            - roles: ["etcd","controlplane","worker"]
+              iamInstanceProfile: "<HB_AWS_IAM_PROFILE>"
+              ami: "<HB_DEFAULT_AMI>"
+              instanceType: "<HB_AWS_INSTANCE_TYPE>"
+              volumeType: "<HB_AWS_VOLUME_TYPE>"
+              rootSize: "<HB_AWS_ROOT_SIZE>"
+              sshUser: "<HB_AWS_OS_USER>"
+              subnetId: "<HB_AWS_SUBNET_ID>"
+              vpcId: "<HB_AWS_VPC_ID>"
+              securityGroup: ["<HB_AWS_SECURITY_GROUP_NAMES_PRIME>"]
+              zone: "<HB_AWS_ZONE_LETTER>"
+              retries: "5"
 
           clusterConfig:
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
@@ -321,24 +333,11 @@ jobs:
                       username: "${{ env.DOCKERHUB_USERNAME }}"
                       password: "${{ env.DOCKERHUB_PASSWORD }}"
 
+          scalingInput:
+            nodeProvider: "<HB_NODE_PROVIDER>"
+
           logging:
             level: "<HB_LOGGING_LEVEL>"
-
-          awsMachineConfigs:
-            region: "<HB_AWS_REGION>"
-            awsMachineConfig:
-            - roles: ["etcd","controlplane","worker"]
-              iamInstanceProfile: "<HB_AWS_IAM_PROFILE>"
-              ami: "<HB_DEFAULT_AMI>"
-              instanceType: "<HB_AWS_INSTANCE_TYPE>"
-              volumeType: "<HB_AWS_VOLUME_TYPE>"
-              rootSize: "<HB_AWS_ROOT_SIZE>"
-              sshUser: "<HB_AWS_OS_USER>"
-              subnetId: "<HB_AWS_SUBNET_ID>"
-              vpcId: "<HB_AWS_VPC_ID>"
-              securityGroup: ["<HB_AWS_SECURITY_GROUP_NAMES_PRIME>"]
-              zone: "<HB_AWS_ZONE_LETTER>"
-              retries: "5"
 
           awsEC2Configs:
             region: "<HB_AWS_REGION>"
@@ -404,10 +403,10 @@ jobs:
       - name: Run Test Suites
         env:
           QASE_TEST_RUN_ID: ${{ steps.extract-qase-id.outputs.id }}
-          QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
+          QASE_AUTOMATION_TOKEN: ${{ fromJSON(env.HB_QASE_AUTOMATION_TOKEN).value }}
           QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_SCHEMA_PREFIX: hostbusters
-          QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
+          QASE_PROJECT_ID: ${{ fromJSON(env.HB_QASE_PROJECT_ID).value }}
         with:
           reporting: ${{ env.REPORTING_ENABLED }}
           tags: recurring

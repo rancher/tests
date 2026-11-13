@@ -1,0 +1,68 @@
+rancher:
+  insecure: true
+
+#Azure resources used by the hosted setup to provision the Rancher server (terraform provider: aks/azure)
+terraform:
+  cni: "<HB_CNI>"
+  defaultClusterRoleForProjectMembers: "true"
+  enableNetworkPolicy: false
+  localHostedCluster: true
+  privateKeyPath: "<HB_TFP_SSH_PRIVATE_KEY_PATH>"
+  azureCredentials:
+    clientId: "<HB_AZURE_CLIENT_ID>"
+    clientSecret: "<HB_AZURE_CLIENT_SECRET>"
+    environment: "AzurePublicCloud"
+    subscriptionId: "<HB_AZURE_SUBSCRIPTION_ID>"
+    tenantId: "<HB_AZURE_TENANT_ID>"
+  azureConfig:
+    aksNodeCount: 3
+    availabilitySet: "docker-machine"
+    availabilityZones: ["1", "2", "3"]
+    customData: ""
+    diskSize: "<HB_AZURE_DISK_SIZE>"
+    dockerPort: "2376"
+    faultDomainCount: "3"
+    image: "<HB_AZURE_IMAGE>"
+    imageOffer: "<HB_AZURE_IMAGE_OFFER>"
+    imageVersion: "<HB_AZURE_IMAGE_VERSION>"
+    #Set by the workflow (generated SSH key path)
+    keyPath: "<required>"
+    location: "<HB_AZURE_LOCATION>"
+    managedDisks: false
+    mode: "System"
+    name: "<HB_AZURE_AGENT_POOL_NAME>"
+    networkDNSServiceIP: "10.30.0.16"
+    networkDockerBridgeCIDR: "172.17.0.1/16"
+    networkPlugin: "kubenet"
+    networkServiceCIDR: "10.30.0.0/24"
+    noPublicIp: false
+    openPort: ["6443/tcp","2379/tcp","2380/tcp","8472/udp","4789/udp","9796/tcp","10256/tcp","10250/tcp","10251/tcp","10252/tcp"]
+    osDiskSizeGB: 128
+    outboundType: "loadBalancer"
+    publisher: "<HB_AZURE_PUBLISHER>"
+    #Set by the workflow (derived from HOSTNAME_PREFIX)
+    resourceGroup: "<required>"
+    resourceLocation: "<HB_AZURE_LOCATION>"
+    size: "<HB_AZURE_SIZE>"
+    sku: "<HB_AZURE_SKU>"
+    sshUser: "<HB_AZURE_SSH_USER>"
+    staticPublicIp: false
+    storageType: "Standard_LRS"
+    taints: ["none:PreferNoSchedule"]
+    updateDomainCount: "5"
+    vmSize: "<HB_AZURE_SIZE>"
+  standalone:
+    bootstrapPassword: "<HB_RANCHER_ADMIN_PASSWORD>"
+    certManagerVersion: "<HB_CERT_MANAGER_VERSION>"
+    osUser: "<HB_AZURE_SSH_USER>"
+    osGroup: "<HB_AZURE_SSH_USER>"
+    rancherChartRepository: "<HB_PRIME_HEAD_HELM_CHART_URL>"
+    rancherImage: "<HB_PRIME_HEAD_RANCHER_IMAGE>"
+    repo: "<HB_PRIME_HEAD_REPO>"
+
+terratest:
+  pathToRepo: "<HB_PATH_TO_TFP_REPO>"
+  standaloneLogging: false
+
+logging:
+  level: "<HB_LOGGING_LEVEL>"

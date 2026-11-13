@@ -148,6 +148,10 @@ jobs:
             HB_RANCHER_HELM_CHART_URL, HB_RANCHER_HELM_CHART_URL
             HB_STAGING_RANCHER_HELM_CHART_URL, HB_STAGING_RANCHER_HELM_CHART_URL
             HB_SLACK_WEBHOOK_URL, HB_SLACK_WEBHOOK_URL
+            HB_EKS_MANAGED_PREFIX_LIST_ID, HB_EKS_MANAGED_PREFIX_LIST_ID
+            HB_EKS_REGION, HB_EKS_REGION
+            HB_GCP_PROJECT_ID, HB_GCP_PROJECT_ID
+            HB_GCP_ZONE, HB_GCP_ZONE
 
       - name: Fetch and Set DockerHub Credentials
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 #v3
@@ -177,8 +181,8 @@ jobs:
       - name: Whitelist Runner IP
         uses: ./.github/actions/whitelist-runner-ip
         with:
-          prefix-list-id: ${{ secrets.EKS_MANAGED_PREFIX_LIST_ID }}
-          region: "${{ vars.EKS_REGION }}"
+          prefix-list-id: ${{ fromJSON(env.HB_EKS_MANAGED_PREFIX_LIST_ID).value }}
+          region: "${{ fromJSON(env.HB_EKS_REGION).value }}"
 
       - name: Set up SSH Keys
         id: setup-ssh-keys
@@ -235,18 +239,18 @@ jobs:
         run: |
           cat > config.yaml <<EOF
           rancher:
-            host: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
-            adminPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
-            insecure: true
+            host: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
+            adminPassword: "<HB_RANCHER_ADMIN_PASSWORD>"
             cleanup: ${{ env.CLEANUP_ENABLED }}
+
+          awsCredentials:
+            accessKey: "$AWS_ACCESS_KEY"
+            defaultRegion: "${{ fromJSON(env.HB_AWS_REGION).value }}"
+            secretKey: "$AWS_SECRET_KEY"
+
           terraform:
-            cni: "${{ vars.CNI }}"
-            defaultClusterRoleForProjectMembers: "true"
-            enableNetworkPolicy: false
             generateV3Token: ${{ matrix.version == '14' }}
-            localHostedCluster: true
             provider: "eks"
-            privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
             privateFullChainPath: "${{ steps.setup-certs.outputs.private-full-chain-tfp-path }}"
             privateCertKeyPath: "${{ steps.setup-certs.outputs.private-cert-key-tfp-path }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
@@ -254,53 +258,35 @@ jobs:
               awsAccessKey: "$AWS_ACCESS_KEY"
               awsSecretKey: "$AWS_SECRET_KEY"
             awsConfig:
-              ami: "${{ secrets.EKS_AMI }}"
-              awsKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}"
-              awsInstanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
-              awsVolumeType: "${{ vars.AWS_VOLUME_TYPE }}"
-              eksRegion: "${{ vars.EKS_REGION }}"
-              region: "${{ vars.EKS_REGION }}"
-              awsSecurityGroups: [${{ secrets.EKS_SECURITY_GROUPS }}]
-              awsSecurityGroupNames: [${{ secrets.AWS_SECURITY_GROUP_NAMES }}]
-              awsSubnetID: "${{ secrets.EKS_SUBNET_ID }}"
-              rancherSubnetID: "${{ secrets.EKS_SUBNET_ID }}"
-              awsVpcID: "${{ secrets.EKS_VPC_ID }}"
-              awsZoneLetter: "${{ vars.AWS_ZONE_LETTER }}"
-              awsRootSize: ${{ vars.AWS_ROOT_SIZE }}
-              awsRoute53Zone: "${{ secrets.AWS_ROUTE_53_ZONE }}"
-              awsUser: "${{ vars.AWS_USER }}"
-              sshConnectionType: "${{ vars.SSH_CONNECTION_TYPE }}" 
-              timeout: "${{ vars.TIMEOUT }}"
-              ipAddressType: "${{ vars.IP_ADDRESS_TYPE }}"
-              loadBalancerType: "${{ vars.LOAD_BALANCER_TYPE }}"
-              targetType: "${{ vars.TARGET_TYPE }}"
+              ami: "<HB_EKS_AMI>"
+              awsKeyName: "<HB_SSH_PRIVATE_KEY_NAME>"
+              awsInstanceType: "<HB_AWS_INSTANCE_TYPE>"
+              awsVolumeType: "<HB_AWS_VOLUME_TYPE>"
+              eksRegion: "<HB_EKS_REGION>"
+              region: "<HB_EKS_REGION>"
+              awsSecurityGroups: ["<HB_EKS_SECURITY_GROUPS>"]
+              awsSecurityGroupNames: ["<HB_AWS_SECURITY_GROUP_NAMES_PRIME>"]
+              awsSubnetID: "<HB_EKS_SUBNET_ID>"
+              rancherSubnetID: "<HB_EKS_SUBNET_ID>"
+              awsVpcID: "<HB_EKS_VPC_ID>"
+              awsZoneLetter: "<HB_AWS_ZONE_LETTER>"
+              awsRootSize: "<HB_AWS_ROOT_SIZE>"
+              awsRoute53Zone: "<HB_AWS_ROUTE_53_ZONE>"
+              awsUser: "<HB_AWS_OS_USER>"
+              sshConnectionType: "<HB_SSH_CONNECTION_TYPE>"
+              timeout: "<HB_SSH_TIMEOUT>"
+              ipAddressType: "<HB_IP_ADDRESS_TYPE>"
+              loadBalancerType: "<HB_LOAD_BALANCER_TYPE>"
+              targetType: "<HB_TARGET_TYPE>"
               publicAccess: true
               privateAccess: true
             standalone:
-              bootstrapPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
-              certManagerVersion: "${{ vars.CERT_MANAGER_VERSION }}"
               chartVersion: "${{ env.RANCHER_CHART_VERSION }}"
-              osUser: "${{ vars.OS_USER }}"
-              osGroup: "${{ vars.OS_GROUP }}"
-              rancherAgentImage: "${{ secrets.RANCHER_AGENT_IMAGE }}"
-              rancherChartRepository: "${{ secrets.RANCHER_HELM_CHART_URL }}"
-              rancherHostname: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
-              rancherImage: "${{ matrix.version >= '16' && secrets.RANCHER_SERVER_IMAGE || secrets.RANCHER_IMAGE }}"
+              rancherAgentImage: "<HB_RANCHER_AGENT_IMAGE>"
+              rancherHostname: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
-              repo: "${{ secrets.RANCHER_REPO }}"
-          terratest:
-            pathToRepo: "${{ secrets.PATH_TO_REPO }}"
-            standaloneLogging: ${{ vars.TERRAFORM_LOGGING }}
-
-          logging:
-            level: "${{ vars.LOGGING_LEVEL }}"
-
-          awsCredentials:
-            accessKey: "$AWS_ACCESS_KEY"
-            defaultRegion: "${{ vars.EKS_REGION }}"
-            secretKey: "$AWS_SECRET_KEY"
 
           eksClusterConfig:
             imported: false
@@ -309,7 +295,7 @@ jobs:
             nodeGroups:
             - desiredSize: 3
               diskSize: 50
-              ec2SshKey: "${{ secrets.SSH_PRIVATE_KEY_NAME }}"
+              ec2SshKey: "<HB_SSH_PRIVATE_KEY_NAME>"
               gpu: false
               imageId: ""
               instanceType: t3.medium
@@ -327,11 +313,11 @@ jobs:
             privateAccess: false
             publicAccess: true
             publicAccessSources: []
-            region: ${{ vars.EKS_REGION }}
+            region: "<HB_EKS_REGION>"
             secretsEncryption: false
-            securityGroups: [${{ secrets.EKS_SECURITY_GROUPS }}]
+            securityGroups: ["<HB_EKS_SECURITY_GROUPS>"]
             serviceRole: ""
-            subnets: [${{ secrets.EKS_SUBNETS }}]
+            subnets: ["<HB_EKS_SUBNETS>"]
             tags: {}
           EOF
 
@@ -391,18 +377,18 @@ jobs:
         uses: ./.github/actions/cloud-provider-cleanup
         with:
           cloud-provider: ${{ env.CLOUD_PROVIDER }}
-          google-project-id: "${{ secrets.GCP_PROJECT_ID }}"
-          google-zone: "${{ secrets.GCP_ZONE }}"
+          google-project-id: "${{ fromJSON(env.HB_GCP_PROJECT_ID).value }}"
+          google-zone: "${{ fromJSON(env.HB_GCP_ZONE).value }}"
           prefix: "${{ env.OLD_HOSTNAME_PREFIX }}"
-          region: "${{ vars.EKS_REGION }}"
+          region: "${{ fromJSON(env.HB_EKS_REGION).value }}"
           iam-role: ${{ secrets.IAM_ROLE }}
 
       - name: Revoke Runner IP
         if: always()
         uses: ./.github/actions/revoke-runner-ip
         with:
-          prefix-list-id: ${{ secrets.EKS_MANAGED_PREFIX_LIST_ID }}
-          region: "${{ vars.EKS_REGION }}"
+          prefix-list-id: ${{ fromJSON(env.HB_EKS_MANAGED_PREFIX_LIST_ID).value }}
+          region: "${{ fromJSON(env.HB_EKS_REGION).value }}"
 
       - name: Set job status output
         if: always()

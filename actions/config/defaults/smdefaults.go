@@ -71,7 +71,7 @@ func LoadSecretsManagerDefaults(cattleConfig map[string]any) (map[string]any, er
 	secretsClient := secretsmanager.NewFromConfig(awsCfg)
 	secretCache := map[string]any{}
 
-	resolvedValue, err := resolveAWSSecretsInValue(ctx, secretsClient, output, secretCache)
+	resolvedValue, err := resolveAWSSecretsInValue(ctx, secretsClient, output, secretCache, "")
 	if err != nil && isExpiredTokenError(err) && awsCredentials.AccessKey != "" && awsCredentials.SecretKey != "" {
 		logrus.Warning("Default AWS credentials expired while reading Secrets Manager values; retrying with static config credentials")
 
@@ -91,7 +91,7 @@ func LoadSecretsManagerDefaults(cattleConfig map[string]any) (map[string]any, er
 			return nil, cfgErr
 		}
 
-		resolvedValue, err = resolveAWSSecretsInValue(ctx, secretsmanager.NewFromConfig(staticCfg), retryInput, map[string]any{})
+		resolvedValue, err = resolveAWSSecretsInValue(ctx, secretsmanager.NewFromConfig(staticCfg), retryInput, map[string]any{}, "")
 	}
 
 	if err != nil {
@@ -115,11 +115,15 @@ func isExpiredTokenError(err error) bool {
 	return apiErr.ErrorCode() == "ExpiredTokenException"
 }
 
-func resolveAWSSecretsInValue(ctx context.Context, client *secretsmanager.Client, value any, cache map[string]any) (any, error) {
+func resolveAWSSecretsInValue(ctx context.Context, client *secretsmanager.Client, value any, cache map[string]any, path string) (any, error) {
 	switch typedValue := value.(type) {
 	case map[string]any:
 		for key, nestedValue := range typedValue {
-			resolvedNestedValue, err := resolveAWSSecretsInValue(ctx, client, nestedValue, cache)
+			childPath := key
+			if path != "" {
+				childPath = path + "." + key
+			}
+			resolvedNestedValue, err := resolveAWSSecretsInValue(ctx, client, nestedValue, cache, childPath)
 			if err != nil {
 				return nil, err
 			}
@@ -131,8 +135,8 @@ func resolveAWSSecretsInValue(ctx context.Context, client *secretsmanager.Client
 	case []any:
 		resolvedList := make([]any, 0, len(typedValue))
 
-		for _, listValue := range typedValue {
-			resolvedListValue, err := resolveAWSSecretsInValue(ctx, client, listValue, cache)
+		for index, listValue := range typedValue {
+			resolvedListValue, err := resolveAWSSecretsInValue(ctx, client, listValue, cache, fmt.Sprintf("%s[%d]", path, index))
 			if err != nil {
 				return nil, err
 			}
@@ -156,7 +160,7 @@ func resolveAWSSecretsInValue(ctx context.Context, client *secretsmanager.Client
 
 		return resolvedList, nil
 	case string:
-		return resolveSecretPlaceholdersInString(ctx, client, typedValue, cache)
+		return resolveSecretPlaceholdersInString(ctx, client, typedValue, cache, path)
 	default:
 		return value, nil
 	}
@@ -173,7 +177,7 @@ func IsSinglePlaceholderString(value any) bool {
 	return len(matches) == 1 && typedValue == matches[0][0]
 }
 
-func resolveSecretPlaceholdersInString(ctx context.Context, client *secretsmanager.Client, value string, cache map[string]any) (any, error) {
+func resolveSecretPlaceholdersInString(ctx context.Context, client *secretsmanager.Client, value string, cache map[string]any, path string) (any, error) {
 	matches := awsSecretPlaceholderRegex.FindAllStringSubmatch(value, -1)
 	if len(matches) == 0 {
 		return value, nil
@@ -187,6 +191,8 @@ func resolveSecretPlaceholdersInString(ctx context.Context, client *secretsmanag
 			return nil, err
 		}
 		if !exists {
+			logrus.WithFields(logrus.Fields{"path": path, "secret": secretName}).
+				Warning("Secrets Manager value not found; placeholder left unresolved")
 			return value, nil
 		}
 		return secretValue, nil
@@ -208,6 +214,8 @@ func resolveSecretPlaceholdersInString(ctx context.Context, client *secretsmanag
 		}
 
 		if !exists {
+			logrus.WithFields(logrus.Fields{"path": path, "secret": secretName}).
+				Warning("Secrets Manager value not found; placeholder left unresolved")
 			continue
 		}
 
