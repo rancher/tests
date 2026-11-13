@@ -6,7 +6,6 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/rancher/shepherd/clients/ec2"
 	"github.com/rancher/shepherd/extensions/defaults/namespaces"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
 	"github.com/rancher/shepherd/pkg/config"
@@ -89,11 +88,7 @@ func main() {
 		logrus.Fatalf("Failed to verify cluster pods: %v", err)
 	}
 
-	// If awsEC2Configs is present in the cattleConfig, provision clusters before upgrading Rancher.
-	// If it is not present, skip provisioning clusters and proceed with upgrading Rancher.
-	if _, ok := cattleConfig[ec2.ConfigurationFileKey]; ok {
-		clusters.ProvisionClustersPreUpgrade(t, client, cattleConfig)
-	}
+	clusters.ProvisionClustersPreUpgrade(t, client, cattleConfig)
 
 	client, _, _, _ = upgradestandard.UpgradeRancher(t, client, serverNodeOne, testSession, cattleConfig)
 

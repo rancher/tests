@@ -2,15 +2,15 @@ googleCredentials:
   authEncodedJson: |-
     {
       "type": "service_account",
-      "project_id": "<required>",
-      "private_key_id": "<required>",
-      "private_key": "<required>",
-      "client_email": "<required>",
-      "client_id": "<required>",
+      "project_id": "<HB_GCP_PROJECT_ID>",
+      "private_key_id": "<HB_GCP_PRIVATE_KEY_ID>",
+      "private_key": "<HB_GCP_PRIVATE_KEY>",
+      "client_email": "<HB_GCP_CLIENT_EMAIL>",
+      "client_id": "<HB_GCP_CLIENT_ID>",
       "auth_uri": "https://accounts.google.com/o/oauth2/auth",
       "token_uri": "https://oauth2.googleapis.com/token",
       "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-      "client_x509_cert_url": "<required>"
+      "client_x509_cert_url": "<HB_GCP_CLIENT_X509_CERT_URL>"
     }
 
 gkeClusterConfig:
@@ -55,7 +55,7 @@ gkeClusterConfig:
       imageType: COS_CONTAINERD
       labels: {}
       localSsdCount: 0
-      machineType: n1-standard-2
+      machineType: "<HB_GOOGLE_MACHINE_TYPE>"
       oauthScopes:
       - https://www.googleapis.com/auth/devstorage.read_only
       - https://www.googleapis.com/auth/logging.write
@@ -77,5 +77,6 @@ gkeClusterConfig:
     enablePrivateEndpoint: false
     enablePrivateNodes: false
     masterIpv4CidrBlock: null
-  projectID: "<required>"
-  subnetwork: "<required>"
+  projectID: "<HB_GCP_PROJECT_ID>"
+  region: "us-central1"
+  subnetwork: "<HB_GOOGLE_NETWORK>"

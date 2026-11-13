@@ -13,6 +13,7 @@ import (
 	"github.com/rancher/tests/actions/logging"
 	"github.com/rancher/tests/actions/provisioning"
 	standard "github.com/rancher/tests/validation/provisioning/resources/standarduser"
+	infraConfig "github.com/rancher/tests/validation/recurring/infrastructure/config"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -45,11 +46,17 @@ func Setup(t *testing.T) *hostedTest {
 
 	h.CattleConfig = config.LoadConfigFromFile(os.Getenv(config.ConfigEnvironmentKey))
 
-	_, providerName, err := provisioning.GetProviderFromConfig(h.CattleConfig)
+	providerName, _, err := provisioning.GetProviderFromConfig(h.CattleConfig)
 	require.NoError(t, err)
 
 	h.CattleConfig, err = defaults.LoadPackageDefaults(h.CattleConfig, "", providerName)
 	require.NoError(t, err)
+
+	h.CattleConfig, err = defaults.LoadSecretsManagerDefaults(h.CattleConfig)
+	require.NoError(t, err)
+
+	// Cloud credentials and other loaders read the config file, so persist the merged defaults.
+	infraConfig.WriteConfigToFile(os.Getenv(config.ConfigEnvironmentKey), h.CattleConfig)
 
 	loggingConfig := new(logging.Logging)
 	operations.LoadObjectFromMap(logging.LoggingKey, h.CattleConfig, loggingConfig)

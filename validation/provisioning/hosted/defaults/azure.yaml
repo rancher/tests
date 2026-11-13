@@ -1,14 +1,14 @@
-azureCredentials: 
-  clientId: "<required>"
-  clientSecret: "<required>"
-  subscriptionId: "<required>"
+azureCredentials:
+  clientId: "<HB_AZURE_CLIENT_ID>"
+  clientSecret: "<HB_AZURE_CLIENT_SECRET>"
+  subscriptionId: "<HB_AZURE_SUBSCRIPTION_ID>"
   environment: "AzurePublicCloud"
 
 aksClusterConfig:
   dnsPrefix: "<required>"
-  linuxAdminUsername: "azureuser"
+  linuxAdminUsername: "<HB_AZURE_SSH_USER>"
   loadBalancerSku: "Standard"
-  networkPlugin: "<required>"
+  networkPlugin: "kubenet"
   nodePools:
   - availabilityZones:
     - "1"
@@ -24,8 +24,8 @@ aksClusterConfig:
     osDiskSizeGB: 128
     osDiskType: "Managed"
     osType: "Linux"
-    vmSize: "<required>"
+    vmSize: "Standard_DS2_v2"
   resourceGroup: "<required>"
-  resourceLocation: "<required>"
+  resourceLocation: "<HB_AZURE_LOCATION>"
   tags: {}
 

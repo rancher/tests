@@ -1,0 +1,53 @@
+rancher:
+  insecure: true
+
+#Google resources used by the hosted setup to provision the Rancher server (terraform provider: gke/google)
+terraform:
+  cni: "<HB_CNI>"
+  defaultClusterRoleForProjectMembers: "true"
+  enableNetworkPolicy: false
+  localHostedCluster: true
+  privateKeyPath: "<HB_TFP_SSH_PRIVATE_KEY_PATH>"
+  googleCredentials:
+    authEncodedJson: |-
+      {
+        "type": "service_account",
+        "project_id": "<HB_GCP_PROJECT_ID>",
+        "private_key_id": "<HB_GCP_PRIVATE_KEY_ID>",
+        "private_key": "<HB_GCP_PRIVATE_KEY>",
+        "client_email": "<HB_GCP_CLIENT_EMAIL>",
+        "client_id": "<HB_GCP_CLIENT_ID>",
+        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+        "token_uri": "https://oauth2.googleapis.com/token",
+        "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+        "client_x509_cert_url": "<HB_GCP_CLIENT_X509_CERT_URL>",
+        "universe_domain": "googleapis.com"
+      }
+  googleConfig:
+    image: "<HB_GOOGLE_IMAGE>"
+    #Set by the workflow (generated SSH key path)
+    keyPath: "<required>"
+    imageType: "<HB_GOOGLE_IMAGE_TYPE>"
+    machineType: "<HB_GOOGLE_MACHINE_TYPE>"
+    network: "<HB_GOOGLE_NETWORK>"
+    projectID: "<HB_GCP_PROJECT_ID>"
+    region: "<HB_GCP_REGION>"
+    size: "<HB_GOOGLE_DISK_SIZE>"
+    sshUser: "<HB_GOOGLE_SSH_USER>"
+    subnetwork: "<HB_GOOGLE_NETWORK>"
+    zone: "<HB_GCP_ZONE>"
+  standalone:
+    bootstrapPassword: "<HB_RANCHER_ADMIN_PASSWORD>"
+    certManagerVersion: "<HB_CERT_MANAGER_VERSION>"
+    osUser: "<HB_AWS_OS_USER>"
+    osGroup: "<HB_AWS_OS_GROUP>"
+    rancherChartRepository: "<HB_PRIME_HEAD_HELM_CHART_URL>"
+    rancherImage: "<HB_PRIME_HEAD_RANCHER_IMAGE>"
+    repo: "<HB_PRIME_HEAD_REPO>"
+
+terratest:
+  pathToRepo: "<HB_PATH_TO_TFP_REPO>"
+  standaloneLogging: false
+
+logging:
+  level: "<HB_LOGGING_LEVEL>"

@@ -249,8 +249,8 @@ jobs:
         run: |
           cat > config.yaml <<EOF
           rancher:
-            cleanup: ${{ env.CLEANUP_ENABLED }}
             host: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
+            cleanup: ${{ env.CLEANUP_ENABLED }}
 
           awsCredentials:
             accessKey: "$AWS_ACCESS_KEY"
@@ -308,7 +308,7 @@ jobs:
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@5e8dbf3c6d9deaf4193ca7a8fb23f2ac83bb6c85 #v4
         with:
-          terraform_version: "${{ vars.TERRAFORM_VERSION }}"
+          terraform_version: "${{ fromJSON(env.HB_TERRAFORM_VERSION).value }}"
           terraform_wrapper: false
 
       - name: Creating Rancher server
@@ -385,7 +385,7 @@ jobs:
         with:
           rancher-version: ${{ env.RANCHER_VERSION }}
           job-status: ${{ steps.set-job-status.outputs.job_status }}
-          slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          slack-webhook-url: ${{ fromJSON(env.HB_SLACK_WEBHOOK_URL).value }}
 
       - name: Save test result weekly summary
         if: always() && github.event_name == 'schedule'

@@ -5,7 +5,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/rancher/shepherd/clients/ec2"
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/pkg/config/operations"
 	"github.com/rancher/tests/actions/clusters"
@@ -25,11 +24,11 @@ func ProvisionClustersPreUpgrade(t *testing.T, client *rancher.Client, cattleCon
 	clusterConfig := new(clusters.ClusterConfig)
 	operations.LoadObjectFromMap(defaults.ClusterConfigKey, cattleConfig, clusterConfig)
 
-	provider := provisioning.CreateProvider(clusterConfig.Provider)
-	machineConfigSpec := provider.LoadMachineConfigFunc(cattleConfig)
+	_, providerName, err := provisioning.GetProviderFromConfig(cattleConfig)
+	require.NoError(t, err)
 
-	awsEC2Configs := new(ec2.AWSEC2Configs)
-	operations.LoadObjectFromMap(ec2.ConfigurationFileKey, cattleConfig, awsEC2Configs)
+	provider := provisioning.CreateProvider(providerName)
+	machineConfigSpec := provider.LoadMachineConfigFunc(cattleConfig)
 
 	nodeRolesStandard := []provisioninginput.MachinePools{
 		provisioninginput.EtcdMachinePool,

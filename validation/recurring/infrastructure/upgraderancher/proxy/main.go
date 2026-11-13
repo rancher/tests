@@ -44,6 +44,19 @@ func main() {
 	if err != nil {
 		logrus.Fatalf("Failed to load package defaults: %v", err)
 	}
+
+	cattleConfig, err = defaults.LoadSecretsManagerDefaults(cattleConfig)
+	if err != nil {
+		logrus.Fatalf("Failed to load Secrets Manager defaults: %v", err)
+	}
+
+	err = defaults.VerifyCattleConfig(cattleConfig, nil)
+	if err != nil {
+		logrus.Fatalf("Cattle config verification failed: %v", err)
+	}
+
+	infraConfig.WriteConfigToFile(os.Getenv(config.ConfigEnvironmentKey), cattleConfig)
+
 	testSession := session.NewSession()
 
 	client, proxyBastion, proxyPrivateIP, _, _, cattleConfig := setupproxy.SetupProxyRancher(t, testSession, keypath.ProxyKeyPath, cattleConfig)

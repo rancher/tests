@@ -10,13 +10,13 @@ eksClusterConfig:
   nodeGroups:
   - desiredSize: 3
     diskSize: 50
-    ec2SshKey: "<required>"
+    ec2SshKey: "<HB_SSH_PRIVATE_KEY_NAME>"
     gpu: false
     imageId: ""
-    instanceType: "<required>"
+    instanceType: "t3.medium"
     labels: {}
-    maxSize: 10
-    minSize: 1
+    maxSize: 5
+    minSize: 3
     nodeRole: ""
     nodegroupName: "<required>"
     requestSpotInstances: false
@@ -28,13 +28,12 @@ eksClusterConfig:
   privateAccess: false
   publicAccess: true
   publicAccessSources: []
-  region: "<required>"
+  region: "<HB_EKS_REGION>"
   secretsEncryption: false
   securityGroups:
-  - "<required>"
+  - "<HB_EKS_SECURITY_GROUPS>"
   serviceRole: ""
   subnets:
-  - "<required>"
-  - "<required>"
+  - "<HB_EKS_SUBNETS>"
   tags: {}
 
