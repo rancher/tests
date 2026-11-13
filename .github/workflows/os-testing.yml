@@ -331,8 +331,8 @@ jobs:
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
               rancherHostname: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
               rancherImage: "${{ matrix.version >= '16' && '<HB_PRIME_HEAD_RANCHER_SERVER_IMAGE>' || '<HB_PRIME_HEAD_RANCHER_IMAGE>' }}"
-              rke2Version: "${{ fromJSON(env.HB_RKE2_VERSION).value }}"
-              k3sVersion: "${{ fromJSON(env.HB_K3S_VERSION).value }}${{ fromJSON(env.HB_K3S_VERSION_SUFFIX).value }}"
+              rke2Version: "${{ fromJSON(env[format('HB_RKE2_VERSION_2_{0}', matrix.version)]).value }}"
+              k3sVersion: "${{ fromJSON(env[format('HB_K3S_VERSION_2_{0}', matrix.version)]).value }}${{ fromJSON(env.HB_K3S_VERSION_SUFFIX).value }}"
               osUser: "${{ inputs.os_user }}"
               osGroup: "${{ inputs.os_group }}"
 
@@ -420,14 +420,14 @@ jobs:
           grep -qF "localCluster: \"$ALTERNATE_CLUSTER_TYPE\"" "$CATTLE_TEST_CONFIG"
 
           set -o pipefail
-          exec > >(stdbuf -o0 perl -pe 's/\b(?:\d{1,3}\.){3}\d{1,3}\b/[REDACTED_IP]/g' | tee /tmp/alternate-rancher-server-setup.log) 2>&1
+          exec > >(perl -pe 'BEGIN{$|=1} s/\b(?:\d{1,3}\.){3}\d{1,3}\b/[REDACTED_IP]/g' | tee /tmp/alternate-rancher-server-setup.log) 2>&1
           stdbuf -o0 -e0 go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/standard/main.go
 
       - name: Create ${{ github.event.inputs.local_cluster_type || 'rke2' }} Rancher server
         shell: bash
         run: |
           set -o pipefail
-          exec > >(stdbuf -o0 perl -pe 's/\b(?:\d{1,3}\.){3}\d{1,3}\b/[REDACTED_IP]/g' | tee /tmp/rancher-server-setup.log) 2>&1
+          exec > >(perl -pe 'BEGIN{$|=1} s/\b(?:\d{1,3}\.){3}\d{1,3}\b/[REDACTED_IP]/g' | tee /tmp/rancher-server-setup.log) 2>&1
           stdbuf -o0 -e0 go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/standard/main.go
       - name: Run OS tests
         env:
