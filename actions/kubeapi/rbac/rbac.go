@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/rancher/norman/types"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
@@ -29,6 +30,9 @@ const (
 	ClusterMgmtResource                = "-cluster-mgmt"
 	ProjectMgmtResource                = "-project-mgmt"
 	AggregatedRoleTemplatesFeatureFlag = "aggregated-roletemplates"
+	ClusterRoleOwnerAnnotation         = "authz.cluster.cattle.io/clusterrole-owner"
+	ClusterRoleOwnerInstallUUIDLabel   = "authz.cluster.cattle.io/clusterrole-owner-install-uuid"
+	InstallUUIDSetting                 = "install-uuid"
 	ClusterContext                     = "cluster"
 	ProjectContext                     = "project"
 	RkeCattleAPIGroup                  = "rke.cattle.io"
@@ -598,4 +602,26 @@ func GetProjectRoleTemplateBindingNamespace(project *v3.Project) string {
 		return fmt.Sprintf("%s-%s", project.Spec.ClusterName, project.Name)
 	}
 	return project.Name
+}
+
+// VerifyClusterRoleRetained polls the ClusterRole for the period and returns an error if it is deleted
+func VerifyClusterRoleRetained(client *rancher.Client, clusterID, clusterRoleName string, period time.Duration) error {
+	wranglerCtx, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
+	if err != nil {
+		return err
+	}
+
+	err = kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, period, true, func(ctx context.Context) (bool, error) {
+		_, err := wranglerCtx.RBAC.ClusterRole().Get(clusterRoleName, metav1.GetOptions{})
+		if k8serrors.IsNotFound(err) {
+			return false, fmt.Errorf("ClusterRole %s on cluster %s was deleted", clusterRoleName, clusterID)
+		}
+
+		return false, err
+	})
+	if kwait.Interrupted(err) {
+		return nil
+	}
+
+	return err
 }

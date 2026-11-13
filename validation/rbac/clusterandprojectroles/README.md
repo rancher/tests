@@ -2,6 +2,9 @@
 
 ## Getting Started
 Your GO suite should be set to `-run ^Test<>TestSuite$`. For example to run the cluster_role_test.go, set the GO suite to `-run ^TestClusterRoleTestSuite$` You can find specific tests by checking the test file you plan to run.
+
+cluster_role_owner_test.go needs only the `rancher` block below. It skips on servers older than v2.16 and when the `aggregated-roletemplates` feature is on.
+
 Config needed for each of the suites cluster_role_test.go and project_role_test.go require the following config:
 
 ```yaml
