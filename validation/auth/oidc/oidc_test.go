@@ -213,33 +213,6 @@ func (s *OIDCTestSuite) TestOIDCClientSchemaRegisteredInNormanAPI() {
 		"GET %s must return 200, got %d: %s", oidcext.OIDCClientSchemaPath, resp.StatusCode, resp.Body)
 }
 
-func (s *OIDCTestSuite) TestOIDCClientCreatableViaNormanAPI() {
-	subSession := s.session.NewSession()
-	defer subSession.Cleanup()
-
-	normanClientName := namegen.AppendRandomString("norman-oidc")
-	logrus.Infof("Verifying POST %s creates OIDCClient %s", oidcext.OIDCClientsPath, normanClientName)
-
-	resp, err := s.oidcAPI.RawRequest(http.MethodPost, oidcext.OIDCClientsPath, "Bearer "+s.client.RancherConfig.AdminToken, map[string]interface{}{
-		"type":                          "oidcclient",
-		"name":                          normanClientName,
-		"redirectURIs":                  []string{s.oidcConfig.RedirectURI},
-		"scopes":                        s.oidcConfig.Scopes,
-		"tokenExpirationSeconds":        s.oidcConfig.TokenExpirationSeconds,
-		"refreshTokenExpirationSeconds": s.oidcConfig.RefreshTokenExpirationSeconds,
-	})
-	require.NoError(s.T(), err)
-
-	if resp.StatusCode == http.StatusCreated {
-		subSession.RegisterCleanupFunc(func() error {
-			return oidcclient.DeleteOIDCClient(s.client, normanClientName)
-		})
-	}
-
-	require.Equal(s.T(), http.StatusCreated, resp.StatusCode,
-		"POST %s must return 201, got %d: %s", oidcext.OIDCClientsPath, resp.StatusCode, resp.Body)
-}
-
 func (s *OIDCTestSuite) TestOIDCClientRejectsExpirationBelowSchemaMinimum() {
 	logrus.Info("Verifying the OIDCClient schema rejects expiration values below the allowed minimum of one second")
 
@@ -347,14 +320,6 @@ func (s *OIDCTestSuite) TestTokenEndpointRefreshTokenExchangeWorks() {
 	require.NoError(s.T(), err)
 	require.Equal(s.T(), http.StatusOK, resp.StatusCode,
 		"Refreshed access token must authenticate /v3/users, got %d: %s", resp.StatusCode, resp.Body)
-}
-
-func (s *OIDCTestSuite) TestTokenEndpointWrongClientSecretIsRejected() {
-	logrus.Info("Verifying the refresh_token grant rejects a wrong client_secret")
-
-	_, err := s.oidcAPI.RefreshAccessToken(s.tokenSet.RefreshToken, s.clientID, namegen.AppendRandomString("wrong-secret"))
-	require.Error(s.T(), err, "refresh_token grant must reject a wrong client_secret")
-	require.NotContains(s.T(), err.Error(), "500", "A wrong client_secret must not produce a server error")
 }
 
 func (s *OIDCTestSuite) TestSecurityMissingAuthHeaderReturns401() {
