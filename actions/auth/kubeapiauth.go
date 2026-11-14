@@ -37,7 +37,8 @@ const (
 	KubeAPIAuthNamespace = "cattle-system"
 	KubeAPIAuthDaemonSet = "kube-api-auth"
 
-	TokenReviewKind = "TokenReview"
+	TokenReviewKind        = "TokenReview"
+	TokenReviewContentType = "application/json"
 
 	ExtTokenPrefix = "ext/"
 
@@ -60,6 +61,7 @@ var (
 // TokenReviewResult holds what kube-api-auth answered a TokenReview with
 type TokenReviewResult struct {
 	StatusCode    int
+	ContentType   string
 	APIVersion    string
 	Kind          string
 	Authenticated bool
@@ -100,7 +102,7 @@ func ReviewToken(client *rancher.Client, clusterID, apiVersion, kind, token stri
 // PostTokenReview sends a TokenReview to kube-api-auth from the host network of a control plane node
 func PostTokenReview(client *rancher.Client, clusterID, payload string) (*TokenReviewResult, error) {
 	command := []string{"sh", "-c", fmt.Sprintf(
-		`curl -s -w '%s%%{http_code}' -X POST %s -H 'Content-Type: application/json' --data-binary %s`,
+		`curl -s -w '%s%%{http_code} %%{content_type}' -X POST %s -H 'Content-Type: application/json' --data-binary %s`,
 		statusMarker, KubeAPIAuthEndpoint, shellQuote(payload))}
 
 	output, err := kubectl.CommandOnControlPlane(client, clusterID, command, kubeAPIAuthLogBuffer)
@@ -121,12 +123,17 @@ func parseTokenReviewOutput(output string) (*TokenReviewResult, error) {
 
 	body := output[:marker]
 
-	statusCode, err := strconv.Atoi(strings.TrimSpace(output[marker+len(statusMarker):]))
+	trailer := strings.SplitN(strings.TrimSpace(output[marker+len(statusMarker):]), " ", 2)
+
+	statusCode, err := strconv.Atoi(trailer[0])
 	if err != nil {
 		return nil, fmt.Errorf("reading the status code the TokenReview request wrote: %w", err)
 	}
 
 	result := &TokenReviewResult{StatusCode: statusCode, Body: strings.TrimSpace(body)}
+	if len(trailer) == 2 {
+		result.ContentType = strings.TrimSpace(trailer[1])
+	}
 
 	reply := new(tokenReviewReply)
 	if err := json.Unmarshal([]byte(body), reply); err != nil {
@@ -252,6 +259,72 @@ func EchoesRequestAPIVersion(client *rancher.Client, clusterID, token string) (b
 	}
 
 	return result.APIVersion == TokenReviewAPIV1, nil
+}
+
+// AnswersRefusalsWithTokenReview reports whether kube-api-auth refuses an unknown token with a TokenReview rather than an empty 401
+func AnswersRefusalsWithTokenReview(client *rancher.Client, clusterID string) (bool, error) {
+	result, err := ReviewToken(client, clusterID, TokenReviewAPIV1, TokenReviewKind, "refusal-probe:secret")
+	if err != nil {
+		return false, err
+	}
+
+	return result.StatusCode == http.StatusOK && result.Kind == TokenReviewKind && !result.Authenticated, nil
+}
+
+func waitForTokenReviewRefusal(client *rancher.Client, clusterID, apiVersion, token, reason string) (*TokenReviewResult, error) {
+	var last *TokenReviewResult
+	var lastErr error
+
+	pollErr := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.FiveMinuteTimeout, true,
+		func(context.Context) (bool, error) {
+			result, err := ReviewToken(client, clusterID, apiVersion, TokenReviewKind, token)
+			if err != nil {
+				lastErr = err
+
+				return false, nil
+			}
+
+			last = result
+
+			if result.StatusCode != http.StatusOK {
+				return true, nil
+			}
+
+			return !result.Authenticated && strings.Contains(result.Error, reason), nil
+		})
+	if kwait.Interrupted(pollErr) {
+		if last == nil {
+			return nil, fmt.Errorf("no TokenReview on cluster %s succeeded, the last error was %v: %w", clusterID, lastErr, pollErr)
+		}
+
+		return nil, fmt.Errorf("kube-api-auth never refused the token for %q, its last answer was status %d with authenticated=%t and error %q (last review error: %v): %w",
+			reason, last.StatusCode, last.Authenticated, last.Error, lastErr, pollErr)
+	}
+
+	if pollErr != nil {
+		return nil, fmt.Errorf("reviewing the token on cluster %s: %w", clusterID, pollErr)
+	}
+
+	return last, nil
+}
+
+// NewSyncedClusterScopedToken mints a token scoped to the cluster and returns it once its cluster auth token has synced downstream
+func NewSyncedClusterScopedToken(client *rancher.Client, clusterID string, lifetime time.Duration) (string, error) {
+	token, err := NewClusterScopedToken(client, clusterID, lifetime)
+	if err != nil {
+		return "", err
+	}
+
+	accessKey, _, found := strings.Cut(token, ":")
+	if !found {
+		return "", fmt.Errorf("the token minted for cluster %s should look like accessKey:secret", clusterID)
+	}
+
+	if err := WaitForClusterAuthToken(client, clusterID, accessKey); err != nil {
+		return "", err
+	}
+
+	return token, nil
 }
 
 // EnsureACEEnabled turns the authorized cluster endpoint on when it is off and returns a func restoring the state it found

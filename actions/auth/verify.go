@@ -221,6 +221,109 @@ func VerifyKubeAPIAuthLogged(client *rancher.Client, clusterID string, baseline 
 	return nil
 }
 
+// VerifyKubeAPIAuthRefused polls until kube-api-auth logs the refusal of the access key and returns an error unless it is exactly one info line with the reason and no error line
+func VerifyKubeAPIAuthRefused(client *rancher.Client, clusterID, accessKey, reason string) error {
+	var refusals []string
+
+	var errorLines []string
+
+	var lastErr error
+
+	pollErr := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.TwoMinuteTimeout, true,
+		func(context.Context) (bool, error) {
+			current, err := KubeAPIAuthLogs(client, clusterID)
+			if err != nil {
+				lastErr = err
+
+				return false, nil
+			}
+
+			refusals, errorLines = kubeAPIAuthRefusalLines(current, accessKey)
+
+			return len(refusals) > 0 || len(errorLines) > 0, nil
+		})
+	if pollErr != nil {
+		return fmt.Errorf("%s never logged the refusal of token %s (last read error: %v): %w", KubeAPIAuthDaemonSet, accessKey, lastErr, pollErr)
+	}
+
+	if len(errorLines) > 0 {
+		return fmt.Errorf("%s logged %d error lines for the refused token %s, the first being %q", KubeAPIAuthDaemonSet, len(errorLines), accessKey, errorLines[0])
+	}
+
+	if len(refusals) != 1 {
+		return fmt.Errorf("%s logged the refusal of token %s %d times where one info line was expected", KubeAPIAuthDaemonSet, accessKey, len(refusals))
+	}
+
+	if !strings.Contains(refusals[0], reason) {
+		return fmt.Errorf("%s logged the refusal of token %s without the reason %q: %q", KubeAPIAuthDaemonSet, accessKey, reason, refusals[0])
+	}
+
+	return nil
+}
+
+func kubeAPIAuthRefusalLines(logsByPod map[string]string, accessKey string) ([]string, []string) {
+	refusals := []string{}
+	errorLines := []string{}
+
+	for _, logs := range logsByPod {
+		for _, line := range strings.Split(logs, "\n") {
+			if !strings.Contains(line, accessKey) {
+				continue
+			}
+
+			switch {
+			case strings.Contains(line, "level=error"):
+				errorLines = append(errorLines, line)
+			case strings.Contains(line, "level=info") && strings.Contains(line, "Authentication refused for "+accessKey+":"):
+				refusals = append(refusals, line)
+			}
+		}
+	}
+
+	return refusals, errorLines
+}
+
+// VerifyTokenReviewRefused returns an error unless kube-api-auth refuses the token under both apiVersions with a JSON TokenReview that names the reason and omits the secret
+func VerifyTokenReviewRefused(client *rancher.Client, clusterID, token, reason string) error {
+	_, secret, found := strings.Cut(token, ":")
+	if !found || secret == "" {
+		return fmt.Errorf("the token should look like accessKey:secret so the refusal can be checked for the secret")
+	}
+
+	for _, apiVersion := range []string{TokenReviewAPIV1, TokenReviewAPIV1Beta} {
+		refusal, err := waitForTokenReviewRefusal(client, clusterID, apiVersion, token, reason)
+		if err != nil {
+			return err
+		}
+
+		if refusal.StatusCode != http.StatusOK {
+			return fmt.Errorf("kube-api-auth answered the refusal under %s with status %d rather than a TokenReview", apiVersion, refusal.StatusCode)
+		}
+
+		if refusal.Kind != TokenReviewKind {
+			return fmt.Errorf("the refusal under %s carried kind %q where %q was expected", apiVersion, refusal.Kind, TokenReviewKind)
+		}
+
+		if refusal.APIVersion != apiVersion {
+			return fmt.Errorf("the refusal carried apiVersion %q where %q was requested", refusal.APIVersion, apiVersion)
+		}
+
+		if !strings.Contains(refusal.Error, reason) {
+			return fmt.Errorf("the refusal under %s says %q where %q was expected", apiVersion, refusal.Error, reason)
+		}
+
+		if strings.Contains(refusal.Body, secret) {
+			return fmt.Errorf("the refusal under %s repeats the token secret", apiVersion)
+		}
+
+		if !strings.Contains(refusal.ContentType, TokenReviewContentType) {
+			return fmt.Errorf("the refusal under %s was answered as %q rather than JSON", apiVersion, refusal.ContentType)
+		}
+	}
+
+	return nil
+}
+
 func logsSince(baseline, current string) string {
 	trimmed := strings.TrimRight(baseline, "\n")
 	if trimmed == "" {
