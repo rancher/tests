@@ -4,7 +4,7 @@ This package contains tests for Rancher's built-in OIDC Provider and OAuth2 acce
 
 ## Prerequisites
 
-- Rancher v2.14.0 or later
+- Rancher v2.14.0 or later. Tests that cover a fix from v2.15 or v2.16 skip on an older server and say why
 - An existing cluster that the user has access to
 - The `server-url` setting must be set on the Rancher install. The OIDC issuer is derived from it, so an
   unset `server-url` yields a relative issuer of `/oidc` and fails RFC 8414 discovery validation.

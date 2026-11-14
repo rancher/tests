@@ -17,6 +17,7 @@ import (
 	"github.com/rancher/shepherd/pkg/config"
 	"github.com/rancher/shepherd/pkg/session"
 	authactions "github.com/rancher/tests/actions/auth"
+	actionsClusters "github.com/rancher/tests/actions/clusters"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	secretapi "github.com/rancher/tests/actions/kubeapi/secrets"
 	userapi "github.com/rancher/tests/actions/kubeapi/users"
@@ -59,6 +60,12 @@ func (k *KeycloakOIDCTerraformSuite) SetupSuite() {
 	client, err := rancher.NewClient("", k.session)
 	require.NoError(k.T(), err, "Failed to create Rancher client")
 	k.client = client
+
+	atLeast214, err := actionsClusters.IsRancherVersionAbove(k.client, "v2.14.0-0")
+	require.NoError(k.T(), err, "Failed to read the Rancher server version")
+	if !atLeast214 {
+		k.T().Skip("The rancher2_auth_config_keycloak_oidc resource is only in the terraform provider for Rancher v2.14 and later")
+	}
 
 	logrus.Info("Getting cluster name from the config file")
 	clusterName := client.RancherConfig.ClusterName

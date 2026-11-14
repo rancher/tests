@@ -14,16 +14,19 @@ import (
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/shepherd/clients/rancher"
 	oidcauth "github.com/rancher/shepherd/clients/rancher/auth/oidc"
+	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	oidcext "github.com/rancher/shepherd/extensions/auth/oidc"
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/extensions/kubeapi/auth/oidcclient"
 	"github.com/rancher/shepherd/extensions/kubeapi/cluster"
 	"github.com/rancher/shepherd/extensions/kubeapi/features"
 	"github.com/rancher/shepherd/extensions/kubeapi/workloads/deployments"
+	"github.com/rancher/shepherd/extensions/token"
 	"github.com/rancher/shepherd/pkg/clientbase"
 	"github.com/rancher/shepherd/pkg/config"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
+	actionsClusters "github.com/rancher/tests/actions/clusters"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -51,6 +54,7 @@ type OIDCNoClientsTestSuite struct {
 	client     *rancher.Client
 	oidcConfig *oidcauth.Config
 	oidcAPI    *oidcauth.APIClient
+	atLeast216 bool
 }
 
 func (s *OIDCNoClientsTestSuite) SetupSuite() {
@@ -59,6 +63,9 @@ func (s *OIDCNoClientsTestSuite) SetupSuite() {
 	client, err := rancher.NewClient("", s.session)
 	require.NoError(s.T(), err, "Failed to create Rancher client")
 	s.client = client
+
+	s.atLeast216, err = actionsClusters.IsRancherVersionAbove(s.client, "v2.16.0-0")
+	require.NoError(s.T(), err, "Failed to read the Rancher server version")
 
 	logrus.Info("Loading OIDC configuration from config file")
 	s.oidcConfig = new(oidcauth.Config)
@@ -149,6 +156,10 @@ func (s *OIDCNoClientsTestSuite) fetchJWKS() (*clientbase.Response, map[string]i
 }
 
 func (s *OIDCNoClientsTestSuite) TestDiscoveryReturns200WithNoOIDCClients() {
+	if !s.atLeast216 {
+		s.T().Skip("Known issue: https://github.com/rancher/rancher/issues/56837")
+	}
+
 	s.requireNoOIDCClients()
 
 	logrus.Info("Verifying GET /oidc/.well-known/openid-configuration returns 200 with no OIDCClients configured")
@@ -165,6 +176,10 @@ func (s *OIDCNoClientsTestSuite) TestDiscoveryReturns200WithNoOIDCClients() {
 }
 
 func (s *OIDCNoClientsTestSuite) TestJWKSReturns200WithNoOIDCClients() {
+	if !s.atLeast216 {
+		s.T().Skip("Known issue: https://github.com/rancher/rancher/issues/56837")
+	}
+
 	s.requireNoOIDCClients()
 
 	logrus.Info("Verifying GET /oidc/.well-known/jwks.json returns 200 with no OIDCClients configured")
@@ -185,6 +200,10 @@ func (s *OIDCNoClientsTestSuite) TestJWKSReturns200WithNoOIDCClients() {
 }
 
 func (s *OIDCNoClientsTestSuite) TestPublicEndpointsSetSecurityHeadersWithNoOIDCClients() {
+	if !s.atLeast216 {
+		s.T().Skip("Known issue: https://github.com/rancher/rancher/issues/56837")
+	}
+
 	s.requireNoOIDCClients()
 
 	logrus.Info("Verifying the public OIDC endpoints set the security headers and are not CORS-readable with no OIDCClients configured")
@@ -220,6 +239,10 @@ func (s *OIDCNoClientsTestSuite) TestPublicEndpointsSetSecurityHeadersWithNoOIDC
 }
 
 func (s *OIDCNoClientsTestSuite) TestAuthorizeReturnsClientErrorWithNoOIDCClients() {
+	if !s.atLeast216 {
+		s.T().Skip("Known issue: https://github.com/rancher/rancher/issues/56837")
+	}
+
 	s.requireNoOIDCClients()
 
 	logrus.Info("Verifying /oidc/authorize rejects an unsupported method as a client error instead of a server error")
@@ -241,8 +264,12 @@ func (s *OIDCNoClientsTestSuite) TestAuthorizeReturnsClientErrorWithNoOIDCClient
 		"code_challenge_method": {authorizeCodeChallengeMethod},
 	}
 
+	loginToken, err := token.GenerateUserToken(&management.User{Username: s.oidcConfig.AdminUsername, Password: s.oidcConfig.AdminPassword},
+		s.client.RancherConfig.Host)
+	require.NoError(s.T(), err, "The admin should be able to log in to Rancher, since only a login token can start an OIDC sign-in")
+
 	resp, err = s.oidcAPI.RawRequest(http.MethodGet, oidcext.OIDCAuthPath+"?"+authorizeQuery.Encode(),
-		"Bearer "+s.client.RancherConfig.AdminToken, nil)
+		"Bearer "+loginToken.Token, nil)
 	require.NoError(s.T(), err)
 	require.Equal(s.T(), http.StatusBadRequest, resp.StatusCode,
 		"An authorize request naming an unknown client must be rejected with 400, got %d: %s", resp.StatusCode, resp.Body)
@@ -255,6 +282,10 @@ func (s *OIDCNoClientsTestSuite) TestAuthorizeReturnsClientErrorWithNoOIDCClient
 }
 
 func (s *OIDCNoClientsTestSuite) TestTokenEndpointReturns400ForUnverifiableRefreshTokenWithNoOIDCClients() {
+	if !s.atLeast216 {
+		s.T().Skip("Known issue: https://github.com/rancher/rancher/issues/56837")
+	}
+
 	s.requireNoOIDCClients()
 
 	logrus.Info("Verifying the refresh_token grant rejects an unverifiable token with an HTTP 400 status instead of a server error with no OIDCClients configured")
@@ -272,6 +303,10 @@ func (s *OIDCNoClientsTestSuite) TestTokenEndpointReturns400ForUnverifiableRefre
 }
 
 func (s *OIDCNoClientsTestSuite) TestUserInfoRejectsInvalidTokenWithNoOIDCClients() {
+	if !s.atLeast216 {
+		s.T().Skip("Known issue: https://github.com/rancher/rancher/issues/56837")
+	}
+
 	s.requireNoOIDCClients()
 
 	logrus.Info("Verifying /oidc/userinfo returns an OAuth2 error instead of a server error with no OIDCClients configured")
@@ -289,6 +324,10 @@ func (s *OIDCNoClientsTestSuite) TestUserInfoRejectsInvalidTokenWithNoOIDCClient
 }
 
 func (s *OIDCNoClientsTestSuite) TestPublicEndpointsStayAvailableAfterLastOIDCClientDeleted() {
+	if !s.atLeast216 {
+		s.T().Skip("Known issue: https://github.com/rancher/rancher/issues/56837")
+	}
+
 	subSession := s.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -374,7 +413,7 @@ func (s *OIDCNoClientsTestSuite) TestAccessTokenStopsAuthenticatingAfterLastOIDC
 }
 
 func (s *OIDCNoClientsTestSuite) TestRefreshTokenGrantReturnsInvalidGrantAfterLastOIDCClientDeleted() {
-	s.T().Skip("Known issue: https://github.com/rancher/rancher/issues/56837")
+	s.T().Skip("Known issue: https://github.com/rancher/rancher/issues/58801")
 
 	subSession := s.session.NewSession()
 	defer subSession.Cleanup()

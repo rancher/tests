@@ -21,6 +21,7 @@ import (
 	"github.com/rancher/shepherd/pkg/config"
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
+	actionsClusters "github.com/rancher/tests/actions/clusters"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -43,6 +44,7 @@ type OIDCTestSuite struct {
 	clientSecret      string
 	tokenSet          *oidcext.TokenSet
 	accessTokenHeader string
+	atLeast215        bool
 }
 
 func (s *OIDCTestSuite) SetupSuite() {
@@ -51,6 +53,9 @@ func (s *OIDCTestSuite) SetupSuite() {
 	client, err := rancher.NewClient("", s.session)
 	require.NoError(s.T(), err, "Failed to create Rancher client")
 	s.client = client
+
+	s.atLeast215, err = actionsClusters.IsRancherVersionAbove(s.client, "v2.15.0-0")
+	require.NoError(s.T(), err, "Failed to read the Rancher server version")
 
 	logrus.Info("Loading OIDC configuration from config file")
 	s.oidcConfig = new(oidcauth.Config)
@@ -214,6 +219,10 @@ func (s *OIDCTestSuite) TestOIDCClientSchemaRegisteredInNormanAPI() {
 }
 
 func (s *OIDCTestSuite) TestOIDCClientCreatableViaNormanAPI() {
+	if !s.atLeast215 {
+		s.T().Skip("Known issue: https://github.com/rancher/rancher/issues/54099")
+	}
+
 	subSession := s.session.NewSession()
 	defer subSession.Cleanup()
 
@@ -350,6 +359,10 @@ func (s *OIDCTestSuite) TestTokenEndpointRefreshTokenExchangeWorks() {
 }
 
 func (s *OIDCTestSuite) TestTokenEndpointWrongClientSecretIsRejected() {
+	if !s.atLeast215 {
+		s.T().Skip("Known issue: https://github.com/rancher/rancher/issues/54401")
+	}
+
 	logrus.Info("Verifying the refresh_token grant rejects a wrong client_secret")
 
 	_, err := s.oidcAPI.RefreshAccessToken(s.tokenSet.RefreshToken, s.clientID, namegen.AppendRandomString("wrong-secret"))
