@@ -15,6 +15,8 @@ This package contains tests for Keycloak OIDC authentication provider functional
 
 - A reachable Keycloak server and an account that can administer the target realm
 - Rancher reachable at the address in `rancher.host`, because that is the address Keycloak redirects back to
+- Rancher v2.14 or later for the tests that sign a user in, v2.15 or later for the ones that search Keycloak
+  principals, and v2.16 or later for the configureTest scope check. On an older server those tests skip and say why
 
 Nothing else has to exist beforehand.
 

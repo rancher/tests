@@ -18,6 +18,7 @@ import (
 	extsecretapi "github.com/rancher/shepherd/extensions/kubeapi/secrets"
 	"github.com/rancher/shepherd/pkg/session"
 	authactions "github.com/rancher/tests/actions/auth"
+	actionsClusters "github.com/rancher/tests/actions/clusters"
 	projectapi "github.com/rancher/tests/actions/kubeapi/projects"
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	userapi "github.com/rancher/tests/actions/kubeapi/users"
@@ -28,6 +29,8 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+const v1OIDCSignInMissing = "The /v1-oidc route the suite signs users in through is only in Rancher v2.14 and later"
 
 type KeycloakOIDCAuthProviderSuite struct {
 	suite.Suite
@@ -40,6 +43,8 @@ type KeycloakOIDCAuthProviderSuite struct {
 	adminPrincipalID string
 	clientID         string
 	authConfig       *authactions.ExternalAuthConfig
+	atLeast214       bool
+	atLeast215       bool
 }
 
 func (k *KeycloakOIDCAuthProviderSuite) SetupSuite() {
@@ -49,6 +54,11 @@ func (k *KeycloakOIDCAuthProviderSuite) SetupSuite() {
 	client, err := rancher.NewClient("", k.session)
 	require.NoError(k.T(), err, "Failed to create Rancher client")
 	k.client = client
+
+	k.atLeast214, err = actionsClusters.IsRancherVersionAbove(k.client, "v2.14.0-0")
+	require.NoError(k.T(), err, "Failed to read the Rancher server version")
+	k.atLeast215, err = actionsClusters.IsRancherVersionAbove(k.client, "v2.15.0-0")
+	require.NoError(k.T(), err, "Failed to read the Rancher server version")
 
 	logrus.Info("Getting cluster name from the config file")
 	clusterName := client.RancherConfig.ClusterName
@@ -181,7 +191,35 @@ func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCConfigureTestReturnsAuth
 	require.Equal(k.T(), keycloakOIDCConfig.RancherURL, parameters.Get("redirect_uri"), "The authorization request should come back to the configured Rancher address")
 }
 
+func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCConfigureTestRequestsOpenIDScope() {
+	atLeast216, err := actionsClusters.IsRancherVersionAbove(k.client, "v2.16.0-0")
+	require.NoError(k.T(), err, "Failed to read the Rancher server version")
+	if !atLeast216 {
+		k.T().Skip("Known issue: https://github.com/rancher/rancher/issues/57708")
+	}
+
+	subSession := k.session.NewSession()
+	defer subSession.Cleanup()
+
+	err = authactions.EnsureAuthProviderEnabled(k.client, authactions.KeycloakOIDC)
+	require.NoError(k.T(), err, "Failed to enable Keycloak OIDC")
+
+	redirectURL, err := k.client.Auth.KeycloakOIDC.ConfigureTest()
+	require.NoError(k.T(), err, "Rancher should answer configureTest with the address the administrator signs in at")
+
+	authorizationRequest, err := url.Parse(redirectURL)
+	require.NoError(k.T(), err, "configureTest should answer with a parseable address, got [%v]", redirectURL)
+
+	scope := authorizationRequest.Query().Get("scope")
+	require.Contains(k.T(), strings.Fields(scope), "openid",
+		"The authorization request should ask for the openid scope so the code it yields comes with an id_token, got scope [%v]", scope)
+}
+
 func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCAdminLogin() {
+	if !k.atLeast214 {
+		k.T().Skip(v1OIDCSignInMissing)
+	}
+
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(k.client, k.session, k.adminUser, authactions.KeycloakOIDC)
 	require.NoError(k.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -200,6 +238,10 @@ func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCAdminLogin() {
 }
 
 func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCUnrestrictedAccessMode() {
+	if !k.atLeast214 {
+		k.T().Skip(v1OIDCSignInMissing)
+	}
+
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(k.client, k.session, k.adminUser, authactions.KeycloakOIDC)
 	require.NoError(k.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -214,6 +256,10 @@ func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCUnrestrictedAccessMode()
 }
 
 func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCRestrictedAccessModeAuthorizedUsersCanLogin() {
+	if !k.atLeast214 {
+		k.T().Skip(v1OIDCSignInMissing)
+	}
+
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(k.client, k.session, k.adminUser, authactions.KeycloakOIDC)
 	require.NoError(k.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -236,6 +282,10 @@ func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCRestrictedAccessModeAuth
 }
 
 func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCRestrictedAccessModeUnauthorizedLoginDenied() {
+	if !k.atLeast214 {
+		k.T().Skip(v1OIDCSignInMissing)
+	}
+
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(k.client, k.session, k.adminUser, authactions.KeycloakOIDC)
 	require.NoError(k.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -260,6 +310,10 @@ func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCRestrictedAccessModeUnau
 }
 
 func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCRequiredAccessModeAuthorizedUsersCanLogin() {
+	if !k.atLeast214 {
+		k.T().Skip(v1OIDCSignInMissing)
+	}
+
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(k.client, k.session, k.adminUser, authactions.KeycloakOIDC)
 	require.NoError(k.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -282,6 +336,10 @@ func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCRequiredAccessModeAuthor
 }
 
 func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCRequiredAccessModeUnauthorizedLoginDenied() {
+	if !k.atLeast214 {
+		k.T().Skip(v1OIDCSignInMissing)
+	}
+
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(k.client, k.session, k.adminUser, authactions.KeycloakOIDC)
 	require.NoError(k.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -398,6 +456,10 @@ func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCEnableWithAdminLoginChec
 }
 
 func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCGroupClusterAccess() {
+	if !k.atLeast214 {
+		k.T().Skip(v1OIDCSignInMissing)
+	}
+
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(k.client, k.session, k.adminUser, authactions.KeycloakOIDC)
 	require.NoError(k.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -428,6 +490,10 @@ func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCGroupClusterAccess() {
 }
 
 func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCGroupProjectAccess() {
+	if !k.atLeast214 {
+		k.T().Skip(v1OIDCSignInMissing)
+	}
+
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(k.client, k.session, k.adminUser, authactions.KeycloakOIDC)
 	require.NoError(k.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -466,6 +532,10 @@ func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCGroupProjectAccess() {
 }
 
 func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCNonMemberClusterAccessDenied() {
+	if !k.atLeast214 {
+		k.T().Skip(v1OIDCSignInMissing)
+	}
+
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(k.client, k.session, k.adminUser, authactions.KeycloakOIDC)
 	require.NoError(k.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -493,6 +563,10 @@ func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCNonMemberClusterAccessDe
 }
 
 func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCRestrictedModeBindings() {
+	if !k.atLeast214 {
+		k.T().Skip(v1OIDCSignInMissing)
+	}
+
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(k.client, k.session, k.adminUser, authactions.KeycloakOIDC)
 	require.NoError(k.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -548,6 +622,10 @@ func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCRestrictedModeBindings()
 }
 
 func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCAllowClusterAndProjectMembersAccessMode() {
+	if !k.atLeast214 {
+		k.T().Skip(v1OIDCSignInMissing)
+	}
+
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(k.client, k.session, k.adminUser, authactions.KeycloakOIDC)
 	require.NoError(k.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -616,6 +694,10 @@ func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCAllowClusterAndProjectMe
 }
 
 func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCRequiredModeRevokedPrincipalLoginDenied() {
+	if !k.atLeast214 {
+		k.T().Skip(v1OIDCSignInMissing)
+	}
+
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(k.client, k.session, k.adminUser, authactions.KeycloakOIDC)
 	require.NoError(k.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -659,6 +741,10 @@ func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCRequiredModeRevokedPrinc
 }
 
 func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCPrincipalSearchFindsGroups() {
+	if !k.atLeast215 {
+		k.T().Skip("Known issue: https://github.com/rancher/rancher/issues/43765")
+	}
+
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(k.client, k.session, k.adminUser, authactions.KeycloakOIDC)
 	require.NoError(k.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -672,6 +758,10 @@ func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCPrincipalSearchFindsGrou
 }
 
 func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCPrincipalSearchFindsUsers() {
+	if !k.atLeast215 {
+		k.T().Skip("Known issue: https://github.com/rancher/rancher/issues/43765")
+	}
+
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(k.client, k.session, k.adminUser, authactions.KeycloakOIDC)
 	require.NoError(k.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -687,6 +777,10 @@ func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCPrincipalSearchFindsUser
 }
 
 func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCPrincipalSearchByPrincipalType() {
+	if !k.atLeast215 {
+		k.T().Skip("Known issue: https://github.com/rancher/rancher/issues/43765")
+	}
+
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(k.client, k.session, k.adminUser, authactions.KeycloakOIDC)
 	require.NoError(k.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -707,6 +801,10 @@ func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCPrincipalSearchByPrincip
 }
 
 func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCPrincipalSearchByPartialName() {
+	if !k.atLeast215 {
+		k.T().Skip("Known issue: https://github.com/rancher/rancher/issues/43765")
+	}
+
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(k.client, k.session, k.adminUser, authactions.KeycloakOIDC)
 	require.NoError(k.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -728,6 +826,10 @@ func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCPrincipalSearchByPartial
 }
 
 func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCPrincipalSearchRejectsUnknownNames() {
+	if !k.atLeast215 {
+		k.T().Skip("Known issue: https://github.com/rancher/rancher/issues/43765")
+	}
+
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(k.client, k.session, k.adminUser, authactions.KeycloakOIDC)
 	require.NoError(k.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -744,6 +846,10 @@ func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCPrincipalSearchRejectsUn
 }
 
 func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCPrincipalByIDResolvesGroupAndUser() {
+	if !k.atLeast215 {
+		k.T().Skip("Known issue: https://github.com/rancher/rancher/issues/43765")
+	}
+
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(k.client, k.session, k.adminUser, authactions.KeycloakOIDC)
 	require.NoError(k.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -762,6 +868,10 @@ func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCPrincipalByIDResolvesGro
 }
 
 func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCPrincipalSearchFindsLocalUserByDisplayName() {
+	if !k.atLeast214 {
+		k.T().Skip(v1OIDCSignInMissing)
+	}
+
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(k.client, k.session, k.adminUser, authactions.KeycloakOIDC)
 	require.NoError(k.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -781,6 +891,10 @@ func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCPrincipalSearchFindsLoca
 }
 
 func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCPrincipalSearchProvisionedUserIsNotLocal() {
+	if !k.atLeast215 {
+		k.T().Skip("Known issue: https://github.com/rancher/rancher/issues/43765")
+	}
+
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(k.client, k.session, k.adminUser, authactions.KeycloakOIDC)
 	require.NoError(k.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -813,6 +927,10 @@ func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCPrincipalSearchProvision
 }
 
 func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCPrincipalSearchAfterProviderDisabled() {
+	if !k.atLeast215 {
+		k.T().Skip("Known issue: https://github.com/rancher/rancher/issues/43765")
+	}
+
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(k.client, k.session, k.adminUser, authactions.KeycloakOIDC)
 	require.NoError(k.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -845,6 +963,10 @@ func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCPrincipalSearchAfterProv
 }
 
 func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCLoginAttachesExternalPrincipal() {
+	if !k.atLeast214 {
+		k.T().Skip(v1OIDCSignInMissing)
+	}
+
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(k.client, k.session, k.adminUser, authactions.KeycloakOIDC)
 	require.NoError(k.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -864,6 +986,10 @@ func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCLoginAttachesExternalPri
 }
 
 func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCDisableRemovesExternalPrincipals() {
+	if !k.atLeast214 {
+		k.T().Skip(v1OIDCSignInMissing)
+	}
+
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(k.client, k.session, k.adminUser, authactions.KeycloakOIDC)
 	require.NoError(k.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -942,6 +1068,10 @@ func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCNestedGroupsInClaim() {
 }
 
 func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCParentGroupBindingDoesNotReachNestedMembers() {
+	if !k.atLeast214 {
+		k.T().Skip(v1OIDCSignInMissing)
+	}
+
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(k.client, k.session, k.adminUser, authactions.KeycloakOIDC)
 	require.NoError(k.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -981,6 +1111,10 @@ func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCParentGroupBindingDoesNo
 }
 
 func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCNestedGroupBindingGrantsItsOwnMembers() {
+	if !k.atLeast214 {
+		k.T().Skip(v1OIDCSignInMissing)
+	}
+
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(k.client, k.session, k.adminUser, authactions.KeycloakOIDC)
 	require.NoError(k.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
@@ -1020,6 +1154,10 @@ func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCNestedGroupBindingGrants
 }
 
 func (k *KeycloakOIDCAuthProviderSuite) TestKeycloakOIDCFullGroupPathClaimGrantsAncestors() {
+	if !k.atLeast214 {
+		k.T().Skip(v1OIDCSignInMissing)
+	}
+
 	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(k.client, k.session, k.adminUser, authactions.KeycloakOIDC)
 	require.NoError(k.T(), err, "Failed to setup authenticated test")
 	defer subSession.Cleanup()
