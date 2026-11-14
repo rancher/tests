@@ -25,6 +25,7 @@ These tests validate:
 - User authentication with different access modes (unrestricted, restricted, required)
 - Group membership and nested group inheritance
 - Cluster and project role bindings with AD groups
+- Configurable user and group principal ID attributes
 - Access control for authorized and unauthorized users
 - Enabling, disabling and destroying the provider through the `rancher/rancher2` Terraform provider,
   with the resulting state validated over the Rancher API
@@ -35,9 +36,9 @@ These tests validate:
 - AD server must have nested group support enabled
 - Test users and groups must exist in your AD directory with the following hierarchy:
   ```
-  nestgroup1 (doubleNestedGroup)
-    └─ nestgroup2 (nestedGroup)
-        └─ testautogroup1 (group)
+  nestgroup1 (nestedGroup)
+    └─ nestgroup2 (doubleNestedGroup)
+        └─ nestgroup3 (tripleNestedGroup)
   ```
 
 ## Configuration
@@ -113,9 +114,9 @@ activeDirectoryAuthInput:
 ### Group Hierarchy
 
 - `group`: Base group containing direct members (username1, username2)
-- `nestedGroup`: Child group one level deep (nested-username1)
-- `doubleNestedGroup`: Parent group two levels deep (double-nested-username1)
-- `tripleNestedGroup`: Grandparent group three levels deep (triple-nested-username1)
+- `nestedGroup`: Top group, containing nested-username1 and `doubleNestedGroup`
+- `doubleNestedGroup`: One level down, containing double-nested-username1 and `tripleNestedGroup`
+- `tripleNestedGroup`: Two levels down, containing triple-nested-username1
 
 ### Running the Tests
 
@@ -128,6 +129,14 @@ Your GO suite should be set to `-run ^TestActiveDirectoryAuthProviderSuite$`
 ```bash
 gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/auth/provider/activedirectory --junitfile results.xml -- -timeout=60m -tags=validation -v -run ^TestActiveDirectoryAuthProviderSuite$
 ```
+
+**Run Active Directory Principal ID Tests**
+
+`TestActiveDirectoryPrincipalIDTestSuite` enables Active Directory with `sAMAccountName` as the user and group
+principal ID attribute and puts the provider back the way it found it. It needs Rancher v2.16 or later and skips
+on older servers.
+
+Your GO suite should be set to `-run ^TestActiveDirectoryPrincipalIDTestSuite$`
 
 ## Terraform Tests
 

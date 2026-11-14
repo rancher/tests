@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/rancher/norman/httperror"
 	"github.com/rancher/norman/types"
 	"github.com/rancher/shepherd/clients/rancher"
 	shepherdauth "github.com/rancher/shepherd/clients/rancher/auth"
@@ -235,4 +236,36 @@ func logsSince(baseline, current string) string {
 	}
 
 	return current
+}
+
+// VerifyAPIError checks that err is a Rancher API error carrying the given status code, error code and message
+func VerifyAPIError(err error, statusCode int, code, message string) error {
+	var apiError *clientbase.APIError
+	if !errors.As(err, &apiError) {
+		return fmt.Errorf("expected a Rancher API error with status %d, got: %v", statusCode, err)
+	}
+
+	if apiError.StatusCode != statusCode {
+		return fmt.Errorf("expected status %d, got %d: %s", statusCode, apiError.StatusCode, apiError.Body)
+	}
+
+	if !strings.Contains(apiError.Body, "code="+code) || !strings.Contains(apiError.Body, "message="+message) {
+		return fmt.Errorf("expected code %s with message %q, got: %s", code, message, apiError.Body)
+	}
+
+	return nil
+}
+
+// VerifyLoginRefused checks that err is a login refusal carrying the given HTTP status
+func VerifyLoginRefused(err error, statusCode int) error {
+	var apiError *httperror.APIError
+	if !errors.As(err, &apiError) {
+		return fmt.Errorf("expected a login refusal with status %d, got: %v", statusCode, err)
+	}
+
+	if apiError.Code.Status != statusCode {
+		return fmt.Errorf("expected login status %d, got %d: %v", statusCode, apiError.Code.Status, err)
+	}
+
+	return nil
 }
