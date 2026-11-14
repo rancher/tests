@@ -4,9 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
+
+	authnv1 "k8s.io/api/authentication/v1"
 
 	"github.com/rancher/norman/types"
 	"github.com/rancher/shepherd/clients/rancher"
@@ -14,7 +18,9 @@ import (
 	v3 "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/pkg/clientbase"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/kubernetes"
 )
 
 // searchPrincipals runs the /v3/principals search for the given name, restricted to principalType when it is not empty.
@@ -235,4 +241,31 @@ func logsSince(baseline, current string) string {
 	}
 
 	return current
+}
+
+// VerifySelfSubjectReviewExtras returns an error unless a SelfSubjectReview resolves to the user, carries every required extra and no extra outside the allowed ones
+func VerifySelfSubjectReviewExtras(clientset kubernetes.Interface, username string, required, allowed []string) error {
+	review, err := clientset.AuthenticationV1().SelfSubjectReviews().Create(context.Background(), &authnv1.SelfSubjectReview{}, metav1.CreateOptions{})
+	if err != nil {
+		return fmt.Errorf("creating a SelfSubjectReview: %w", err)
+	}
+
+	userInfo := review.Status.UserInfo
+	if userInfo.Username != username {
+		return fmt.Errorf("the SelfSubjectReview resolved to %q where %q was expected", userInfo.Username, username)
+	}
+
+	for _, key := range required {
+		if _, found := userInfo.Extra[key]; !found {
+			return fmt.Errorf("the SelfSubjectReview carries no %q extra, it carries %v", key, slices.Sorted(maps.Keys(userInfo.Extra)))
+		}
+	}
+
+	for key := range userInfo.Extra {
+		if !slices.Contains(allowed, key) {
+			return fmt.Errorf("the SelfSubjectReview carries the %q extra, which is outside %v", key, allowed)
+		}
+	}
+
+	return nil
 }

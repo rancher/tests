@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	clusterv3 "github.com/rancher/rancher/pkg/apis/cluster.cattle.io/v3"
 	apisV1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
 	management "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
@@ -216,6 +217,40 @@ func WaitForClusterAuthTokenGone(client *rancher.Client, clusterID, accessKey st
 	}
 
 	return nil
+}
+
+// WaitForClusterUserAttributeExtras polls the downstream cluster until the user's cluster user attribute carries extras and returns it
+func WaitForClusterUserAttributeExtras(client *rancher.Client, clusterID, userID string) (*clusterv3.ClusterUserAttribute, error) {
+	downstream, err := client.WranglerContext.DownStreamClusterWranglerContext(clusterID)
+	if err != nil {
+		return nil, fmt.Errorf("reaching cluster %s to look for the cluster user attribute of %s: %w", clusterID, userID, err)
+	}
+
+	var attribute *clusterv3.ClusterUserAttribute
+
+	pollErr := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.FiveMinuteTimeout, true,
+		func(context.Context) (bool, error) {
+			attribute, err = downstream.Cluster.ClusterUserAttribute().Get(KubeAPIAuthNamespace, userID, metav1.GetOptions{})
+			if apierrors.IsNotFound(err) {
+				return false, nil
+			}
+
+			if err != nil {
+				return false, err
+			}
+
+			return len(attribute.ExtraByProvider) > 0, nil
+		})
+	if kwait.Interrupted(pollErr) {
+		return nil, fmt.Errorf("the cluster user attribute of %s in %s on cluster %s never carried any extras: %w",
+			userID, KubeAPIAuthNamespace, clusterID, pollErr)
+	}
+
+	if pollErr != nil {
+		return nil, fmt.Errorf("reading the cluster user attribute of %s on cluster %s: %w", userID, clusterID, pollErr)
+	}
+
+	return attribute, nil
 }
 
 // KubeAPIAuthImage returns the image the kube-api-auth daemon set runs on the given cluster
