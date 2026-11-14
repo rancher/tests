@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -23,13 +24,16 @@ import (
 	authnv1 "k8s.io/api/authentication/v1"
 	authnv1beta1 "k8s.io/api/authentication/v1beta1"
 	authzv1 "k8s.io/api/authorization/v1"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/remotecommand"
 )
 
 const (
@@ -41,13 +45,13 @@ const (
 
 	ExtTokenPrefix = "ext/"
 
-	kubeAPIAuthAppLabel  = "app=" + KubeAPIAuthDaemonSet
+	KubeAPIAuthAppLabel  = "app=" + KubeAPIAuthDaemonSet
 	kubeAPIAuthLogBuffer = "64KB"
 	statusMarker         = "__STATUS__"
 	rancherProxyPath     = "/k8s/clusters/"
 
 	kubeAPIServerLabel    = "component=kube-apiserver"
-	controlPlaneNodeLabel = "node-role.kubernetes.io/control-plane"
+	ControlPlaneNodeLabel = "node-role.kubernetes.io/control-plane"
 	webhookVersionArg     = "authentication-token-webhook-version"
 	unknownConversionLog  = "unknown conversion"
 )
@@ -112,6 +116,33 @@ func PostTokenReview(client *rancher.Client, clusterID, payload string) (*TokenR
 }
 
 // parseTokenReviewOutput splits the status code the curl wrote from the body kube-api-auth answered with
+// ExecTokenReview posts a TokenReview to kube-api-auth by running curl, with no shell, in the given host network pod on a control plane node
+func ExecTokenReview(restConfig *rest.Config, podName, payload string) (*TokenReviewResult, error) {
+	command := []string{"curl", "-s", "-m", "30", "-w", statusMarker + "%{http_code}", "-X", "POST", KubeAPIAuthEndpoint,
+		"-H", "Content-Type: application/json", "--data-binary", payload}
+
+	clientset, err := kubernetes.NewForConfig(restConfig)
+	if err != nil {
+		return nil, fmt.Errorf("building a clientset to reach pod %s: %w", podName, err)
+	}
+
+	execURL := clientset.CoreV1().RESTClient().Post().Resource("pods").Namespace(kubectl.Namespace).Name(podName).SubResource("exec").
+		VersionedParams(&corev1.PodExecOptions{Command: command, Stdout: true, Stderr: true}, scheme.ParameterCodec).URL()
+
+	executor, err := remotecommand.NewWebSocketExecutor(restConfig, http.MethodGet, execURL.String())
+	if err != nil {
+		return nil, fmt.Errorf("preparing to exec into pod %s: %w", podName, err)
+	}
+
+	var stdout, stderr bytes.Buffer
+
+	if err := executor.StreamWithContext(context.Background(), remotecommand.StreamOptions{Stdout: &stdout, Stderr: &stderr}); err != nil {
+		return nil, fmt.Errorf("sending a TokenReview to %s from pod %s (stderr: %s): %w", KubeAPIAuthEndpoint, podName, strings.TrimSpace(stderr.String()), err)
+	}
+
+	return parseTokenReviewOutput(stdout.String())
+}
+
 func parseTokenReviewOutput(output string) (*TokenReviewResult, error) {
 	marker := strings.LastIndex(output, statusMarker)
 	if marker < 0 {
@@ -213,6 +244,72 @@ func WaitForClusterAuthTokenGone(client *rancher.Client, clusterID, accessKey st
 	if pollErr != nil {
 		return fmt.Errorf("cluster auth token %s is still synced to cluster %s, so a revoked token keeps working through the authorized cluster endpoint: %w",
 			accessKey, clusterID, pollErr)
+	}
+
+	return nil
+}
+
+// WaitForClusterAuthTokenEnabled polls the downstream cluster until the cluster auth token of the given access key is enabled or disabled as given
+func WaitForClusterAuthTokenEnabled(client *rancher.Client, clusterID, accessKey string, enabled bool) error {
+	downstream, err := client.WranglerContext.DownStreamClusterWranglerContext(clusterID)
+	if err != nil {
+		return fmt.Errorf("reaching cluster %s to read cluster auth token %s: %w", clusterID, accessKey, err)
+	}
+
+	var last bool
+
+	var lastErr error
+
+	pollErr := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.TwoMinuteTimeout, true,
+		func(context.Context) (bool, error) {
+			clusterAuthToken, err := downstream.Cluster.ClusterAuthToken().Get(KubeAPIAuthNamespace, accessKey, metav1.GetOptions{})
+			if err != nil {
+				lastErr = err
+
+				return false, nil
+			}
+
+			lastErr = nil
+			last = clusterAuthToken.Enabled
+
+			return last == enabled, nil
+		})
+	if pollErr != nil {
+		return fmt.Errorf("cluster auth token %s stays enabled=%t where enabled=%t was expected (last read error: %v): %w", accessKey, last, enabled, lastErr, pollErr)
+	}
+
+	return nil
+}
+
+// GetClusterAuthTokenLastUsedAt reads the lastUsedAt of the cluster auth token of the given access key, or nil when it is unset
+func GetClusterAuthTokenLastUsedAt(client *rancher.Client, clusterID, accessKey string) (*time.Time, error) {
+	downstream, err := client.WranglerContext.DownStreamClusterWranglerContext(clusterID)
+	if err != nil {
+		return nil, fmt.Errorf("reaching cluster %s to read cluster auth token %s: %w", clusterID, accessKey, err)
+	}
+
+	clusterAuthToken, err := downstream.Cluster.ClusterAuthToken().Get(KubeAPIAuthNamespace, accessKey, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("reading cluster auth token %s on cluster %s: %w", accessKey, clusterID, err)
+	}
+
+	if clusterAuthToken.LastUsedAt == nil {
+		return nil, nil
+	}
+
+	return &clusterAuthToken.LastUsedAt.Time, nil
+}
+
+// SetClusterAuthTokenLastUsedAt overwrites the lastUsedAt of the cluster auth token of the given access key
+func SetClusterAuthTokenLastUsedAt(client *rancher.Client, clusterID, accessKey string, at time.Time) error {
+	downstream, err := client.WranglerContext.DownStreamClusterWranglerContext(clusterID)
+	if err != nil {
+		return fmt.Errorf("reaching cluster %s to set lastUsedAt of cluster auth token %s: %w", clusterID, accessKey, err)
+	}
+
+	patch := []byte(fmt.Sprintf(`{"lastUsedAt":%q}`, at.UTC().Format(time.RFC3339)))
+	if _, err := downstream.Cluster.ClusterAuthToken().Patch(KubeAPIAuthNamespace, accessKey, types.MergePatchType, patch); err != nil {
+		return fmt.Errorf("setting lastUsedAt of cluster auth token %s on cluster %s: %w", accessKey, clusterID, err)
 	}
 
 	return nil
@@ -339,7 +436,7 @@ func ControlPlaneNodeCount(client *rancher.Client, clusterID string) (int, error
 		return 0, fmt.Errorf("reaching cluster %s to count its control plane nodes: %w", clusterID, err)
 	}
 
-	nodeList, err := downstream.Core.Node().List(metav1.ListOptions{LabelSelector: controlPlaneNodeLabel})
+	nodeList, err := downstream.Core.Node().List(metav1.ListOptions{LabelSelector: ControlPlaneNodeLabel})
 	if err != nil {
 		return 0, fmt.Errorf("listing the control plane nodes of cluster %s: %w", clusterID, err)
 	}
@@ -439,7 +536,7 @@ func provisioningCluster(client *rancher.Client, clusterID string) (*apisV1.Clus
 
 // KubeAPIAuthLogs returns what each kube-api-auth pod on the cluster has logged, keyed by pod name so a reader can tell which node answered
 func KubeAPIAuthLogs(client *rancher.Client, clusterID string) (map[string]string, error) {
-	podList, err := pods.GetPodsByLabelSelector(client, clusterID, KubeAPIAuthNamespace, kubeAPIAuthAppLabel)
+	podList, err := pods.GetPodsByLabelSelector(client, clusterID, KubeAPIAuthNamespace, KubeAPIAuthAppLabel)
 	if err != nil {
 		return nil, fmt.Errorf("listing the %s pods on cluster %s: %w", KubeAPIAuthDaemonSet, clusterID, err)
 	}
@@ -534,7 +631,7 @@ func VerifyNoUnknownConversion(client *rancher.Client, clusterID string, baselin
 	}
 
 	for pod, logs := range current {
-		if strings.Contains(logsSince(baseline[pod], logs), unknownConversionLog) {
+		if strings.Contains(LogsSince(baseline[pod], logs), unknownConversionLog) {
 			return fmt.Errorf("the kube-apiserver on %s logged %q, so it could not read the TokenReview kube-api-auth answered with",
 				pod, unknownConversionLog)
 		}

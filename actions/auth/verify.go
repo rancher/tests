@@ -208,7 +208,7 @@ func VerifyKubeAPIAuthLogged(client *rancher.Client, clusterID string, baseline 
 	appended := strings.Builder{}
 
 	for pod, logs := range current {
-		appended.WriteString(logsSince(baseline[pod], logs))
+		appended.WriteString(LogsSince(baseline[pod], logs))
 		appended.WriteString("\n")
 	}
 
@@ -221,7 +221,8 @@ func VerifyKubeAPIAuthLogged(client *rancher.Client, clusterID string, baseline 
 	return nil
 }
 
-func logsSince(baseline, current string) string {
+// LogsSince returns what a pod logged after the last line of its baseline
+func LogsSince(baseline, current string) string {
 	trimmed := strings.TrimRight(baseline, "\n")
 	if trimmed == "" {
 		return current

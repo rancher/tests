@@ -19,6 +19,7 @@ import (
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	userapi "github.com/rancher/tests/actions/kubeapi/users"
 	"github.com/rancher/tests/actions/rbac"
+	tokenapi "github.com/rancher/tests/actions/tokens"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -1026,6 +1027,14 @@ func (k *KeycloakSAMLAuthProviderSuite) TestKeycloakSAMLFullGroupPathBinding() {
 
 	err = authAdmin.WranglerContext.Mgmt.ClusterRoleTemplateBinding().Delete(crtb.Namespace, crtb.Name, &metav1.DeleteOptions{})
 	require.NoError(k.T(), err, "Failed to delete CRTB: %s/%s", crtb.Namespace, crtb.Name)
+}
+
+func (k *KeycloakSAMLAuthProviderSuite) TestKeycloakSAMLLoginTokenRecordsLastUsedAt() {
+	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(k.client, k.session, k.adminUser, authactions.KeycloakSAML)
+	require.NoError(k.T(), err, "Failed to setup authenticated test")
+	defer subSession.Cleanup()
+
+	require.NoError(k.T(), tokenapi.VerifyLoginTokenRecordsLastUsedAt(k.client, authAdmin), "The first use of the KeycloakSAML login token should be written to its lastUsedAt")
 }
 
 func TestKeycloakSAMLAuthProviderSuite(t *testing.T) {

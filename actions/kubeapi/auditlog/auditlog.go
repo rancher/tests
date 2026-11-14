@@ -173,6 +173,33 @@ func FetchAuditLogEntries(client *rancher.Client, uriSubstring string) ([]Entry,
 	return entries, nil
 }
 
+// WaitForAuditLogEntryCount polls the audit log until at least count entries have a request URI containing the substring and returns them
+func WaitForAuditLogEntryCount(client *rancher.Client, uriSubstring string, count int) ([]Entry, error) {
+	var found []Entry
+
+	var lastErr error
+
+	err := kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.TwoMinuteTimeout, true,
+		func(context.Context) (bool, error) {
+			entries, err := FetchAuditLogEntries(client, uriSubstring)
+			if err != nil {
+				lastErr = err
+
+				return false, nil
+			}
+
+			lastErr = nil
+			found = entries
+
+			return len(entries) >= count, nil
+		})
+	if err != nil {
+		return found, fmt.Errorf("the audit log holds %d entries for %s where %d were expected (last read error: %v): %w", len(found), uriSubstring, count, lastErr, err)
+	}
+
+	return found, nil
+}
+
 // WaitForAuditLogEntry polls the audit log until an entry whose request URI contains the given substring satisfies match
 func WaitForAuditLogEntry(client *rancher.Client, uriSubstring string, match func(Entry) bool) (*Entry, error) {
 	var found *Entry
