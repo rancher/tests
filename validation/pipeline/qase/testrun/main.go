@@ -27,9 +27,16 @@ func main() {
 
 	client := qasedefaults.SetupQaseClient()
 
+	// QASE_PROJECT_ID targets a non-default project (e.g. RANCHERINT for
+	// PIT-style shared runs); unset keeps the historical RM default.
+	projectID := os.Getenv(qasedefaults.ProjectIDEnvVar)
+	if projectID == "" {
+		projectID = qasedefaults.RancherManagerProjectID
+	}
+
 	if *startRun {
 		// create test run
-		resp, err := client.CreateTestRun(testRunName, qasedefaults.RancherManagerProjectID, "")
+		resp, err := client.CreateTestRun(testRunName, projectID, "")
 		if err != nil {
 			logrus.Error("error creating test run: ", err)
 		}
@@ -48,18 +55,16 @@ func main() {
 			logrus.Fatalf("error reporting converting string to int32: %v", err)
 		}
 		// complete test run
-		completeRunRequest := client.Client.RunsAPI.CompleteRun(context.TODO(), qasedefaults.RancherManagerProjectID, int32(testRunConfig.ID))
+		completeRunRequest := client.Client.RunsAPI.CompleteRun(context.TODO(), projectID, int32(testRunConfig.ID))
 		completeRunRequest.Execute()
 		if err != nil {
 			log.Fatalf("error completing test run: %v", err)
 		}
 	}
-
 }
 
 func writeToConfigFile(config RecurringTestRun) error {
 	yamlConfig, err := yaml.Marshal(config)
-
 	if err != nil {
 		return err
 	}
