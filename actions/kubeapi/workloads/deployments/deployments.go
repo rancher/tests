@@ -148,6 +148,24 @@ func GetLatestStatusMessageFromDeployment(deployment *appv1.Deployment, messageT
 	return latestMessage, latestReason, nil
 }
 
+// FindDeploymentEnvVar returns the value an env var has on the deployment's containers, or an empty string when none sets it
+func FindDeploymentEnvVar(client *rancher.Client, clusterID, namespaceName, deploymentName, envVarName string) (string, error) {
+	deployment, err := extdeploymentsapi.GetDeploymentByName(client, clusterID, namespaceName, deploymentName)
+	if err != nil {
+		return "", fmt.Errorf("error fetching deployment %s in namespace %s: %w", deploymentName, namespaceName, err)
+	}
+
+	for _, container := range deployment.Spec.Template.Spec.Containers {
+		for _, env := range container.Env {
+			if env.Name == envVarName {
+				return env.Value, nil
+			}
+		}
+	}
+
+	return "", nil
+}
+
 // UpdateOrRemoveEnvVarForDeployment is a helper to add, update or remove an environment variable in a deployment
 func UpdateOrRemoveEnvVarForDeployment(client *rancher.Client, clusterID, namespaceName, deploymentName, envVarName, envVarValue string) error {
 	deploymentObj, err := extdeploymentsapi.GetDeploymentByName(client, clusterID, namespaceName, deploymentName)

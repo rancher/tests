@@ -1,4 +1,4 @@
-//go:build (validation || infra.any || cluster.any || extended) && !sanity && !stress && !2.8 && !2.9 && !2.10 && !2.11 && !2.12 && !2.13
+//go:build (validation || infra.any || cluster.any || extended) && !sanity && !stress && !2.8 && !2.9 && !2.10 && !2.11 && !2.12 && !2.13 && !2.14
 
 package scim
 
@@ -16,6 +16,7 @@ import (
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	authactions "github.com/rancher/tests/actions/auth"
+	actionsClusters "github.com/rancher/tests/actions/clusters"
 	scimactions "github.com/rancher/tests/actions/kubeapi/scim"
 	usersapi "github.com/rancher/tests/actions/kubeapi/users"
 
@@ -31,6 +32,7 @@ const (
 
 type SCIMLoginAttributesTestSuite struct {
 	suite.Suite
+	atLeast216      bool
 	session         *session.Session
 	client          *rancher.Client
 	scimClient      *scimclient.Client
@@ -46,6 +48,9 @@ func (s *SCIMLoginAttributesTestSuite) SetupSuite() {
 	client, err := rancher.NewClient("", s.session)
 	require.NoError(s.T(), err, "Failed to create Rancher client")
 	s.client = client
+
+	s.atLeast216, err = actionsClusters.IsRancherVersionAbove(s.client, scimactions.RancherV216Floor)
+	require.NoError(s.T(), err, "Failed to read the Rancher server version")
 
 	logrus.Info("Setting up SCIM client for OpenLDAP provider")
 	scimClient, err := scimactions.SetupSCIMClient(s.client, authactions.OpenLdap)
@@ -254,6 +259,10 @@ func (s *SCIMLoginAttributesTestSuite) TestSCIMDisabledLoginWritesLoginNameAsUse
 }
 
 func (s *SCIMLoginAttributesTestSuite) TestSCIMUserNameSurvivesLoginInUserNameMode() {
+	if !s.atLeast216 {
+		s.T().Skip("Known issue: https://github.com/rancher/rancher/issues/58096")
+	}
+
 	subSession := s.session.NewSession()
 	defer subSession.Cleanup()
 

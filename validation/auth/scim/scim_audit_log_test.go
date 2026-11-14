@@ -1,4 +1,4 @@
-//go:build (validation || infra.any || cluster.any || extended) && !sanity && !stress && !2.8 && !2.9 && !2.10 && !2.11 && !2.12 && !2.13
+//go:build (validation || infra.any || cluster.any || extended) && !sanity && !stress && !2.8 && !2.9 && !2.10 && !2.11 && !2.12 && !2.13 && !2.14
 
 package scim
 
@@ -14,6 +14,7 @@ import (
 	namegen "github.com/rancher/shepherd/pkg/namegenerator"
 	"github.com/rancher/shepherd/pkg/session"
 	authactions "github.com/rancher/tests/actions/auth"
+	actionsClusters "github.com/rancher/tests/actions/clusters"
 	auditlogapi "github.com/rancher/tests/actions/kubeapi/auditlog"
 	scimactions "github.com/rancher/tests/actions/kubeapi/scim"
 
@@ -42,12 +43,18 @@ func (s *SCIMAuditLogTestSuite) SetupSuite() {
 	require.NoError(s.T(), err, "Failed to create Rancher client")
 	s.client = client
 
+	require.NoError(s.T(), scimactions.VerifyExpectedBuildType(s.client), "The Rancher build type should match the one the config expects")
+
+	atLeast216, err := actionsClusters.IsRancherVersionAbove(s.client, scimactions.RancherV216Floor)
+	require.NoError(s.T(), err, "Failed to read the Rancher server version")
+	if !atLeast216 {
+		s.T().Skip("The SCIM audit log is only in Rancher v2.16 and later")
+	}
+
 	logrus.Info("Setting up SCIM client for OpenLDAP provider")
 	scimClient, err := scimactions.SetupSCIMClient(s.client, authactions.OpenLdap)
 	require.NoError(s.T(), err, "Failed to setup SCIM client")
 	s.scimClient = scimClient
-
-	require.NoError(s.T(), scimactions.VerifyExpectedBuildType(s.client), "The Rancher build type should match the one the config expects")
 
 	servable, reason, err := scimactions.VerifySCIMServable(s.client)
 	require.NoError(s.T(), err, "Failed to read whether this Rancher server serves SCIM")
