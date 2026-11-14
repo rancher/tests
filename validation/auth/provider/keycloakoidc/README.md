@@ -86,3 +86,5 @@ provider terraform applies has it off while the fixture turns it on; principal s
 left to the auth provider suite rather than asserted here. Disable is skipped while
 rancher/terraform-provider-rancher2#2512 is open, because `enabled = false` is a no-op on every
 non-LDAP auth config resource.
+The suite skips on Rancher v2.13 and older, because the terraform provider for those lines has no
+`rancher2_auth_config_keycloak_oidc` resource.
