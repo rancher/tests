@@ -62,12 +62,10 @@ func (n *NeuVectorTestSuite) SetupSuite() {
 	require.NoError(n.T(), err)
 
 	n.chartInstallOptions = &actionsCharts.PayloadOpts{
-		Namespace: actionsCharts.NeuVectorNamespace,
-		InstallOptions: actionsCharts.InstallOptions{
-			Cluster:   n.cluster,
-			Version:   latestVersion,
-			ProjectID: n.project.ID,
-		},
+		Namespace:       actionsCharts.NeuVectorNamespace,
+		Cluster:         n.cluster,
+		Version:         latestVersion,
+		ProjectID:       n.project.ID,
 		DefaultRegistry: registrySetting.Value,
 	}
 }
@@ -84,6 +82,8 @@ func (n *NeuVectorTestSuite) TestNeuVectorChartInstallation() {
 	require.NoError(n.T(), err)
 
 	if !neuVectorChartStatus.IsAlreadyInstalled {
+		actionsCharts.UpdateClusterRepo(n.client, catalog.RancherChartRepo)
+
 		n.T().Logf("Installing NeuVector on cluster [%s] with version [%s]", n.cluster.Name, n.chartInstallOptions.Version)
 		err = actionsCharts.InstallNeuVectorChart(client, *n.chartInstallOptions)
 		require.NoError(n.T(), err)
