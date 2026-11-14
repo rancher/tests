@@ -26,9 +26,9 @@ var expectedNeuVectorServices = []string{
 	neuVectorAdmissionWebhookSvc,
 }
 
-// verifyNeuVectorServicesActive checks that all expected NeuVector services exist and are active
+// VerifyNeuVectorServicesActive checks that all expected NeuVector services exist and are active
 // in the NeuVector namespace.
-func verifyNeuVectorServicesActive(client *rancher.Client, clusterID string) error {
+func VerifyNeuVectorServicesActive(client *rancher.Client, clusterID string) error {
 	steveClient, err := client.Steve.ProxyDownstream(clusterID)
 	if err != nil {
 		return err
@@ -51,9 +51,9 @@ func verifyNeuVectorServicesActive(client *rancher.Client, clusterID string) err
 	return nil
 }
 
-// verifyNeuVectorWebUIAccessible verifies that the NeuVector manager web UI is reachable
+// VerifyNeuVectorWebUIAccessible verifies that the NeuVector manager web UI is reachable
 // through the Rancher service proxy endpoint.
-func verifyNeuVectorWebUIAccessible(client *rancher.Client, clusterID string) (string, error) {
+func VerifyNeuVectorWebUIAccessible(client *rancher.Client, clusterID string) (string, error) {
 	proxyPath := fmt.Sprintf(neuVectorWebUIServiceProxyFmt, clusterID, charts.NeuVectorNamespace, neuVectorWebUIService, neuVectorWebUIPort)
 
 	logrus.Infof("Verifying NeuVector manager UI is accessible at path [%s]", proxyPath)
