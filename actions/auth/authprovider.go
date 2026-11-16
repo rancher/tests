@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/rancher/shepherd/clients/rancher"
@@ -10,6 +11,7 @@ import (
 	"github.com/rancher/shepherd/clients/rancher/auth/oidcprovider"
 	"github.com/rancher/shepherd/clients/rancher/auth/saml"
 	v3 "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
+	authext "github.com/rancher/shepherd/extensions/auth"
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/pkg/session"
 	authconfigsapi "github.com/rancher/tests/actions/kubeapi/authconfigs"
@@ -34,6 +36,7 @@ const (
 	KeycloakSAML                         = "keycloak"
 	GenericSAML                          = "genericsaml"
 	KeycloakOIDC                         = "keycloakoidc"
+	Cognito                              = "cognito"
 	OpenLdapPasswordSecretID             = "openldapconfig-serviceaccountpassword"
 	ActiveDirectoryPasswordSecretID      = "activedirectoryconfig-serviceaccountpassword"
 	KeycloakSAMLKeySecretID              = "keycloakconfig-spkey"
@@ -61,6 +64,7 @@ var samlProviders = map[string]saml.Provider{
 
 var oidcProviders = map[string]oidcprovider.Provider{
 	KeycloakOIDC: oidcprovider.KeycloakOIDC,
+	Cognito:      oidcprovider.Cognito,
 }
 
 var authConfigTypes = map[string]string{
@@ -69,6 +73,7 @@ var authConfigTypes = map[string]string{
 	KeycloakSAML:    v3.KeyCloakConfigType,
 	GenericSAML:     v3.GenericSAMLConfigType,
 	KeycloakOIDC:    v3.KeyCloakOIDCConfigType,
+	Cognito:         oidcprovider.Cognito.ConfigType,
 }
 
 type User struct {
@@ -282,6 +287,8 @@ func EnsureAuthProviderEnabled(client *rancher.Client, providerName string) erro
 		err = enableGenericSAML(client)
 	case KeycloakOIDC:
 		err = enableKeycloakOIDC(client)
+	case Cognito:
+		err = enableCognito(client)
 	default:
 		return fmt.Errorf("unsupported auth provider: %s", providerName)
 	}
@@ -316,6 +323,8 @@ func EnsureAuthProviderDisabled(client *rancher.Client, providerName string) err
 		err = client.Auth.GenericSAML.Disable()
 	case KeycloakOIDC:
 		err = client.Auth.KeycloakOIDC.Disable()
+	case Cognito:
+		err = client.Auth.Cognito.Disable()
 	default:
 		return fmt.Errorf("unsupported auth provider: %s", providerName)
 	}
@@ -325,6 +334,34 @@ func EnsureAuthProviderDisabled(client *rancher.Client, providerName string) err
 	}
 
 	return nil
+}
+
+// LogoutAll ends the session at the provider's identity provider and returns the address the browser is sent to
+func LogoutAll(client *rancher.Client, providerName string) (string, error) {
+	rancherAPIHost := rancherAPIHostFromConfig(client)
+	if rancherAPIHost == "" {
+		return "", fmt.Errorf("the rancher config names no host, the identity provider sends the browser back "+
+			"to it after it ends the %s session, so it must be set", providerName)
+	}
+
+	return authext.LogoutAll(client, rancherAPIHost)
+}
+
+// CaptureAccessModeRestore records the access mode and allowed principals of the provider and returns a function that puts them back
+func CaptureAccessModeRestore(client *rancher.Client, providerName string) (func() error, error) {
+	authConfig, err := client.WranglerContext.Mgmt.AuthConfig().Get(providerName, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("reading the access mode of %s: %w", providerName, err)
+	}
+
+	accessMode := authConfig.AccessMode
+	allowedPrincipalIDs := slices.Clone(authConfig.AllowedPrincipalIDs)
+
+	return func() error {
+		_, err := UpdateAccessMode(client, providerName, accessMode, allowedPrincipalIDs)
+
+		return err
+	}, nil
 }
 
 // WaitForNamespaceReady polls until the namespace is available within the specified timeout
@@ -372,6 +409,8 @@ func UpdateAccessMode(client *rancher.Client, providerName, accessMode string, a
 		updateAccessMode = client.Auth.GenericSAML.UpdateAccessMode
 	case KeycloakOIDC:
 		updateAccessMode = client.Auth.KeycloakOIDC.UpdateAccessMode
+	case Cognito:
+		updateAccessMode = client.Auth.Cognito.UpdateAccessMode
 	}
 
 	if updateAccessMode != nil {

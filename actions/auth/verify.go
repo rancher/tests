@@ -12,6 +12,7 @@ import (
 	"github.com/rancher/shepherd/clients/rancher"
 	shepherdauth "github.com/rancher/shepherd/clients/rancher/auth"
 	v3 "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
+	authext "github.com/rancher/shepherd/extensions/auth"
 	"github.com/rancher/shepherd/extensions/defaults"
 	"github.com/rancher/shepherd/pkg/clientbase"
 	kwait "k8s.io/apimachinery/pkg/util/wait"
@@ -235,4 +236,18 @@ func logsSince(baseline, current string) string {
 	}
 
 	return current
+}
+
+// VerifyLogoutRefused checks that err is a logout Rancher refused with the given HTTP status
+func VerifyLogoutRefused(err error, statusCode int) error {
+	var logoutError *authext.LogoutError
+	if !errors.As(err, &logoutError) {
+		return fmt.Errorf("expected Rancher to refuse the logout with status %d, got: %v", statusCode, err)
+	}
+
+	if logoutError.StatusCode != statusCode {
+		return fmt.Errorf("expected Rancher to refuse the logout with status %d, got %d: %s", statusCode, logoutError.StatusCode, logoutError.Body)
+	}
+
+	return nil
 }
