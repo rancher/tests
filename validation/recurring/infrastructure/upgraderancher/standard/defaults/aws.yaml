@@ -54,6 +54,34 @@ terraform:
     upgradedRancherRepo: "<HB_UPGRADED_PRIME_HEAD_REPO>"
     upgradedRancherTagVersion: "<required>"
 
+awsMachineConfigs:
+  region: "<HB_AWS_REGION>"
+  awsMachineConfig:
+  - roles: ["etcd","controlplane","worker"]
+    ami: "<HB_DEFAULT_AMI>"
+    instanceType: "<HB_AWS_INSTANCE_TYPE>"
+    volumeType: "<HB_AWS_VOLUME_TYPE>"
+    rootSize: "<HB_AWS_ROOT_SIZE>"
+    sshUser: "<HB_AWS_OS_USER>"
+    vpcId: "<HB_AWS_VPC_ID>"
+    subnetId: "<HB_AWS_SUBNET_ID>"
+    securityGroup: ["<HB_AWS_SECURITY_GROUP_NAMES_PRIME>"]
+    iamInstanceProfile: "<HB_AWS_IAM_PROFILE>"
+    zone: "<HB_AWS_ZONE_LETTER>"
+    retries: "5"
+  - roles: ["windows"]
+    ami: "<HB_WINDOWS_2022_AMI>"
+    instanceType: "<HB_AWS_WINDOWS_INSTANCE_TYPE>"
+    sshUser: "<HB_AWS_OS_USER>"
+    vpcId: "<HB_AWS_VPC_ID>"
+    subnetId: "<HB_AWS_SUBNET_ID>"
+    securityGroup: ["<HB_AWS_SECURITY_GROUP_NAMES_PRIME>"]
+    iamInstanceProfile: "<HB_AWS_IAM_PROFILE>"
+    volumeType: "<HB_AWS_VOLUME_TYPE>"
+    zone: "<HB_AWS_ZONE_LETTER>"
+    retries: "5"
+    rootSize: "<HB_AWS_ROOT_SIZE>"
+
 terratest:
   pathToRepo: "<HB_PATH_TO_TFP_REPO>"
   standaloneLogging: false
