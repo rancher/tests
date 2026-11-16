@@ -76,7 +76,7 @@ jobs:
             versions='["16", "15", "14", "13"]'
           else
             case "$RANCHER_VERSION_INPUT" in
-              head)
+              v2.16-head)
                 versions='["16"]'
                 ;;
               v2.16*|v2.15*|v2.14*|v2.13*)
@@ -103,7 +103,7 @@ jobs:
       matrix: ${{ fromJSON(needs.prepare-matrix.outputs.matrix) }}
     name: ${{ format('v2.{0}', matrix.version) }}
     runs-on: ubuntu-latest
-    environment: ${{ matrix.version == '16' && 'prime-head' || 'prime' }}
+    environment: ${{ matrix.version == '16' && 'latest' || 'prime' }}
     env:
       RANCHER2_PROVIDER_VERSION: "${{ vars[format('RANCHER2_PROVIDER_VERSION_2_{0}', matrix.version)] }}"
       HOSTNAME_PREFIX: "kdm-${{ matrix.version }}"
@@ -164,6 +164,8 @@ jobs:
             HB_RELEASED_RANCHER_CHART_VERSION_2_13, HB_RELEASED_RANCHER_CHART_VERSION_2_13
             HB_RKE2_VERSION_2_15, HB_RKE2_VERSION_2_15
             HB_K3S_VERSION_2_15, HB_K3S_VERSION_2_15
+            HB_RKE2_VERSION_2_14, HB_RKE2_VERSION_2_14
+            HB_K3S_VERSION_2_14, HB_K3S_VERSION_2_14
             HB_RKE2_VERSION_2_13, HB_RKE2_VERSION_2_13
             HB_K3S_VERSION_2_13, HB_K3S_VERSION_2_13
             HB_K3S_VERSION_SUFFIX, HB_K3S_VERSION_SUFFIX
@@ -305,10 +307,10 @@ jobs:
               k3sVersion: "${{ vars[format('K3S_VERSION_2_{0}', matrix.version)] }}${{ vars.K3S_VERSION_SUFFIX }}"
               osUser: "${{ vars.OS_USER }}"
               osGroup: "${{ vars.OS_GROUP }}"
-              rancherAgentImage: "${{ secrets.RANCHER_AGENT_IMAGE }}"
+              rancherAgentImage: "${{ matrix.version <= '15' && secrets.RANCHER_AGENT_IMAGE || '' }}"
               rancherChartRepository: "${{ secrets.RANCHER_HELM_CHART_URL }}"
               rancherHostname: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
-              rancherImage: "${{ matrix.version >= '16' && '<HB_PRIME_HEAD_RANCHER_SERVER_IMAGE>' || secrets.RANCHER_IMAGE }}"
+              rancherImage: "${{ secrets.RANCHER_IMAGE }}"
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
