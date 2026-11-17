@@ -53,10 +53,8 @@ func GetNumberOfLonghornVolumes(client *rancher.Client, clusterID string) (int, 
 func CreateS3LonghornBackupTarget(client *rancher.Client, clusterID string, awsCreds cloudcredentials.AmazonEC2CredentialConfig, region, bucketName string) (*longhorn.BackupTarget, error) {
 	secretName := namegenerator.AppendRandomString("aws-creds")
 	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      secretName,
-			Namespace: charts.LonghornNamespace,
-		},
+		Name:      secretName,
+		Namespace: charts.LonghornNamespace,
 		StringData: map[string]string{
 			"AWS_ACCESS_KEY_ID":     awsCreds.AccessKey,
 			"AWS_SECRET_ACCESS_KEY": awsCreds.SecretKey,
@@ -164,14 +162,10 @@ func CreateLonghornVolumeBackup(client *rancher.Client, clusterID string, namesp
 	}
 
 	snapshot := longhorn.Snapshot{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       longhornTypes.LonghornKindSnapshot,
-			APIVersion: longhorn.SchemeGroupVersion.Group + "/" + longhorn.SchemeGroupVersion.Version,
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      namegenerator.AppendRandomString("backup-test"),
-			Namespace: namespace,
-		},
+		Kind:       longhornTypes.LonghornKindSnapshot,
+		APIVersion: longhorn.SchemeGroupVersion.Group + "/" + longhorn.SchemeGroupVersion.Version,
+		Name:       namegenerator.AppendRandomString("backup-test"),
+		Namespace:  namespace,
 		Spec: longhorn.SnapshotSpec{
 			Volume:         volumeName,
 			CreateSnapshot: true,
@@ -196,16 +190,12 @@ func CreateLonghornVolumeBackup(client *rancher.Client, clusterID string, namesp
 	}
 
 	backup := &longhorn.Backup{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       longhornTypes.LonghornKindBackup,
-			APIVersion: longhorn.SchemeGroupVersion.Group + "/" + longhorn.SchemeGroupVersion.Version,
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      namegenerator.AppendRandomString("backup-test"),
-			Namespace: namespace,
-			Labels: map[string]string{
-				"backup-volume": volumeName,
-			},
+		Kind:       longhornTypes.LonghornKindBackup,
+		APIVersion: longhorn.SchemeGroupVersion.Group + "/" + longhorn.SchemeGroupVersion.Version,
+		Name:       namegenerator.AppendRandomString("backup-test"),
+		Namespace:  namespace,
+		Labels: map[string]string{
+			"backup-volume": volumeName,
 		},
 		Spec: longhorn.BackupSpec{
 			SnapshotName: snapshot.Name,
@@ -219,7 +209,7 @@ func CreateLonghornVolumeBackup(client *rancher.Client, clusterID string, namesp
 	}
 
 	client.Session.RegisterCleanupFunc(func() error {
-		return backupController.Client().Delete(context.Background(), namespace, snapshot.Name, metav1.DeleteOptions{})
+		return backupController.Client().Delete(context.Background(), namespace, backup.Name, metav1.DeleteOptions{})
 	})
 
 	err = wait.PollUntilContextTimeout(context.Background(), defaults.FiveHundredMillisecondTimeout, defaults.FiveMinuteTimeout, false, func(context.Context) (bool, error) {
@@ -273,7 +263,7 @@ func RestoreLonghornVolumeFromBackup(client *rancher.Client, clusterID string, b
 	}
 
 	backupVolumeSelector := labels.SelectorFromSet(longhornTypes.GetBackupVolumeWithBackupTargetLabels(backup.Status.BackupTargetName, backup.Status.VolumeName))
-	err = wait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, defaults.FiveMinuteTimeout, true, func(context.Context) (bool, error) {
+	err = wait.PollUntilContextTimeout(context.Background(), defaults.TenSecondTimeout, defaults.FifteenMinuteTimeout, true, func(context.Context) (bool, error) {
 		var backupVolumes longhorn.BackupVolumeList
 		err := backupVolumeController.Client().List(context.Background(), backup.Namespace, &backupVolumes, metav1.ListOptions{LabelSelector: backupVolumeSelector.String()})
 		if err != nil {
@@ -286,17 +276,18 @@ func RestoreLonghornVolumeFromBackup(client *rancher.Client, clusterID string, b
 		return fmt.Errorf("backup volume for volume %s on backup target %s was not created: %w", backup.Status.VolumeName, backup.Status.BackupTargetName, err)
 	}
 
+	// Backups of encrypted volumes must be restored into encrypted volumes. Longhorn reports the backup size without
+	// the LUKS header and adds it back to the backend size of encrypted volumes, so the size can be used as is.
+	encrypted := backup.Status.Labels[longhornTypes.LonghornLabelVolumeEncrypted] == longhornTypes.LonghornLabelValueEnabled
+
 	// This volume is based on the docs: https://longhorn.io/docs/1.11.1/snapshots-and-backups/backup-and-restore/restore-from-a-backup/
 	volume := &longhorn.Volume{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       longhornTypes.LonghornKindVolume,
-			APIVersion: longhorn.SchemeGroupVersion.Group + "/" + longhorn.SchemeGroupVersion.Version,
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      namegenerator.AppendRandomString("restored-" + backup.Status.VolumeName),
-			Namespace: backup.Namespace,
-		},
+		Kind:       longhornTypes.LonghornKindVolume,
+		APIVersion: longhorn.SchemeGroupVersion.Group + "/" + longhorn.SchemeGroupVersion.Version,
+		Name:       namegenerator.AppendRandomString("restored-" + backup.Status.VolumeName),
+		Namespace:  backup.Namespace,
 		Spec: longhorn.VolumeSpec{
+			Encrypted:  encrypted,
 			Size:       int64(volumeSize),
 			FromBackup: backup.Status.URL,
 			Frontend:   "blockdev",
@@ -319,10 +310,19 @@ func RestoreLonghornVolumeFromBackup(client *rancher.Client, clusterID string, b
 			return false, err
 		}
 
+		for _, condition := range volume.Status.Conditions {
+			if condition.Type == longhorn.VolumeConditionTypeRestore && condition.Reason == longhorn.VolumeConditionReasonRestoreFailure {
+				return false, fmt.Errorf("restore of volume %s from backup %s failed: %s", volume.Name, backup.Name, condition.Message)
+			}
+		}
+
 		return !volume.Status.RestoreRequired && volume.Status.State == longhorn.VolumeStateDetached, nil
 	})
+	if err != nil {
+		return fmt.Errorf("volume %s restored from backup %s did not become ready (state: %s, restoreRequired: %t): %w", volume.Name, backup.Name, volume.Status.State, volume.Status.RestoreRequired, err)
+	}
 
-	return err
+	return nil
 }
 
 // DeleteLonghornVolume deletes the specified volume.longhorn.io resource.

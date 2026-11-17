@@ -58,11 +58,13 @@ func (l *LoggingTestSuite) SetupSuite() {
 }
 
 func (l *LoggingTestSuite) TestLoggingInstallation() {
-	l.T().Logf("Resolving latest chart version for [%s] from repository [%s]", charts.LonghornNamespace, charts.LonghornChartName)
 	longhornChart, err := shepherdCharts.GetChartStatus(l.client, l.cluster.ID, charts.LonghornNamespace, charts.LonghornChartName)
 	require.NoError(l.T(), err)
 
 	if !longhornChart.IsAlreadyInstalled {
+		charts.UpdateClusterRepo(l.client, catalog.RancherChartRepo)
+
+		l.T().Logf("Resolving latest chart version for [%s] from repository [%s]", charts.LonghornChartName, catalog.RancherChartRepo)
 		// Get latest versions of longhorn
 		latestLonghornVersion, err := l.client.Catalog.GetLatestChartVersion(charts.LonghornChartName, catalog.RancherChartRepo)
 		require.NoError(l.T(), err)
@@ -70,11 +72,9 @@ func (l *LoggingTestSuite) TestLoggingInstallation() {
 		payloadOpts := charts.PayloadOpts{
 			Namespace: charts.LonghornNamespace,
 			Host:      l.client.RancherConfig.Host,
-			InstallOptions: charts.InstallOptions{
-				Cluster:   l.cluster,
-				Version:   latestLonghornVersion,
-				ProjectID: l.project.ID,
-			},
+			Cluster:   l.cluster,
+			Version:   latestLonghornVersion,
+			ProjectID: l.project.ID,
 		}
 
 		l.T().Logf("Installing Longhorn chart in cluster [%v] with latest version [%v] in project [%v] and namespace [%v]", l.cluster.Name, payloadOpts.Version, l.project.Name, payloadOpts.Namespace)

@@ -64,6 +64,8 @@ func (i *InstallationTestSuite) SetupSuite() {
 	require.NoError(i.T(), err)
 	require.Equal(i.T(), createdProject.Name, exampleAppProjectName)
 	i.project = createdProject
+
+	charts.UpdateClusterRepo(i.client, catalog.RancherChartRepo)
 }
 
 func (i *InstallationTestSuite) TestInstallMonitoringChart() {
