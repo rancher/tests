@@ -26,6 +26,16 @@ type ExtTokenTTLTestSuite struct {
 }
 
 func (e *ExtTokenTTLTestSuite) TearDownSuite() {
+	err := settingsapi.ResetTokenTTLSettingsToDefault(e.client, []string{
+		settingsapi.AuthTokenDefaultTTLMinutes,
+		settingsapi.AuthTokenMaxTTLMinutes,
+		settingsapi.KubeconfigDefaultTTLMinutes,
+		settingsapi.KubeconfigMaxTTLMinutes,
+	})
+	if err != nil {
+		log.Errorf("Failed to reset token TTL settings during teardown: %v", err)
+	}
+
 	e.session.Cleanup()
 }
 

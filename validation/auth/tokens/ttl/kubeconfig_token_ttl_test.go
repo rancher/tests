@@ -34,6 +34,16 @@ type KubeconfigTokenTTLTestSuite struct {
 }
 
 func (kc *KubeconfigTokenTTLTestSuite) TearDownSuite() {
+	err := settingsapi.ResetTokenTTLSettingsToDefault(kc.client, []string{
+		settingsapi.AuthTokenDefaultTTLMinutes,
+		settingsapi.AuthTokenMaxTTLMinutes,
+		settingsapi.KubeconfigDefaultTTLMinutes,
+		settingsapi.KubeconfigMaxTTLMinutes,
+	})
+	if err != nil {
+		log.Errorf("Failed to reset token TTL settings during teardown: %v", err)
+	}
+
 	kc.session.Cleanup()
 }
 
