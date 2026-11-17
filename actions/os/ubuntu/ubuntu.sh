@@ -49,6 +49,13 @@ sudo apt install -y cloud-init iptables vim
 echo "$username ALL=(ALL) NOPASSWD:ALL" | sudo tee "/etc/sudoers.d/$username" >/dev/null
 sudo chmod 440 "/etc/sudoers.d/$username"
 
+sudo install -d -m 755 /etc/cloud/cloud.cfg.d
+{
+	printf 'allow_public_ssh_keys: true\n'
+	printf 'system_info:\n  default_user:\n    name: "%s"\n' "$username"
+} | sudo tee /etc/cloud/cloud.cfg.d/99-rancher-ssh-user.cfg >/dev/null
+sudo chmod 644 /etc/cloud/cloud.cfg.d/99-rancher-ssh-user.cfg
+
 sudo systemctl enable cloud-init.service
 sudo systemctl enable cloud-config.service
 sudo systemctl enable cloud-final.service
