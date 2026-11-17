@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Re-exec under bash if invoked via sh/dash (which lacks [[ and pipefail).
+if [ -z "${BASH_VERSION:-}" ]; then
+	exec bash "$0" "$@"
+fi
 set -euo pipefail
 
 if [[ "$#" -ne 3 ]]; then
@@ -44,7 +48,7 @@ sudo chown "$username:$user_group" "$user_home/.ssh/authorized_keys"
 sudo chmod 600 "$user_home/.ssh/authorized_keys"
 
 sudo apt update
-sudo apt install -y cloud-init iptables vim
+sudo apt install -y cloud-init iptables vim yq
 
 echo "$username ALL=(ALL) NOPASSWD:ALL" | sudo tee "/etc/sudoers.d/$username" >/dev/null
 sudo chmod 440 "/etc/sudoers.d/$username"
@@ -56,14 +60,14 @@ sudo install -d -m 755 /etc/cloud/cloud.cfg.d
 } | sudo tee /etc/cloud/cloud.cfg.d/99-rancher-ssh-user.cfg >/dev/null
 sudo chmod 644 /etc/cloud/cloud.cfg.d/99-rancher-ssh-user.cfg
 
-sudo systemctl enable cloud-init.service
-sudo systemctl enable cloud-config.service
-sudo systemctl enable cloud-final.service
-sudo systemctl enable cloud-init-local.service
+# cloud-init.service was renamed to cloud-init-network.service in newer releases,
+# so only enable the units that exist on this system.
+for unit in cloud-init-local cloud-init cloud-init-network cloud-config cloud-final; do
+	if systemctl cat "$unit.service" >/dev/null 2>&1; then
+		sudo systemctl enable "$unit.service"
+	fi
+done
 
 sudo cloud-init clean --logs
 sudo rm -f /etc/ssh/ssh_host_*
 sudo truncate -s 0 /etc/machine-id
-
-#Please make provision all VMs with at least 30GB of disk space.
-sudo lvextend -l +100%FREE -r /dev/ubuntu-vg/ubuntu-lv
