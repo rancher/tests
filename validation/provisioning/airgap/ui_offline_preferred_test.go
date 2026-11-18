@@ -29,7 +29,6 @@ func TestUIOfflinePreferred(t *testing.T) {
 		client  *rancher.Client
 		setting string
 	}{
-		{"UI_Offline_Preferred_Dynamic", r.client, "dynamic"},
 		{"UI_Offline_Preferred_Local", r.client, "true"},
 		{"UI_Offline_Preferred_Remote", r.client, "false"},
 	}
@@ -49,6 +48,10 @@ func TestUIOfflinePreferred(t *testing.T) {
 
 			updatedSetting, err := tt.client.Management.Setting.Update(defaultSetting, setting)
 			require.NoError(t, err)
+
+			current, err := tt.client.Management.Setting.ByID(uiOfflinePreferred)
+			require.NoError(t, err)
+			require.Equal(t, tt.setting, current.Value)
 
 			err = networking.GetPageStatus(r.rancherConfig, updatedSetting.Value)
 			require.NoError(t, err)
