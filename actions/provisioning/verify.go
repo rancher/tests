@@ -14,6 +14,7 @@ import (
 
 	"github.com/rancher/norman/types"
 	provv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
+	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/shepherd/clients/rancher"
 	managementv3 "github.com/rancher/shepherd/clients/rancher/generated/management/v3"
 	steveV1 "github.com/rancher/shepherd/clients/rancher/v1"
@@ -45,16 +46,18 @@ import (
 )
 
 const (
-	logMessageKubernetesVersion = "Validating the current version is the upgraded one"
-	hostnameLimit               = 63
-	machineNameAnnotation       = "cluster.x-k8s.io/machine"
-	deploymentNameLabel         = "cluster.x-k8s.io/deployment-name"
-	capiRoleLabel               = "cluster.x-k8s.io/role"
-	rancherRoleLabel            = "rke.cattle.io/role"
-	DefaultRancherDataDir       = "/var/lib/rancher"
-	oneSecondInterval           = time.Duration(1 * time.Second)
-	notFound                    = "404 Not Found"
-	ipv4Pattern                 = `\b(?:\d{1,3}\.){3}\d{1,3}\b`
+	logMessageKubernetesVersion  = "Validating the current version is the upgraded one"
+	hostnameLimit                = 63
+	machineNameAnnotation        = "cluster.x-k8s.io/machine"
+	deploymentNameLabel          = "cluster.x-k8s.io/deployment-name"
+	capiRoleLabel                = "cluster.x-k8s.io/role"
+	rkeControlPlaneSteveType     = "rke.cattle.io.rkecontrolplane"
+	rancherRoleLabel             = "rke.cattle.io/role"
+	DefaultRancherDataDir        = "/var/lib/rancher"
+	oneSecondInterval            = time.Duration(1 * time.Second)
+	notFound                     = "404 Not Found"
+	ipv4Pattern                  = `\b(?:\d{1,3}\.){3}\d{1,3}\b`
+	systemUpgradeControllerReady = "SystemUpgradeControllerReady"
 )
 
 // VerifyClusterReady validates that a non-rke1 cluster and its resources are in a good state, matching a given config.
@@ -1093,4 +1096,52 @@ func dumpClusterStateV3(client *rancher.Client, clusterID string, lastErr error)
 	logrus.Errorf("  Total: %d", total)
 	logrus.Errorf("  Ready: %d", ready)
 	logrus.Errorf("  NotReady: %d\n", total-ready)
+}
+
+// VerifySystemUpgradeController verifies that the SystemUpgradeControllerReady condition is True.
+// This condition is set by Rancher on the cluster's RKEControlPlane object (rke.cattle.io), which shares
+// its name and namespace (fleet-default) with the provisioning cluster; it is not on the provisioning cluster itself.
+func VerifySystemUpgradeControllerReadyFlag(client *rancher.Client, cluster *steveV1.SteveAPIObject) error {
+	if cluster == nil {
+		return fmt.Errorf("cluster is nil")
+	}
+
+	var lastErr error
+	controlPlaneID := namespaces.FleetDefault + "/" + cluster.Name
+
+	err := kwait.PollUntilContextTimeout(context.TODO(), 5*time.Second, defaults.FiveMinuteTimeout, true, func(ctx context.Context) (bool, error) {
+		controlPlane, err := client.Steve.SteveType(rkeControlPlaneSteveType).ByID(controlPlaneID)
+		if err != nil {
+			lastErr = err
+			logrus.Debugf("Unable to fetch RKEControlPlane (%s), retrying: %v", controlPlaneID, err)
+			return false, nil
+		}
+
+		status := &rkev1.RKEControlPlaneStatus{}
+		err = steveV1.ConvertToK8sType(controlPlane.Status, status)
+		if err != nil {
+			lastErr = err
+			logrus.Debugf("Unable to convert RKEControlPlane status (%s), retrying: %v", controlPlaneID, err)
+			return false, nil
+		}
+
+		for _, condition := range status.Conditions {
+			if condition.Type == systemUpgradeControllerReady {
+				if condition.Status == corev1.ConditionTrue {
+					logrus.Debugf("Cluster (%s) SystemUpgradeControllerReady condition is True", cluster.Name)
+					return true, nil
+				}
+				lastErr = fmt.Errorf("SystemUpgradeControllerReady is %s (reason: %s, message: %s)", condition.Status, condition.Reason, condition.Message)
+				return false, nil
+			}
+		}
+
+		lastErr = fmt.Errorf("SystemUpgradeControllerReady condition not found on RKEControlPlane")
+		return false, nil
+	})
+	if err != nil {
+		return fmt.Errorf("failed to verify SystemUpgradeController for cluster (%s): %w (last error: %v)", cluster.Name, err, lastErr)
+	}
+
+	return nil
 }
