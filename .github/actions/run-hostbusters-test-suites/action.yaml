@@ -22,7 +22,11 @@ runs:
       run: |
         set +e
 
+        # RERUN_FAILS is set via env on the calling step (unset/empty disables reruns)
+
         gotestsum --format standard-verbose \
+          ${RERUN_FAILS:+--rerun-fails="$RERUN_FAILS"} \
+          ${RERUN_FAILS:+--rerun-fails-report=rerun_report_cert.txt} \
           --packages=github.com/rancher/tests/validation/certificates/... \
           --junitfile results.xml \
           --jsonfile results_cert.json \
@@ -38,6 +42,8 @@ runs:
         fi
 
         gotestsum --format standard-verbose \
+          ${RERUN_FAILS:+--rerun-fails="$RERUN_FAILS"} \
+          ${RERUN_FAILS:+--rerun-fails-report=rerun_report_delete.txt} \
           --packages=github.com/rancher/tests/validation/deleting/... \
           --junitfile results.xml \
           --jsonfile results_delete.json \
@@ -53,6 +59,8 @@ runs:
         fi
 
         gotestsum --format standard-verbose \
+          ${RERUN_FAILS:+--rerun-fails="$RERUN_FAILS"} \
+          ${RERUN_FAILS:+--rerun-fails-report=rerun_report_encryption_key_rotation.txt} \
           --packages=github.com/rancher/tests/validation/encryptionkeyrotation/... \
           --junitfile results.xml \
           --jsonfile results_encryption_key_rotation.json \
@@ -68,6 +76,8 @@ runs:
         fi
 
         gotestsum --format standard-verbose \
+          ${RERUN_FAILS:+--rerun-fails="$RERUN_FAILS"} \
+          ${RERUN_FAILS:+--rerun-fails-report=rerun_report_node_scale.txt} \
           --packages=github.com/rancher/tests/validation/nodescaling/... \
           --junitfile results.xml \
           --jsonfile results_node_scale.json \
@@ -83,6 +93,8 @@ runs:
         fi
 
         gotestsum --format standard-verbose \
+          ${RERUN_FAILS:+--rerun-fails="$RERUN_FAILS"} \
+          ${RERUN_FAILS:+--rerun-fails-report=rerun_report_snapshot.txt} \
           --packages=github.com/rancher/tests/validation/snapshot/... \
           --junitfile results.xml \
           --jsonfile results_snapshot.json \
@@ -98,6 +110,8 @@ runs:
         fi
 
         gotestsum --format standard-verbose \
+          ${RERUN_FAILS:+--rerun-fails="$RERUN_FAILS"} \
+          ${RERUN_FAILS:+--rerun-fails-report=rerun_report_upgrade.txt} \
           --packages=github.com/rancher/tests/validation/upgrade/... \
           --junitfile results.xml \
           --jsonfile results_upgrade.json \
@@ -139,4 +153,33 @@ runs:
 
         if [ "$failed" -eq 1 ]; then
           exit 1
+        fi
+
+    - name: Show rerun tests
+      if: always()
+      shell: bash
+      run: |
+        reports=(
+          "Cert Rotation:rerun_report_cert.txt"
+          "Delete Cluster:rerun_report_delete.txt"
+          "Encryption Key Rotation:rerun_report_encryption_key_rotation.txt"
+          "Node Scaling:rerun_report_node_scale.txt"
+          "Snapshot Restore:rerun_report_snapshot.txt"
+          "Kubernetes Upgrade:rerun_report_upgrade.txt"
+        )
+
+        reran=0
+
+        for entry in "${reports[@]}"; do
+          IFS=: read suite_name report_file <<< "$entry"
+
+          if [ -s "$report_file" ]; then
+            echo "Rerun report for $suite_name tests:"
+            cat "$report_file"
+            reran=1
+          fi
+        done
+
+        if [ "$reran" -eq 0 ]; then
+          echo "No tests were rerun."
         fi

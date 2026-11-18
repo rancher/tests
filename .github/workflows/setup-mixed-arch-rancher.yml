@@ -82,6 +82,7 @@ jobs:
         with:
           role-to-assume: ${{ secrets.IAM_ROLE }}
           aws-region: ${{ vars.AWS_REGION }}
+          role-duration-seconds: 21600
 
       - name: Get AWS credentials from Secrets Manager
         uses: aws-actions/aws-secretsmanager-get-secrets@3a411b6ec5cace3d626412dd917e7bfeac242cfa #v3
@@ -239,6 +240,7 @@ jobs:
         with:
           role-to-assume: ${{ secrets.IAM_ROLE }}
           aws-region: ${{ vars.AWS_REGION }}
+          role-duration-seconds: 21600
 
       - name: Revoke Runner IP
         if: always()
@@ -270,6 +272,7 @@ jobs:
         with:
           role-to-assume: ${{ secrets.IAM_ROLE }}
           aws-region: ${{ vars.AWS_REGION }}
+          role-duration-seconds: 21600
 
       - name: Get AWS credentials from Secrets Manager
         uses: aws-actions/aws-secretsmanager-get-secrets@3a411b6ec5cace3d626412dd917e7bfeac242cfa #v3
@@ -444,6 +447,7 @@ jobs:
         with:
           role-to-assume: ${{ secrets.IAM_ROLE }}
           aws-region: ${{ vars.AWS_REGION }}
+          role-duration-seconds: 21600
 
       - name: Revoke Runner IP
         if: always()

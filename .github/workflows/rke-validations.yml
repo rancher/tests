@@ -27,6 +27,7 @@ jobs:
         with:
           role-to-assume: ${{ secrets.IAM_ROLE }}
           aws-region: ${{ vars.AWS_REGION }}
+          role-duration-seconds: 21600
 
       - name: Create Qase test run
         id: qase

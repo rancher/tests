@@ -29,7 +29,14 @@ runs:
           local stream_label="$3"
           shift 3
 
+          # RERUN_FAILS is set via env on the calling step (0/unset disables reruns)
+          local rerun_args=()
+          if [[ "${RERUN_FAILS:-0}" -gt 0 ]]; then
+            rerun_args=(--rerun-fails="$RERUN_FAILS" --rerun-fails-report=rerun_report_provisioning.txt)
+          fi
+
           gotestsum --format standard-verbose \
+            "${rerun_args[@]}" \
             --packages="$package_path" \
             --junitfile results.xml \
             --jsonfile "$json_output" \
@@ -63,4 +70,15 @@ runs:
 
         if [ "$failed" -eq 1 ]; then
           exit 1
+        fi
+
+    - name: Show rerun tests
+      if: always()
+      shell: bash
+      run: |
+        if [ -s rerun_report_provisioning.txt ]; then
+          echo "Rerun report for Provisioning tests:"
+          cat rerun_report_provisioning.txt
+        else
+          echo "No tests were rerun."
         fi

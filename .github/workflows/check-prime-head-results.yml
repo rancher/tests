@@ -68,6 +68,7 @@ jobs:
         with:
           role-to-assume: ${{ secrets.IAM_ROLE }}
           aws-region: ${{ vars.AWS_REGION }}
+          role-duration-seconds: 21600
 
       - name: Set version outputs
         id: set-versions
@@ -94,6 +95,7 @@ jobs:
         with:
           role-to-assume: ${{ secrets.IAM_ROLE }}
           aws-region: ${{ vars.AWS_REGION }}
+          role-duration-seconds: 21600
 
       - name: Report and notify v2.15 prime head results
         uses: ./.github/actions/report-prime-head-results
