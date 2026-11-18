@@ -19,6 +19,7 @@ import (
 	rbacapi "github.com/rancher/tests/actions/kubeapi/rbac"
 	userapi "github.com/rancher/tests/actions/kubeapi/users"
 	"github.com/rancher/tests/actions/rbac"
+	tokenapi "github.com/rancher/tests/actions/tokens"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -866,6 +867,14 @@ func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryDisableRemovesExte
 	logrus.Infof("Verifying that user %s was removed rather than left behind holding only its local principal", attachedUser.Name)
 	err = userapi.WaitForUserDeletion(a.client, attachedUser.Name)
 	require.NoError(a.T(), err, "Disabling the provider should remove a user whose only external identity that provider emitted, leaving no record that could later be rebound")
+}
+
+func (a *ActiveDirectoryAuthProviderSuite) TestActiveDirectoryLoginTokenRecordsLastUsedAt() {
+	subSession, authAdmin, err := authactions.SetupAuthenticatedSession(a.client, a.session, a.adminUser, authactions.ActiveDirectory)
+	require.NoError(a.T(), err, "Failed to setup authenticated test")
+	defer subSession.Cleanup()
+
+	require.NoError(a.T(), tokenapi.VerifyLoginTokenRecordsLastUsedAt(a.client, authAdmin), "The first use of the ActiveDirectory login token should be written to its lastUsedAt")
 }
 
 func TestActiveDirectoryAuthProviderSuite(t *testing.T) {
