@@ -187,6 +187,22 @@ func ResolveSCIMTokenNamespace(client *rancher.Client, providerName string) (str
 		return namespace, nil
 	}
 
+	feature, err := client.WranglerContext.Mgmt.Feature().Get(SCIMFeatureFlag, metav1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("reading the %s feature: %w", SCIMFeatureFlag, err)
+	}
+
+	communityOnly, err := primeOnlyOnCommunity(client, feature)
+	if err != nil {
+		return "", err
+	}
+
+	if communityOnly {
+		tokenNamespaceCache[key] = SCIMTokenSecretNamespace
+
+		return SCIMTokenSecretNamespace, nil
+	}
+
 	namespace, err := probeSCIMTokenNamespace(client, providerName)
 	if err != nil {
 		return "", err
@@ -196,6 +212,19 @@ func ResolveSCIMTokenNamespace(client *rancher.Client, providerName string) (str
 	tokenNamespaceCache[key] = namespace
 
 	return namespace, nil
+}
+
+func primeOnlyOnCommunity(client *rancher.Client, feature *v3.Feature) (bool, error) {
+	if !feature.Status.Prime {
+		return false, nil
+	}
+
+	prime, err := rancherserver.IsRancherPrimeBuild(client)
+	if err != nil {
+		return false, err
+	}
+
+	return !prime, nil
 }
 
 // probeSCIMTokenNamespace plants a token secret in the legacy namespace and reports which namespace the Rancher server honours
@@ -405,24 +434,22 @@ func VerifyExpectedBuildType(client *rancher.Client) error {
 
 // VerifySCIMServable reports whether the Rancher server serves the SCIM endpoints, and why it does not when it cannot
 func VerifySCIMServable(client *rancher.Client) (bool, string, error) {
-	feature, err := client.Management.Feature.ByID(SCIMFeatureFlag)
+	feature, err := client.WranglerContext.Mgmt.Feature().Get(SCIMFeatureFlag, metav1.GetOptions{})
+	if err != nil {
+		return false, "", fmt.Errorf("reading the %s feature: %w", SCIMFeatureFlag, err)
+	}
+
+	communityOnly, err := primeOnlyOnCommunity(client, feature)
 	if err != nil {
 		return false, "", err
 	}
 
-	if feature.Value != nil && *feature.Value {
-		return true, "", nil
+	if communityOnly {
+		return false, fmt.Sprintf("The %s feature is Prime only and this Rancher server reports a community build, so the SCIM endpoints answer 404", SCIMFeatureFlag), nil
 	}
 
-	if feature.Status != nil && feature.Status.Prime {
-		prime, err := rancherserver.IsRancherPrimeBuild(client)
-		if err != nil {
-			return false, "", err
-		}
-
-		if !prime {
-			return false, fmt.Sprintf("The %s feature is Prime only and this Rancher server reports a community build, so the SCIM endpoints answer 404", SCIMFeatureFlag), nil
-		}
+	if (feature.Spec.Value != nil && *feature.Spec.Value) || (feature.Spec.Value == nil && feature.Status.Default) {
+		return true, "", nil
 	}
 
 	return false, fmt.Sprintf("The %s feature is disabled on this Rancher server, so the SCIM endpoints answer 404", SCIMFeatureFlag), nil

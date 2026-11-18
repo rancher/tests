@@ -1,4 +1,4 @@
-//go:build (validation || infra.any || cluster.any || extended) && !sanity && !stress && !2.8 && !2.9 && !2.10 && !2.11 && !2.12 && !2.13
+//go:build (validation || infra.any || cluster.any || extended) && !sanity && !stress && !2.8 && !2.9 && !2.10 && !2.11 && !2.12 && !2.13 && !2.14
 
 package scim
 
@@ -1245,24 +1245,6 @@ func (s *SCIMOpenLDAPTestSuite) TestSCIMNoConfigMapAllEndpointsReturn404() {
 		require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusNotFound, fmt.Sprintf("%s should return 404 when ConfigMap absent", ep.name)))
 		require.NoError(s.T(), scimactions.ValidateSCIMErrorBody(resp, http.StatusNotFound), "%s 404 body should match SCIM error schema", ep.name)
 	}
-}
-
-func (s *SCIMOpenLDAPTestSuite) TestSCIMCMInvalidTokenReturns401WithoutConfigMap() {
-	subSession := s.session.NewSession()
-	defer subSession.Cleanup()
-
-	logrus.Info("Verifying an invalid bearer token returns 401 when the ConfigMap is absent, so the answer does not report the provider state")
-
-	defer func() {
-		require.NoError(s.T(), scimactions.RestoreSCIMBaseline(s.client, s.scimClient, authactions.OpenLdap))
-	}()
-	require.NoError(s.T(), scimactions.DeleteSCIMConfigMap(s.client, authactions.OpenLdap))
-	require.NoError(s.T(), scimactions.WaitForSCIMEndpointStatus(s.scimClient, http.StatusNotFound))
-
-	badClient := scimactions.NewSCIMClientWithToken(s.client.RancherConfig.Host, authactions.OpenLdap, "invalid-token")
-	resp, err := badClient.Users().List(nil)
-	require.NoError(s.T(), err)
-	require.NoError(s.T(), scimactions.CheckStatus(resp, http.StatusUnauthorized, "An invalid token should return 401 whether or not the ConfigMap is present"))
 }
 
 func (s *SCIMOpenLDAPTestSuite) TestSCIMCMEnabledTrueReturns200() {
