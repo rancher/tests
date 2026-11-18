@@ -194,6 +194,7 @@ func (k *KubeAPIAuthTokenReviewSuite) TestTokenReviewRefusesWrongSecret() {
 		require.Equal(k.T(), apiVersion, result.APIVersion, "A refusal must echo the apiVersion too, otherwise the apiserver logs an unknown conversion instead of an auth failure")
 		require.False(k.T(), result.Authenticated, "A wrong secret should not authenticate, got body [%v]", result.Body)
 		require.NotEmpty(k.T(), result.Error, "The refusal should say why, got body [%v]", result.Body)
+		require.NotContains(k.T(), result.Body, strings.SplitN(wrongSecret, ":", 2)[1], "A refusal must not repeat the secret it was given")
 	}
 }
 
@@ -211,6 +212,7 @@ func (k *KubeAPIAuthTokenReviewSuite) TestTokenReviewRefusesUnknownAccessKey() {
 		require.Equal(k.T(), 200, result.StatusCode, "An unknown access key should be refused rather than error, got body [%v]", result.Body)
 		require.Equal(k.T(), apiVersion, result.APIVersion, "A refusal must echo the apiVersion the request carried")
 		require.False(k.T(), result.Authenticated, "An unknown access key should not authenticate, got body [%v]", result.Body)
+		require.NotEmpty(k.T(), result.Error, "The refusal should say why, got body [%v]", result.Body)
 	}
 }
 
