@@ -28,6 +28,7 @@ if [[ ! "$username" =~ ^[a-z_][a-z0-9_-]*\$?$ ]]; then
 fi
 
 sudo SUSEConnect -r "$registration_code" -e "$email"
+sudo SUSEConnect -p "SLES/16.0/$(uname -m)" -r "$registration_code"
 
 if ! id "$username" >/dev/null 2>&1; then
 	sudo useradd --create-home --shell /bin/bash "$username"
@@ -47,8 +48,8 @@ printf '%s\n' "$ssh_public_key" | sudo tee "$user_home/.ssh/authorized_keys" >/d
 sudo chown "$username:$user_group" "$user_home/.ssh/authorized_keys"
 sudo chmod 600 "$user_home/.ssh/authorized_keys"
 
-sudo systemctl stop firewalld
-sudo systemctl disable firewalld
+sudo systemctl stop firewalld || true
+sudo systemctl disable firewalld || true
 
 sudo zypper refresh
 sudo zypper update
@@ -57,6 +58,9 @@ echo "$username ALL=(ALL) NOPASSWD:ALL" | sudo tee "/etc/sudoers.d/$username" >/
 sudo chmod 440 "/etc/sudoers.d/$username"
 
 sudo zypper install -y cloud-init vim
+
+sudo zypper install -y yq
+
 sudo install -d -m 755 /etc/cloud/cloud.cfg.d
 {
 	printf 'allow_public_ssh_keys: true\n'
@@ -64,10 +68,14 @@ sudo install -d -m 755 /etc/cloud/cloud.cfg.d
 } | sudo tee /etc/cloud/cloud.cfg.d/99-rancher-ssh-user.cfg >/dev/null
 sudo chmod 644 /etc/cloud/cloud.cfg.d/99-rancher-ssh-user.cfg
 
-sudo systemctl enable cloud-init.service
-sudo systemctl enable cloud-config.service
-sudo systemctl enable cloud-final.service
-sudo systemctl enable cloud-init-local.service
+# Newer cloud-init enables its units via a generator, so some have no [Install] section and cannot be enabled.
+for unit in cloud-init-local cloud-init cloud-config cloud-final; do
+	state=$(systemctl is-enabled "$unit.service" 2>/dev/null || true)
+	case "$state" in
+	enabled | static | generated | alias) ;;
+	*) sudo systemctl enable "$unit.service" || echo "Warning: could not enable $unit.service (state: ${state:-unknown}); continuing." >&2 ;;
+	esac
+done
 
 sudo cloud-init clean --logs
 sudo rm -f /etc/ssh/ssh_host_*

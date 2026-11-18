@@ -44,7 +44,7 @@ sudo chown "$username:$user_group" "$user_home/.ssh/authorized_keys"
 sudo chmod 600 "$user_home/.ssh/authorized_keys"
 
 sudo dnf update -y
-sudo dnf install -y cloud-init iptables grubby vim-enhanced
+sudo dnf install -y cloud-init iptables grubby vim-enhanced yq
 
 sudo systemctl disable nm-cloud-setup
 sudo systemctl stop nm-cloud-setup
