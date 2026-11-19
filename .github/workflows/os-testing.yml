@@ -276,7 +276,7 @@ jobs:
 
       - name: Create Qase test run
         id: create-qase-run
-        if: env.REPORTING_ENABLED == 'true' && inputs.qase_test_run_id == ''
+        if: env.REPORTING_ENABLED == 'true' && (inputs.qase_test_run_id == '' || !contains(inputs.qase_test_run_id, format('"{0}"', matrix.version)))
         uses: ./.github/actions/create-qase-test-run
         with:
           test_run_name: "[${{ inputs.os_name || 'OS' }}] OS Testing"
@@ -285,10 +285,11 @@ jobs:
 
       - name: Set Qase test run ID
         id: set-qase-run
-        env:
-          QASE_OVERRIDE: ${{ inputs.qase_test_run_id }}
-          CREATED_QASE_RUN_ID: ${{ steps.create-qase-run.outputs.id }}
-        run: echo "id=${QASE_OVERRIDE:-$CREATED_QASE_RUN_ID}" >> "$GITHUB_OUTPUT"
+        uses: ./.github/actions/extract-qase-id
+        with:
+          qase_test_run_id: ${{ inputs.qase_test_run_id }}
+          version: ${{ matrix.version }}
+          default_id: ${{ steps.create-qase-run.outputs.id }}
 
       - name: Create config.yaml
         run: |
