@@ -1,104 +1,108 @@
 package networking
 
 import (
-	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
+	"html"
+	"io"
 	"net/http"
+	"net/url"
+	"regexp"
 	"time"
 
 	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/sirupsen/logrus"
-	kwait "k8s.io/apimachinery/pkg/util/wait"
 )
 
-// GetPageStatus is a function that will attempt to load the Rancher UI's ui.min.js file from both the /v3 and /v1 API endpoints.
+var errNotLoaded = errors.New("not loaded")
+
+// GetPageStatus is a function that will attempt to load the /v3 and /v1 API-UI pages and verify
+// whether they load based on the ui-offline-preferred setting.
 func GetPageStatus(rancherConfig *rancher.Config, setting string) error {
 	client := &http.Client{
-		Timeout: 10 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		},
+		Timeout:   20 * time.Second,
+		Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
 	}
 
-	// We want to check both the /v3 and /v1 endpoints. Dynamic and local (true) should be reachable;
-	// remote (false) should not be reachable.
-	endpoints := []string{"/v3", "/v1"}
-	for _, endpoint := range endpoints {
-		url := "https://" + rancherConfig.Host + endpoint
+	for _, endpoint := range []string{"/v3", "/v1"} {
+		err := loadAPIUI(client, rancherConfig, endpoint)
 
-		doRequest := func() (*http.Response, time.Duration, error) {
-			req, err := http.NewRequest("GET", url, nil)
-			if err != nil {
-				return nil, 0, err
-			}
-
-			req.Header.Set("Authorization", "Bearer "+rancherConfig.AdminToken)
-			start := time.Now()
-			resp, err := client.Do(req)
-			elapsed := time.Since(start)
-			return resp, elapsed, err
-		}
-
-		var resp *http.Response
-		var elapsed time.Duration
-		var err error
-
-		if setting == "dynamic" || setting == "true" {
-			var lastErr error
-			err = kwait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 5*time.Minute, true, func(ctx context.Context) (done bool, pollErr error) {
-				if resp != nil {
-					resp.Body.Close()
-					resp = nil
-				}
-
-				resp, elapsed, lastErr = doRequest()
-				if lastErr != nil {
-					return false, nil
-				}
-
-				return true, nil
-			})
-			if err != nil {
-				if lastErr != nil {
-					return lastErr
-				}
-				return err
-			}
-		} else {
-			resp, elapsed, err = doRequest()
-		}
-
-		defer func(resp *http.Response) {
-			if resp != nil {
-				resp.Body.Close()
-			}
-		}(resp)
-
-		if setting == "dynamic" || setting == "true" {
-			if err != nil {
-				return err
-			}
-
-			if resp == nil {
-				return fmt.Errorf("nil response received for %s", endpoint)
-			}
-
-			logrus.Infof("reachable endpoint %s with status %d in %s", endpoint, resp.StatusCode, elapsed)
-
-			if elapsed >= 10*time.Second {
-				logrus.Errorf("request to %s took too long: %s", endpoint, elapsed)
-			}
-		} else if setting == "false" {
-			if err != nil {
-				continue
-			}
-
-			if resp.StatusCode == http.StatusOK && elapsed < 10*time.Second {
-				logrus.Errorf("endpoint %s unexpectedly reachable while remote UI was preferred: status=%d elapsed=%s", endpoint, resp.StatusCode, elapsed)
-			}
+		switch {
+		case setting == "false" && err == nil:
+			return fmt.Errorf("API-UI %s unexpectedly loaded while remote UI was preferred", endpoint)
+		case setting == "false" && errors.Is(err, errNotLoaded):
+			logrus.Infof("API-UI %s did not load with ui-offline-preferred=false: %v", endpoint, err)
+		case err != nil:
+			return err
 		}
 	}
 
 	return nil
+}
+
+func loadAPIUI(client *http.Client, rancherConfig *rancher.Config, endpoint string) error {
+	pageURL, err := url.Parse("https://" + rancherConfig.Host + endpoint)
+	if err != nil {
+		return err
+	}
+
+	body, err := fetch(client, pageURL.String(), rancherConfig.AdminToken)
+	if err != nil {
+		return err
+	}
+
+	var assetPattern = regexp.MustCompile(`(?i)(?:src|href)\s*=\s*["']([^"']+\.(?:js|css)(?:\?[^"']*)?)["']`)
+
+	matches := assetPattern.FindAllStringSubmatch(html.UnescapeString(string(body)), -1)
+	if len(matches) == 0 {
+		return fmt.Errorf("%s page references no scripts or stylesheets", endpoint)
+	}
+
+	for _, match := range matches {
+		ref, err := url.Parse(match[1])
+		if err != nil {
+			return err
+		}
+
+		asset := pageURL.ResolveReference(ref)
+
+		token := ""
+		if asset.Host == pageURL.Host {
+			token = rancherConfig.AdminToken
+		}
+
+		if _, err := fetch(client, asset.String(), token); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func fetch(client *http.Client, target, token string) ([]byte, error) {
+	req, err := http.NewRequest("GET", target, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+
+	start := time.Now()
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %s after %s: %v", errNotLoaded, target, time.Since(start), err)
+	}
+	defer resp.Body.Close()
+
+	logrus.Debugf("%s status=%d elapsed=%s", target, resp.StatusCode, time.Since(start))
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("%w: %s returned status %d", errNotLoaded, target, resp.StatusCode)
+	}
+
+	return io.ReadAll(resp.Body)
 }

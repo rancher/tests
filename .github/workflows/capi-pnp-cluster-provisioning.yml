@@ -78,12 +78,11 @@ jobs:
         shell: bash
         run: |
           if [[ "$RUN_ALL_VERSIONS" == "true" || "$GITHUB_EVENT_NAME" == "schedule" ]]; then
-            versions='["17", "16", "15"]'
+            versions='["17", "16"]'
           else
             case "$RANCHER_VERSION_INPUT" in
               head) versions='["17"]' ;;
               v2.16-head) versions='["16"]' ;;
-              v2.15-head) versions='["15"]' ;;
               *) versions='[]' ;;
             esac
           fi
@@ -149,20 +148,15 @@ jobs:
             HB_RANCHER_REPO, HB_RANCHER_REPO
             HB_RANCHER_VERSION_2_17_HEAD, HB_RANCHER_VERSION_2_17_HEAD
             HB_RANCHER_VERSION_2_16_HEAD, HB_RANCHER_VERSION_2_16_HEAD
-            HB_RANCHER_VERSION_2_15_HEAD, HB_RANCHER_VERSION_2_15_HEAD
             HB_RELEASED_RANCHER_CHART_VERSION_2_17, HB_RELEASED_RANCHER_CHART_VERSION_2_17
             HB_RELEASED_RANCHER_CHART_VERSION_2_16, HB_RELEASED_RANCHER_CHART_VERSION_2_16
-            HB_RELEASED_RANCHER_CHART_VERSION_2_15, HB_RELEASED_RANCHER_CHART_VERSION_2_15
             HB_RKE2_VERSION_2_17, HB_RKE2_VERSION_2_17
             HB_K3S_VERSION_2_17, HB_K3S_VERSION_2_17
             HB_RKE2_VERSION_2_16, HB_RKE2_VERSION_2_16
             HB_K3S_VERSION_2_16, HB_K3S_VERSION_2_16
-            HB_RKE2_VERSION_2_15, HB_RKE2_VERSION_2_15
-            HB_K3S_VERSION_2_15, HB_K3S_VERSION_2_15
             HB_K3S_VERSION_SUFFIX, HB_K3S_VERSION_SUFFIX
             HB_QASE_RECURRING_TEST_RUN_ID_2_17, HB_QASE_RECURRING_TEST_RUN_ID_2_17
             HB_QASE_RECURRING_TEST_RUN_ID_2_16, HB_QASE_RECURRING_TEST_RUN_ID_2_16
-            HB_QASE_RECURRING_TEST_RUN_ID_2_15, HB_QASE_RECURRING_TEST_RUN_ID_2_15
             HB_QA_PRIVATE_REGISTRY_NAME, HB_QA_PRIVATE_REGISTRY_NAME
             HB_QASE_AUTOMATION_TOKEN, HB_QASE_AUTOMATION_TOKEN
             HB_QASE_PROJECT_ID, HB_QASE_PROJECT_ID
@@ -199,6 +193,7 @@ jobs:
             HB_PRIVATE_FULL_CHAIN_NAME
             HB_PRIVATE_CERT_KEY
             HB_PRIVATE_CERT_KEY_NAME
+            HB_AWS_CAPA_SUBNET_ID
 
       - name: Whitelist Runner IP
         uses: ./.github/actions/whitelist-runner-ip
@@ -290,7 +285,7 @@ jobs:
           clusterConfig:
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
             provider: "<HB_PROVIDER>"
-            nodeProvider: "ec2"
+            nodeProvider: "<HB_NODE_PROVIDER>"
             pathToRepo: "<HB_PATH_TO_TESTS_REPO>"
 
           capipnp:
@@ -381,6 +376,13 @@ jobs:
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "auto-${{ env.HOSTNAME_PREFIX }}"
+          region: "${{ fromJSON(env.HB_AWS_CAPA_REGION).value }}"
+
+      - name: Delete Orphaned Cluster Tags
+        if: always() && env.CLEANUP_ENABLED == 'true'
+        uses: ./.github/actions/aws-cleanup-orphaned-tags
+        with:
+          subnet-id: ${{ fromJSON(env.HB_AWS_CAPA_SUBNET_ID).value }}
           region: "${{ fromJSON(env.HB_AWS_CAPA_REGION).value }}"
 
       - name: Revoke Runner IP

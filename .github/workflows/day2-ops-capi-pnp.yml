@@ -187,6 +187,7 @@ jobs:
             HB_PRIVATE_FULL_CHAIN_NAME
             HB_PRIVATE_CERT_KEY
             HB_PRIVATE_CERT_KEY_NAME
+            HB_AWS_CAPA_SUBNET_ID
 
       - name: Whitelist Runner IP
         uses: ./.github/actions/whitelist-runner-ip
@@ -387,6 +388,13 @@ jobs:
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "auto-${{ env.HOSTNAME_PREFIX }}"
+          region: "${{ fromJSON(env.HB_AWS_CAPA_REGION).value }}"
+
+      - name: Delete Orphaned Cluster Tags
+        if: always() && env.CLEANUP_ENABLED == 'true'
+        uses: ./.github/actions/aws-cleanup-orphaned-tags
+        with:
+          subnet-id: ${{ fromJSON(env.HB_AWS_CAPA_SUBNET_ID).value }}
           region: "${{ fromJSON(env.HB_AWS_CAPA_REGION).value }}"
 
       - name: Revoke Runner IP
