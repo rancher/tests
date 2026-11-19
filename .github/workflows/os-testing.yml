@@ -404,7 +404,7 @@ jobs:
             trap - EXIT
             set +e
 
-            terraform -chdir=tfp-automation/modules/sanity/aws destroy -auto-approve > /dev/null 2>&1
+            terraform -chdir=tfp-automation/modules/standard/aws destroy -auto-approve > /dev/null 2>&1
             cleanup_exit_code=$?
 
             cp "$selected_config" "$CATTLE_TEST_CONFIG"
@@ -444,7 +444,7 @@ jobs:
 
       - name: Cleanup Infrastructure
         if: always() && github.event.inputs.environment_cleanup == 'true'
-        working-directory: tfp-automation/modules/sanity/aws
+        working-directory: tfp-automation/modules/standard/aws
         run: terraform destroy -auto-approve > /dev/null 2>&1
 
       - name: Refresh AWS credentials
