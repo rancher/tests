@@ -1071,3 +1071,27 @@ func VerifyUserNamespaceRuleRestriction(client *rancher.Client, clusterID, userN
 
 	return nil
 }
+
+// VerifyClusterRoleRetained polls the ClusterRole for the period and returns an error if it is deleted or cannot be read
+func VerifyClusterRoleRetained(client *rancher.Client, clusterID, clusterRoleName string, period time.Duration) error {
+	clusterContext, err := extclusterapi.GetClusterWranglerContext(client, clusterID)
+	if err != nil {
+		return err
+	}
+
+	var readErr error
+
+	err = kwait.PollUntilContextTimeout(context.Background(), defaults.FiveSecondTimeout, period, true, func(ctx context.Context) (bool, error) {
+		_, readErr = clusterContext.RBAC.ClusterRole().Get(clusterRoleName, metav1.GetOptions{})
+		if apierrors.IsNotFound(readErr) {
+			return false, fmt.Errorf("ClusterRole %s on cluster %s was deleted", clusterRoleName, clusterID)
+		}
+
+		return false, readErr
+	})
+	if kwait.Interrupted(err) && readErr == nil {
+		return nil
+	}
+
+	return err
+}
