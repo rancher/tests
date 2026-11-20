@@ -424,7 +424,7 @@ jobs:
 
       - name: Cleanup Infrastructure
         if: always() && env.CLEANUP_ENABLED == 'true'
-        working-directory: tfp-automation/modules/sanity/aws
+        working-directory: tfp-automation/modules/standard/aws
         run: terraform destroy -auto-approve > /dev/null 2>&1
 
       - name: Refresh AWS credentials

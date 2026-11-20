@@ -62,7 +62,7 @@ func main() {
 
 	testSession := session.NewSession()
 
-	client, serverNodeOne, _, _, cattleConfig := setupstandard.SetupRancher(t, testSession, keypath.SanityKeyPath, cattleConfig)
+	client, serverNodeOne, _, _, cattleConfig := setupstandard.SetupRancher(t, testSession, keypath.StandardKeyPath, cattleConfig)
 
 	cattleConfig, err = operations.ReplaceValue([]string{"rancher", "adminToken"}, client.RancherConfig.AdminToken, cattleConfig)
 	if err != nil {

@@ -269,6 +269,7 @@ jobs:
             privateCertKeyPath: "${{ steps.setup-certs.outputs.private-cert-key-tfp-path }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
             awsConfig:
+              ami: "<HB_DEFAULT_AMI>"
               awsInstanceType: "<HB_AWS_INSTANCE_TYPE>"
               armAMI: "<HB_ARM64_AMI>"
               armInstanceType: "<HB_ARM64_INSTANCE_TYPE>"
@@ -278,6 +279,10 @@ jobs:
               windows2019Password: "<HB_AWS_WINDOWS_2019_PASSWORD>"
               windows2022Password: "<HB_AWS_WINDOWS_2022_PASSWORD>"
               windowsInstanceType: "<HB_AWS_WINDOWS_INSTANCE_TYPE>"
+            rancherConfig:
+              awsConfig:
+                armAMI: "<HB_ARM64_AMI>"
+                armInstanceType: "<HB_ARM64_INSTANCE_TYPE>"
             standalone:
               chartVersion: "${{ env.RANCHER_CHART_VERSION }}"
               k3sVersion: "${{ fromJSON(env[format('HB_K3S_VERSION_2_{0}', matrix.version)]).value }}${{ fromJSON(env.HB_K3S_VERSION_SUFFIX).value }}"
@@ -291,6 +296,8 @@ jobs:
           awsMachineConfigs:
             awsMachineConfig:
             - roles: ["etcd", "controlplane"]
+              ami: "<HB_DEFAULT_AMI>"
+              instanceType: "<HB_AWS_INSTANCE_TYPE>"
             - roles: ["worker"]
               ami: "<HB_ARM64_AMI>"
               instanceType: "<HB_ARM64_INSTANCE_TYPE>"
@@ -362,7 +369,7 @@ jobs:
 
       - name: Cleanup Infrastructure
         if: always() && env.CLEANUP_ENABLED == 'true'
-        working-directory: tfp-automation/modules/sanity/aws
+        working-directory: tfp-automation/modules/standard/aws
         run: terraform destroy -auto-approve > /dev/null 2>&1
 
       - name: Refresh AWS credentials
