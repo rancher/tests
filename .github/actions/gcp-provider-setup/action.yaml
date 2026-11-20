@@ -30,6 +30,7 @@ runs:
       with:
         role-to-assume: ${{ inputs.iam-role }}
         aws-region: ${{ inputs.region }}
+        role-duration-seconds: 21600
 
     - if: ${{ inputs.downstream-cluster-provider == 'aws' }}
       name: Get AWS credentials from Secrets Manager

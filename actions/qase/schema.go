@@ -8,11 +8,14 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 
 	upstream "github.com/qase-tms/qase-go/qase-api-client"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 )
+
+var schemaUpdateMu sync.Mutex
 
 type schemaFile struct {
 	path   string
@@ -121,6 +124,37 @@ func getSchemaPathByPrefix(basePath, prefix string) (string, error) {
 	return schemaPath, nil
 }
 
+// writeFileAtomic writes data to a temp file in the same directory and renames it over path, so
+// concurrent readers never observe a truncated or partially written file.
+func writeFileAtomic(path string, data []byte) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".qase-tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		os.Remove(tmpName)
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpName)
+		return err
+	}
+	if err := os.Chmod(tmpName, 0o644); err != nil {
+		os.Remove(tmpName)
+		return err
+	}
+
+	if err := os.Rename(tmpName, path); err != nil {
+		os.Remove(tmpName)
+		return err
+	}
+
+	return nil
+}
+
 // UpdateSchemaParameters updates the parameters of a test's schema file
 func UpdateSchemaParameters(testName string, params []upstream.TestCaseParameterCreate) error {
 	_, schemaFilepath, _, _ := runtime.Caller(1)
@@ -130,6 +164,9 @@ func UpdateSchemaParameters(testName string, params []upstream.TestCaseParameter
 		logrus.Warnf("QASE schema prefix not provided; skipping parameter reporting for test %s", testName)
 		return nil
 	}
+
+	schemaUpdateMu.Lock()
+	defer schemaUpdateMu.Unlock()
 
 	schemaFiles, err := getSchemaFiles(packagePath, schemaPrefix)
 	if err != nil {
@@ -152,6 +189,10 @@ func UpdateSchemaParameters(testName string, params []upstream.TestCaseParameter
 		}
 	}
 
+	if len(qaseSuiteSchemas) == 0 {
+		return fmt.Errorf("refusing to overwrite empty schema under %s for prefix %q", packagePath, strings.TrimSpace(schemaPrefix))
+	}
+
 	outputContent, err := yaml.Marshal(qaseSuiteSchemas)
 	if err != nil {
 		return err
@@ -165,12 +206,7 @@ func UpdateSchemaParameters(testName string, params []upstream.TestCaseParameter
 		return fmt.Errorf("no schema file found under %s for prefix %q", packagePath, strings.TrimSpace(schemaPrefix))
 	}
 
-	err = os.WriteFile(schemaFile, outputContent, os.ModePerm)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return writeFileAtomic(schemaFile, outputContent)
 }
 
 // GetTestSchema searches a set of suite schemas for a specific test

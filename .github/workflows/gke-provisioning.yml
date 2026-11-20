@@ -29,6 +29,11 @@ on:
         required: false
         default: true
         type: boolean
+      rerun_fails:
+        description: "Number of times to rerun failed tests before reporting"
+        required: false
+        default: "1"
+        type: string
 
 permissions:
   id-token: write
@@ -109,6 +114,7 @@ jobs:
         with:
           role-to-assume: ${{ secrets.IAM_ROLE }}
           aws-region: ${{ vars.AWS_REGION }}
+          role-duration-seconds: 21600
 
       - name: Get AWS credentials from Secrets Manager
         uses: aws-actions/aws-secretsmanager-get-secrets@3a411b6ec5cace3d626412dd917e7bfeac242cfa #v3
@@ -415,6 +421,7 @@ jobs:
 
       - name: Run Provisioning tests
         env:
+          RERUN_FAILS: ${{ github.event.inputs.rerun_fails || '1' }}
           QASE_TEST_RUN_ID: ${{ steps.extract-qase-id.outputs.id }}
           QASE_AUTOMATION_TOKEN: ${{ fromJSON(env.HB_QASE_AUTOMATION_TOKEN).value }}
           QASE_CUSTOM_FIELD_FILTER: Hostbusters
@@ -431,6 +438,7 @@ jobs:
         with:
           role-to-assume: ${{ secrets.IAM_ROLE }}
           aws-region: ${{ vars.AWS_REGION }}
+          role-duration-seconds: 21600
 
       - name: Cloud Provider Infrastructure Cleanup
         if: always() && env.CLEANUP_ENABLED == 'true'

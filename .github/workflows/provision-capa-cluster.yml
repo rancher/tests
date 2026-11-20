@@ -185,7 +185,7 @@ jobs:
         with:
           role-to-assume: ${{ secrets.IAM_ROLE }}
           aws-region: ${{ secrets.AWS_REGION }}
-          role-duration-seconds: 14400
+          role-duration-seconds: 21600
 
       - name: Check subnet tag limit availability
         shell: bash
