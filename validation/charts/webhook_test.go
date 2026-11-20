@@ -3,11 +3,11 @@
 package charts
 
 import (
+	"cmp"
 	"strings"
 	"testing"
 
 	"github.com/rancher/shepherd/clients/rancher"
-	"github.com/rancher/shepherd/clients/rancher/catalog"
 	extencharts "github.com/rancher/shepherd/extensions/charts"
 	"github.com/rancher/shepherd/extensions/clusters"
 	"github.com/rancher/shepherd/extensions/kubeconfig"
@@ -48,8 +48,9 @@ func (w *webhookSuiteBase) SetupSuite() {
 
 	// Get clusterName from config yaml
 	w.clusterName = client.RancherConfig.ClusterName
-	w.chartVersion, err = client.Catalog.GetLatestChartVersion(charts.RancherWebhookName, catalog.RancherChartRepo)
+	webhookVersion, err := client.Management.Setting.ByID("rancher-webhook-version")
 	require.NoError(w.T(), err)
+	w.chartVersion = cmp.Or(webhookVersion.Value, webhookVersion.Default)
 }
 
 func (w *WebhookTestSuite) TestWebhookChart() {
