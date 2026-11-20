@@ -23,6 +23,11 @@ on:
         options:
           - k3s
           - rke2
+      environment_cleanup:
+        description: "Enable environment cleanup after test run"
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   id-token: write
@@ -33,24 +38,29 @@ env:
   LOCAL_CLUSTER_TYPE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.local_cluster_type }}
   PACKAGE: "postrelease"
   TAG: "prime"
-  TEST_SUITE: "^TestPostReleasePrimeUITestSuite$"
   TIMEOUT: "1h"
   REPORTING_ENABLED: >-
     ${{
       github.actor == 'github-actions[bot]' ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true' )
     }}
+  CLEANUP_ENABLED: >-
+    ${{
+      github.event_name == 'schedule' ||
+      github.actor == 'github-actions[bot]' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment_cleanup == 'true' )
+    }}
 
 jobs:
   create-qase-run:
     if: |
       (github.event_name == 'workflow_call' || github.actor == 'github-actions[bot]' || (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true')) && (
-      ((github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.15') || startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13') || startsWith(github.event.inputs.rancher_version, 'v2.12'))) && !contains(github.event.inputs.rancher_version, '-alpha') &&
-      (github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.15') || startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13') || startsWith(github.event.inputs.rancher_version, 'v2.12'))) && !contains(github.event.inputs.rancher_version, '-rc') &&
-      (github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.15') || startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13') || startsWith(github.event.inputs.rancher_version, 'v2.12'))) && !contains(github.event.inputs.rancher_version, '-head')) ||
-      ((github.event_name == 'workflow_call' && (startsWith(inputs.rancher_version, 'v2.15') || startsWith(inputs.rancher_version, 'v2.14') || startsWith(inputs.rancher_version, 'v2.13') || startsWith(inputs.rancher_version, 'v2.12'))) && !contains(inputs.rancher_version, '-alpha') &&
-      (github.event_name == 'workflow_call' && (startsWith(inputs.rancher_version, 'v2.15') || startsWith(inputs.rancher_version, 'v2.14') || startsWith(inputs.rancher_version, 'v2.13') || startsWith(inputs.rancher_version, 'v2.12'))) && !contains(inputs.rancher_version, '-rc') &&
-      (github.event_name == 'workflow_call' && (startsWith(inputs.rancher_version, 'v2.15') || startsWith(inputs.rancher_version, 'v2.14') || startsWith(inputs.rancher_version, 'v2.13') || startsWith(inputs.rancher_version, 'v2.12'))) && !contains(inputs.rancher_version, '-head')))
+      ((github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.16') || startsWith(github.event.inputs.rancher_version, 'v2.15') || startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13') || startsWith(github.event.inputs.rancher_version, 'v2.12'))) && !contains(github.event.inputs.rancher_version, '-alpha') &&
+      (github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.16') || startsWith(github.event.inputs.rancher_version, 'v2.15') || startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13') || startsWith(github.event.inputs.rancher_version, 'v2.12'))) && !contains(github.event.inputs.rancher_version, '-rc') &&
+      (github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.16') || startsWith(github.event.inputs.rancher_version, 'v2.15') || startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13') || startsWith(github.event.inputs.rancher_version, 'v2.12'))) && !contains(github.event.inputs.rancher_version, '-head')) ||
+      ((github.event_name == 'workflow_call' && (startsWith(inputs.rancher_version, 'v2.16') || startsWith(inputs.rancher_version, 'v2.15') || startsWith(inputs.rancher_version, 'v2.14') || startsWith(inputs.rancher_version, 'v2.13') || startsWith(inputs.rancher_version, 'v2.12'))) && !contains(inputs.rancher_version, '-alpha') &&
+      (github.event_name == 'workflow_call' && (startsWith(inputs.rancher_version, 'v2.16') || startsWith(inputs.rancher_version, 'v2.15') || startsWith(inputs.rancher_version, 'v2.14') || startsWith(inputs.rancher_version, 'v2.13') || startsWith(inputs.rancher_version, 'v2.12'))) && !contains(inputs.rancher_version, '-rc') &&
+      (github.event_name == 'workflow_call' && (startsWith(inputs.rancher_version, 'v2.16') || startsWith(inputs.rancher_version, 'v2.15') || startsWith(inputs.rancher_version, 'v2.14') || startsWith(inputs.rancher_version, 'v2.13') || startsWith(inputs.rancher_version, 'v2.12'))) && !contains(inputs.rancher_version, '-head')))
     runs-on: ubuntu-latest
     outputs:
       run_id: ${{ steps.create-qase-run.outputs.id }}
@@ -171,27 +181,29 @@ jobs:
             HB_QASE_AUTOMATION_TOKEN
 
       - name: Whitelist Runner IP
+        id: whitelist-runner-ip
         uses: ./.github/actions/whitelist-runner-ip
         with:
-          prefix-list-id: ${{ secrets.AWS_MANAGED_PREFIX_LIST_ID_PRIME }}
-          region: "${{ vars.AWS_REGION }}"
+          prefix-list-id: ${{ fromJSON(env.HB_AWS_MANAGED_PREFIX_LIST_ID_PRIME).value }}
+          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
       - name: Set up SSH Keys
+        id: setup-ssh-keys
         uses: ./.github/actions/setup-ssh-keys
         with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-          ssh-private-key-name: ${{ secrets.SSH_PRIVATE_KEY_NAME }}
-          windows-ssh-private-key: ${{ secrets.WINDOWS_SSH_PRIVATE_KEY }}
-          windows-ssh-private-key-name: ${{ secrets.WINDOWS_SSH_PRIVATE_KEY_NAME }}
+          ssh-private-key: ${{ fromJSON(env.HB_SSH_PRIVATE_KEY).value }}
+          ssh-private-key-name: ${{ fromJSON(env.HB_SSH_PRIVATE_KEY_NAME).value }}
+          windows-ssh-private-key: ${{ fromJSON(env.HB_WINDOWS_SSH_PRIVATE_KEY).value }}
+          windows-ssh-private-key-name: ${{ fromJSON(env.HB_WINDOWS_SSH_PRIVATE_KEY_NAME).value }}
 
       - name: Set up certificates
         id: setup-certs
         uses: ./.github/actions/setup-certs
         with:
-          private-full-chain: ${{ secrets.PRIVATE_FULL_CHAIN }}
-          private-full-chain-name: ${{ vars.PRIVATE_FULL_CHAIN_NAME }}
-          private-cert-key: ${{ secrets.PRIVATE_CERT_KEY }}
-          private-cert-key-name: ${{ vars.PRIVATE_CERT_KEY_NAME }}
+          private-full-chain: ${{ fromJSON(env.HB_PRIVATE_FULL_CHAIN).value }}
+          private-full-chain-name: ${{ fromJSON(env.HB_PRIVATE_FULL_CHAIN_NAME).value }}
+          private-cert-key: ${{ fromJSON(env.HB_PRIVATE_CERT_KEY).value }}
+          private-cert-key-name: ${{ fromJSON(env.HB_PRIVATE_CERT_KEY_NAME).value }}
 
       - name: Uniquify hostname prefix
         uses: ./.github/actions/uniquify-hostname
@@ -220,71 +232,52 @@ jobs:
         run: |
           cat > config.yaml <<EOF
           rancher:
-            host: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
-            adminPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
-            insecure: true
-            cleanup: true
+            host: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
+            adminPassword: "<HB_RANCHER_ADMIN_PASSWORD>"
+            cleanup: ${{ env.CLEANUP_ENABLED }}
+
+          awsCredentials:
+            accessKey: "$AWS_ACCESS_KEY"
+            secretKey: "$AWS_SECRET_KEY"
+            defaultRegion: "${{ fromJSON(env.HB_AWS_REGION).value }}"
+
           terraform:
-            cni: "${{ vars.CNI }}"
-            defaultClusterRoleForProjectMembers: "true"
-            enableNetworkPolicy: false
-            generateV3Token: ${{ matrix.version == '12' }}
+            generateV3Token: ${{ matrix.version == '13' || matrix.version == '12' }}
             localCluster: "${{ env.LOCAL_CLUSTER_TYPE }}"
-            provider: "${{ vars.PROVIDER_AMAZON }}"
-            privateKeyPath: "${{ secrets.TFP_SSH_PRIVATE_KEY_PATH }}"
+            privateKeyPath: "${{ steps.setup-ssh-keys.outputs.ssh-private-key-path }}"
+            windowsPrivateKeyPath: "${{ steps.setup-ssh-keys.outputs.windows-ssh-private-key-path }}"
             privateFullChainPath: "${{ steps.setup-certs.outputs.private-full-chain-tfp-path }}"
             privateCertKeyPath: "${{ steps.setup-certs.outputs.private-cert-key-tfp-path }}"
             resourcePrefix: "${{ env.HOSTNAME_PREFIX }}"
-            awsCredentials:
-              awsAccessKey: "$AWS_ACCESS_KEY"
-              awsSecretKey: "$AWS_SECRET_KEY"
             awsConfig:
-              ami: "${{ secrets.AWS_AMI }}"
-              awsKeyName: "${{ secrets.SSH_PRIVATE_KEY_NAME }}"
-              awsInstanceType: "${{ vars.AWS_INSTANCE_TYPE }}"
-              awsVolumeType: "${{ vars.AWS_VOLUME_TYPE }}"
-              region: "${{ vars.AWS_REGION }}"
-              awsSecurityGroups: [${{ secrets.AWS_SECURITY_GROUPS_PRIME }}]
-              awsSecurityGroupNames: [${{ secrets.AWS_SECURITY_GROUP_NAMES_PRIME }}]
-              awsSubnetID: "${{ secrets.AWS_SUBNET_ID }}"
-              awsVpcID: "${{ secrets.AWS_VPC_ID }}"
-              awsZoneLetter: "${{ vars.AWS_ZONE_LETTER }}"
-              awsRootSize: ${{ vars.AWS_ROOT_SIZE }}
-              awsRoute53Zone: "${{ secrets.AWS_ROUTE_53_ZONE }}"
-              awsUser: "${{ vars.AWS_USER }}"
-              sshConnectionType: "${{ vars.SSH_CONNECTION_TYPE }}" 
-              timeout: "${{ vars.TIMEOUT }}"
-              ipAddressType: "${{ vars.IP_ADDRESS_TYPE }}"
-              loadBalancerType: "${{ vars.LOAD_BALANCER_TYPE }}"
-              targetType: "${{ vars.TARGET_TYPE }}"
+              windowsAWSUser: "<HB_AWS_WINDOWS_USER>"
+              windows2019AMI: "<HB_WINDOWS_2019_AMI>"
+              windows2022AMI: "<HB_WINDOWS_2022_AMI>"
+              windows2019Password: "<HB_AWS_WINDOWS_2019_PASSWORD>"
+              windowsInstanceType: "<HB_AWS_WINDOWS_INSTANCE_TYPE>"
+              windowsKeyName: "<HB_WINDOWS_SSH_PRIVATE_KEY_NAME>"
             standalone:
-              bootstrapPassword: "${{ secrets.RANCHER_ADMIN_PASSWORD }}"
-              certManagerVersion: "${{ vars.CERT_MANAGER_VERSION }}"
               chartVersion: "${{ env.RANCHER_CHART_VERSION }}"
               k3sVersion: "${{ fromJSON(env[format('HB_K3S_VERSION_2_{0}', matrix.version)]).value }}${{ fromJSON(env.HB_K3S_VERSION_SUFFIX).value }}"
-              osUser: "${{ vars.OS_USER }}"
-              osGroup: "${{ vars.OS_GROUP }}"
-              rancherChartRepository: "${{ secrets.RANCHER_HELM_CHART_URL }}"
-              rancherHostname: "${{ env.HOSTNAME_PREFIX }}.${{ secrets.AWS_ROUTE_53_ZONE }}"
-              rancherImage: "${{ secrets.RANCHER_IMAGE }}"
+              rancherChartRepository: "<HB_PRIME_HELM_CHART_URL>"
+              rancherAgentImage: "<HB_RELEASED_RANCHER_AGENT_IMAGE>"
+              rancherHostname: "${{ env.HOSTNAME_PREFIX }}.<HB_AWS_ROUTE_53_ZONE>"
+              rancherImage: "<HB_PRIME_RANCHER_IMAGE>"
               rancherTagVersion: "${{ env.RANCHER_VERSION }}"
               registryPassword: "${{ env.DOCKERHUB_PASSWORD }}"
               registryUsername: "${{ env.DOCKERHUB_USERNAME }}"
-              repo: "${{ secrets.RANCHER_REPO }}"
+              repo: "<HB_PRIME_RANCHER_REPO>"
               rke2Version: "${{ fromJSON(env[format('HB_RKE2_VERSION_2_{0}', matrix.version)]).value }}"
-          terratest:
-            pathToRepo: "${{ secrets.PATH_TO_REPO }}"
-            standaloneLogging: ${{ vars.TERRAFORM_LOGGING }}
 
           clusterConfig:
-            provider: "${{ vars.PROVIDER_AMAZON }}"
+            provider: "<HB_PROVIDER>"
 
           prime:
-            brand: "${{ vars.PRIME_BRAND }}"
+            brand: "<HB_PRIME_BRAND>"
             isPrime: true
-            registry: "${{ secrets.PRIME_REGISTRY }}"
-            sccRegistrationCode: "${{ secrets.PRIME_SCC_REGISTRATION_CODE }}"
-            sccRegistrationType: "${{ secrets.PRIME_SCC_REGISTRATION_TYPE }}"
+            registry: "<HB_PRIME_REGISTRY>"
+            sccRegistrationCode: "<HB_PRIME_SCC_REGISTRATION_CODE>"
+            sccRegistrationType: "<HB_PRIME_SCC_REGISTRATION_TYPE>"
           EOF
 
       - name: Export CATTLE_TEST_CONFIG
@@ -305,22 +298,24 @@ jobs:
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@5e8dbf3c6d9deaf4193ca7a8fb23f2ac83bb6c85 #v4
         with:
-          terraform_version: "${{ vars.TERRAFORM_VERSION }}"
+          terraform_version: "${{ fromJSON(env.HB_TERRAFORM_VERSION).value }}"
           terraform_wrapper: false
+
+      - name: Creating Rancher server
+        run: go run /home/runner/work/tests/tests/validation/recurring/infrastructure/setuprancher/standard/main.go
 
       - name: Run Post Release Test Suite
         env:
           QASE_TEST_RUN_ID: ${{ needs.create-qase-run.outputs.run_id }}
-          QASE_AUTOMATION_TOKEN: ${{ secrets.QASE_AUTOMATION_TOKEN }}
+          QASE_AUTOMATION_TOKEN: ${{ fromJSON(env.HB_QASE_AUTOMATION_TOKEN).value }}
           QASE_CUSTOM_FIELD_FILTER: Hostbusters
           QASE_SCHEMA_PREFIX: hostbusters
-          QASE_PROJECT_ID: ${{ secrets.HB_QASE_PROJECT_ID }}
+          QASE_PROJECT_ID: ${{ fromJSON(env.HB_QASE_PROJECT_ID).value }}
         uses: ./.github/actions/run-test-suite
         with:
           package: ${{ env.PACKAGE }}
           reporting: ${{ env.REPORTING_ENABLED }}
           tag: ${{ env.TAG }}
-          test-suite: ${{ env.TEST_SUITE }}
           timeout: ${{ env.TIMEOUT }}
 
       - name: Cleanup Infrastructure
@@ -336,18 +331,18 @@ jobs:
           aws-region: ${{ vars.AWS_REGION }}
 
       - name: AWS Custodian Infrastructure Cleanup
-        if: always()
+        if: always() && env.CLEANUP_ENABLED == 'true'
         uses: ./.github/actions/aws-cleanup
         with:
           prefix: "${{ env.HOSTNAME_PREFIX }}"
-          region: "${{ vars.AWS_REGION }}"
+          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
       - name: Revoke Runner IP
         if: always()
         uses: ./.github/actions/revoke-runner-ip
         with:
-          prefix-list-id: ${{ secrets.AWS_MANAGED_PREFIX_LIST_ID_PRIME }}
-          region: "${{ vars.AWS_REGION }}"
+          prefix-list-id: ${{ fromJSON(env.HB_AWS_MANAGED_PREFIX_LIST_ID_PRIME).value }}
+          region: "${{ fromJSON(env.HB_AWS_REGION).value }}"
 
       - name: Set job status output
         if: always()
@@ -360,17 +355,17 @@ jobs:
         with:
           rancher-version: ${{ env.RANCHER_VERSION }}
           job-status: ${{ steps.set-job-status.outputs.job_status }}
-          slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          slack-webhook-url: ${{ fromJSON(env.HB_SLACK_WEBHOOK_URL).value }}
 
   close-qase-run:
     needs: [create-qase-run, post-release-prime]
     if: always() && needs.create-qase-run.result == 'success' && (github.event_name == 'workflow_call' || github.actor == 'github-actions[bot]' || (github.event_name == 'workflow_dispatch' && github.event.inputs.reporting == 'true')) && (
-        ((github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.15') || startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13') || startsWith(github.event.inputs.rancher_version, 'v2.12'))) && !contains(github.event.inputs.rancher_version, '-alpha') &&
-        (github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.15') || startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13') || startsWith(github.event.inputs.rancher_version, 'v2.12'))) && !contains(github.event.inputs.rancher_version, '-rc') &&
-        (github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.15') || startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13') || startsWith(github.event.inputs.rancher_version, 'v2.12'))) && !contains(github.event.inputs.rancher_version, '-head')) ||
-        ((github.event_name == 'workflow_call' && (startsWith(inputs.rancher_version, 'v2.15') || startsWith(inputs.rancher_version, 'v2.14') || startsWith(inputs.rancher_version, 'v2.13') || startsWith(inputs.rancher_version, 'v2.12'))) && !contains(inputs.rancher_version, '-alpha') &&
-        (github.event_name == 'workflow_call' && (startsWith(inputs.rancher_version, 'v2.15') || startsWith(inputs.rancher_version, 'v2.14') || startsWith(inputs.rancher_version, 'v2.13') || startsWith(inputs.rancher_version, 'v2.12'))) && !contains(inputs.rancher_version, '-rc') &&
-        (github.event_name == 'workflow_call' && (startsWith(inputs.rancher_version, 'v2.15') || startsWith(inputs.rancher_version, 'v2.14') || startsWith(inputs.rancher_version, 'v2.13') || startsWith(inputs.rancher_version, 'v2.12'))) && !contains(inputs.rancher_version, '-head'))
+        ((github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.16') || startsWith(github.event.inputs.rancher_version, 'v2.15') || startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13') || startsWith(github.event.inputs.rancher_version, 'v2.12'))) && !contains(github.event.inputs.rancher_version, '-alpha') &&
+        (github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.16') || startsWith(github.event.inputs.rancher_version, 'v2.15') || startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13') || startsWith(github.event.inputs.rancher_version, 'v2.12'))) && !contains(github.event.inputs.rancher_version, '-rc') &&
+        (github.event_name == 'workflow_dispatch' && (startsWith(github.event.inputs.rancher_version, 'v2.16') || startsWith(github.event.inputs.rancher_version, 'v2.15') || startsWith(github.event.inputs.rancher_version, 'v2.14') || startsWith(github.event.inputs.rancher_version, 'v2.13') || startsWith(github.event.inputs.rancher_version, 'v2.12'))) && !contains(github.event.inputs.rancher_version, '-head')) ||
+        ((github.event_name == 'workflow_call' && (startsWith(inputs.rancher_version, 'v2.16') || startsWith(inputs.rancher_version, 'v2.15') || startsWith(inputs.rancher_version, 'v2.14') || startsWith(inputs.rancher_version, 'v2.13') || startsWith(inputs.rancher_version, 'v2.12'))) && !contains(inputs.rancher_version, '-alpha') &&
+        (github.event_name == 'workflow_call' && (startsWith(inputs.rancher_version, 'v2.16') || startsWith(inputs.rancher_version, 'v2.15') || startsWith(inputs.rancher_version, 'v2.14') || startsWith(inputs.rancher_version, 'v2.13') || startsWith(inputs.rancher_version, 'v2.12'))) && !contains(inputs.rancher_version, '-rc') &&
+        (github.event_name == 'workflow_call' && (startsWith(inputs.rancher_version, 'v2.16') || startsWith(inputs.rancher_version, 'v2.15') || startsWith(inputs.rancher_version, 'v2.14') || startsWith(inputs.rancher_version, 'v2.13') || startsWith(inputs.rancher_version, 'v2.12'))) && !contains(inputs.rancher_version, '-head'))
       )
     runs-on: ubuntu-latest
     steps:

@@ -96,30 +96,7 @@ Verifies various Prime UI settings.
 4. `Prime_System_Default_Registry`
 
 #### Run Commands:
-1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/postrelease --junitfile results.xml --jsonfile results.json -- -tags=prime -run TestPostReleasePrimeUITestSuite -timeout=1h -v`
-
-### Post Release Rancher - Fresh install
-
-#### Description:
-Installs the newly released Rancher as a fresh install.
-
-#### Table Tests:
-1. `Post_Release`
-
-#### Run Commands:
-1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/postrelease --junitfile results.xml --jsonfile results.json -- -tags=postrelease -run TestPostReleaseTestSuite -timeout=1h -v`
-
-### Post Release Rancher - Upgrade
-
-#### Description:
-Installs the previously released Rancher version and then upgrades to the newest released Rancher version.
-
-#### Table Tests:
-1. `Post_Release_Upgrade`
-
-#### Run Commands:
-1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/postrelease --junitfile results.xml --jsonfile results.json -- -tags=postrelease -run TestPostReleaseUpgradeTestSuite -timeout=1h -v`
+1. `gotestsum --format standard-verbose --packages=github.com/rancher/tests/validation/postrelease --junitfile results.xml --jsonfile results.json -- -tags=prime -timeout=1h -v`
 
 ## Additional
 1. If the tests passes immediately without warning, try adding the `-count=1` or run `go clean -cache`. This will avoid previous results from interfering with the new test run.
-2. All of the tests utilize parallelism when running for more finite control of how things are run in parallel use the -p and -parallel.
