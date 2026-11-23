@@ -2,7 +2,8 @@
 
 These scripts prepare a Linux VM for use as template rancher or downstream cluster nodes:
 
-- `sles/sles.sh`
+- `sles/sles15.sh`
+- `sles/sles16.sh`
 - `rhel/rhel9.sh`
 - `oracle/oracle.sh`
 - `ubuntu/ubuntu.sh`
@@ -26,5 +27,6 @@ To run the script you must be a sudoer and requires the following args::
 sudo bash ./actions/os/rhel/rhel9.sh '<username>' '<password>' '<ssh-public-key>' '<rhsm-org>' '<rhsm-activation-key>'
 sudo bash ./actions/os/oracle/oracle.sh '<username>' '<password>' '<ssh-public-key>'
 sudo bash ./actions/os/ubuntu/ubuntu.sh '<username>' '<password>' '<ssh-public-key>'
-sudo bash ./actions/os/sles/sles.sh '<registration-code>' '<email>' '<username>' '<password>' '<ssh-public-key>'
+sudo bash ./actions/os/sles/sles15.sh '<registration-code>' '<email>' '<username>' '<password>' '<ssh-public-key>'
+sudo bash ./actions/os/sles/sles16.sh '<registration-code>' '<email>' '<username>' '<password>' '<ssh-public-key>'
 ```

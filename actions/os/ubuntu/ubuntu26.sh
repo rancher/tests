@@ -48,10 +48,30 @@ sudo chown "$username:$user_group" "$user_home/.ssh/authorized_keys"
 sudo chmod 600 "$user_home/.ssh/authorized_keys"
 
 sudo apt update
-sudo apt install -y cloud-init iptables vim yq
+sudo apt install -y cloud-init iptables vim yq curl docker.io
 
 echo "$username ALL=(ALL) NOPASSWD:ALL" | sudo tee "/etc/sudoers.d/$username" >/dev/null
 sudo chmod 440 "/etc/sudoers.d/$username"
+
+
+# Docker: enable the service and let the test user run docker without sudo.
+sudo systemctl enable docker
+sudo usermod -aG docker "$username"
+
+# Install kubectl and helm from upstream release binaries.
+case "$(uname -m)" in
+	x86_64) arch=amd64 ;;
+	aarch64) arch=arm64 ;;
+	*)
+		echo "Unsupported architecture: $(uname -m)" >&2
+		exit 1
+		;;
+esac
+kubectl_version=$(curl -fsSL https://dl.k8s.io/release/stable.txt)
+curl -fsSL -o /tmp/kubectl "https://dl.k8s.io/release/${kubectl_version}/bin/linux/${arch}/kubectl"
+sudo install -m 755 /tmp/kubectl /usr/local/bin/kubectl
+rm -f /tmp/kubectl
+curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | sudo bash
 
 sudo install -d -m 755 /etc/cloud/cloud.cfg.d
 {

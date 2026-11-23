@@ -27,8 +27,17 @@ if [[ ! "$username" =~ ^[a-z_][a-z0-9_-]*\$?$ ]]; then
 	exit 2
 fi
 
+os_version=$(. /etc/os-release && echo "$VERSION_ID")
+case "$os_version" in
+	15.* | 16.*) ;;
+	*)
+		echo "Unsupported SLES version: $os_version (expected 15.x or 16.x)." >&2
+		exit 1
+		;;
+esac
+
 sudo SUSEConnect -r "$registration_code" -e "$email"
-sudo SUSEConnect -p "SLES/16.0/$(uname -m)" -r "$registration_code"
+sudo SUSEConnect -p "SLES/$os_version/$(uname -m)" -r "$registration_code"
 
 if ! id "$username" >/dev/null 2>&1; then
 	sudo useradd --create-home --shell /bin/bash "$username"
@@ -51,15 +60,29 @@ sudo chmod 600 "$user_home/.ssh/authorized_keys"
 sudo systemctl stop firewalld || true
 sudo systemctl disable firewalld || true
 
-sudo zypper refresh
-sudo zypper update
+sudo zypper --non-interactive refresh
+sudo zypper --non-interactive update
 
 echo "$username ALL=(ALL) NOPASSWD:ALL" | sudo tee "/etc/sudoers.d/$username" >/dev/null
 sudo chmod 440 "/etc/sudoers.d/$username"
 
-sudo zypper install -y cloud-init vim
+# SLES names kubectl as kubernetes1.<minor>-client. Pick the newest minor the repos provide.
+kubectl_pkg=$(sudo zypper --non-interactive search --type package 'kubernetes*-client' 2>/dev/null \
+	| awk -F'|' '$2 ~ /kubernetes/ {gsub(/ /, "", $2); print $2}' \
+	| grep -E '^kubernetes1\.[0-9]+-client$' | sort -V | tail -1)
+if [[ -z "$kubectl_pkg" ]]; then
+	echo "No kubernetes1.<minor>-client package found in the SLES repos." >&2
+	exit 1
+fi
 
-sudo zypper install -y yq
+sudo zypper --non-interactive install -y cloud-init vim yq curl docker "$kubectl_pkg"
+
+# Helm is installed from the upstream release, same as the other OS scripts.
+curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | sudo bash
+
+# Docker: enable the service and let the test user run docker without sudo.
+sudo systemctl enable docker
+sudo usermod -aG docker "$username"
 
 sudo install -d -m 755 /etc/cloud/cloud.cfg.d
 {

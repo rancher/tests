@@ -53,7 +53,12 @@ fi
 sudo dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-10.noarch.rpm
 
 sudo dnf update -y
-sudo dnf install -y cloud-init iptables kernel-modules-extra vim-enhanced yq
+sudo dnf install -y cloud-init iptables kernel-modules-extra vim-enhanced yq curl docker helm kubectl
+
+
+# Docker: enable the service and let the test user run docker without sudo.
+sudo systemctl enable docker
+sudo usermod -aG docker "$username"
 
 sudo install -d -m 755 /etc/cloud/cloud.cfg.d
 {
