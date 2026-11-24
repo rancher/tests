@@ -280,6 +280,10 @@ jobs:
               windows2019Password: "<HB_AWS_WINDOWS_2019_PASSWORD>"
               windows2022Password: "<HB_AWS_WINDOWS_2022_PASSWORD>"
               windowsInstanceType: "<HB_AWS_WINDOWS_INSTANCE_TYPE>"
+            rancherConfig:
+              awsConfig:
+                ami: "<HB_ARM64_AMI>"
+                awsInstanceType: "<HB_ARM64_INSTANCE_TYPE>"
             standalone:
               chartVersion: "${{ fromJSON(env[format('HB_RELEASED_RANCHER_CHART_VERSION_2_{0}', matrix.version)]).value }}"
               rancherTagVersion: "${{ fromJSON(env[format('HB_RELEASED_RANCHER_VERSION_2_{0}', matrix.version)]).value }}"
