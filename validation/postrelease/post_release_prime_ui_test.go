@@ -3,24 +3,16 @@
 package postrelease
 
 import (
-	"os"
 	"testing"
 
-	"github.com/rancher/shepherd/clients/rancher"
 	"github.com/rancher/shepherd/extensions/defaults/namespaces"
 	"github.com/rancher/shepherd/extensions/defaults/stevetypes"
-	shepherdConfig "github.com/rancher/shepherd/pkg/config"
-	"github.com/rancher/shepherd/pkg/config/operations"
-	"github.com/rancher/shepherd/pkg/session"
 	"github.com/rancher/tests/actions/prime"
 	"github.com/rancher/tests/actions/provisioning"
 	"github.com/rancher/tests/actions/qase"
 	"github.com/rancher/tests/actions/workloads/pods"
-	"github.com/rancher/tfp-automation/defaults/keypath"
-	setupstandard "github.com/rancher/tfp-automation/tests/infrastructure/ranchers/setup/standard"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
 )
 
 const (
@@ -31,27 +23,9 @@ const (
 	serverVersion  = "server-version"
 )
 
-type PostReleasePrimeUITestSuite struct {
-	suite.Suite
-	client             *rancher.Client
-	standardUserClient *rancher.Client
-	session            *session.Session
-	cattleConfig       map[string]any
-	primeConfig        *prime.Config
-}
+func TestLocalClusterRancherImages(t *testing.T) {
+	p := Setup(t, "local")
 
-func (p *PostReleasePrimeUITestSuite) SetupSuite() {
-	testSession := session.NewSession()
-	p.session = testSession
-	p.cattleConfig = shepherdConfig.LoadConfigFromFile(os.Getenv(shepherdConfig.ConfigEnvironmentKey))
-
-	p.primeConfig = new(prime.Config)
-	operations.LoadObjectFromMap(prime.ConfigurationFileKey, p.cattleConfig, p.primeConfig)
-
-	p.client, _, _, _, p.cattleConfig = setupstandard.SetupRancher(p.T(), p.session, keypath.SanityKeyPath, p.cattleConfig)
-}
-
-func (p *PostReleasePrimeUITestSuite) TestLocalClusterRancherImages() {
 	tests := []struct {
 		name string
 	}{
@@ -59,15 +33,15 @@ func (p *PostReleasePrimeUITestSuite) TestLocalClusterRancherImages() {
 	}
 
 	for _, tt := range tests {
-		p.T().Run(tt.name, func(t *testing.T) {
-			cluster, err := p.client.Steve.SteveType(stevetypes.Provisioning).ByID(namespaces.FleetLocal + "/" + localCluster)
-			require.NoError(p.T(), err)
+		t.Run(tt.name, func(t *testing.T) {
+			cluster, err := p.Client.Steve.SteveType(stevetypes.Provisioning).ByID(namespaces.FleetLocal + "/" + localCluster)
+			require.NoError(t, err)
 
-			err = pods.VerifyClusterPods(p.client, cluster)
-			require.NoError(p.T(), err)
+			err = pods.VerifyClusterPods(p.Client, cluster)
+			require.NoError(t, err)
 		})
 
-		params := provisioning.GetProvisioningSchemaParams(p.client, p.cattleConfig)
+		params := provisioning.GetProvisioningSchemaParams(p.Client, p.CattleConfig)
 		err := qase.UpdateSchemaParameters(tt.name, params)
 		if err != nil {
 			logrus.Warningf("Failed to upload schema parameters %s", err)
@@ -75,7 +49,9 @@ func (p *PostReleasePrimeUITestSuite) TestLocalClusterRancherImages() {
 	}
 }
 
-func (p *PostReleasePrimeUITestSuite) TestPrimeBrand() {
+func TestPrimeBrand(t *testing.T) {
+	p := Setup(t, "local")
+
 	tests := []struct {
 		name string
 	}{
@@ -83,14 +59,14 @@ func (p *PostReleasePrimeUITestSuite) TestPrimeBrand() {
 	}
 
 	for _, tt := range tests {
-		p.T().Run(tt.name, func(t *testing.T) {
-			logrus.Infof("Verifying Rancher Prime brand is: %s", p.primeConfig.Brand)
-			rancherBrand, err := p.client.Management.Setting.ByID(uiBrand)
-			require.NoError(p.T(), err)
-			require.Equal(p.T(), p.primeConfig.Brand, rancherBrand.Value)
+		t.Run(tt.name, func(t *testing.T) {
+			logrus.Infof("Verifying Rancher Prime brand is: %s", p.PrimeConfig.Brand)
+			rancherBrand, err := p.Client.Management.Setting.ByID(uiBrand)
+			require.NoError(t, err)
+			require.Equal(t, p.PrimeConfig.Brand, rancherBrand.Value)
 		})
 
-		params := provisioning.GetProvisioningSchemaParams(p.client, p.cattleConfig)
+		params := provisioning.GetProvisioningSchemaParams(p.Client, p.CattleConfig)
 		err := qase.UpdateSchemaParameters(tt.name, params)
 		if err != nil {
 			logrus.Warningf("Failed to upload schema parameters %s", err)
@@ -98,7 +74,9 @@ func (p *PostReleasePrimeUITestSuite) TestPrimeBrand() {
 	}
 }
 
-func (p *PostReleasePrimeUITestSuite) TestSCCRegistration() {
+func TestSCCRegistration(t *testing.T) {
+	p := Setup(t, "local")
+
 	tests := []struct {
 		name string
 	}{
@@ -106,29 +84,29 @@ func (p *PostReleasePrimeUITestSuite) TestSCCRegistration() {
 	}
 
 	for _, tt := range tests {
-		p.T().Run(tt.name, func(t *testing.T) {
-			secret, err := prime.CreateSCCRegistrationSecret(sccNamespace, p.primeConfig.SCCRegistrationCode, p.primeConfig.SCCRegistrationType)
-			require.NoError(p.T(), err)
+		t.Run(tt.name, func(t *testing.T) {
+			secret, err := prime.CreateSCCRegistrationSecret(sccNamespace, p.PrimeConfig.SCCRegistrationCode, p.PrimeConfig.SCCRegistrationType)
+			require.NoError(t, err)
 
-			sccSecret, err := p.client.Steve.SteveType("secret").Create(secret)
-			require.NoError(p.T(), err)
+			sccSecret, err := p.Client.Steve.SteveType("secret").Create(secret)
+			require.NoError(t, err)
 
 			logrus.Infof("Verifying SCC registration exists in namespace: %s", sccNamespace)
-			sccRegistration, err := p.client.Steve.SteveType("scc.cattle.io.registration").ListAll(nil)
-			require.NoError(p.T(), err)
-			require.NotEmpty(p.T(), sccRegistration)
+			sccRegistration, err := p.Client.Steve.SteveType("scc.cattle.io.registration").ListAll(nil)
+			require.NoError(t, err)
+			require.NotEmpty(t, sccRegistration)
 
 			logrus.Infof("Deleting SCC registration secret in namespace: %s", sccNamespace)
-			err = p.client.Steve.SteveType("secret").Delete(sccSecret)
-			require.NoError(p.T(), err)
+			err = p.Client.Steve.SteveType("secret").Delete(sccSecret)
+			require.NoError(t, err)
 
 			logrus.Infof("Verifying SCC registration is deleted in namespace: %s", sccNamespace)
-			_, err = p.client.Steve.SteveType("scc.cattle.io.registration").ListAll(nil)
-			require.NoError(p.T(), err)
-			require.Empty(p.T(), err)
+			_, err = p.Client.Steve.SteveType("scc.cattle.io.registration").ListAll(nil)
+			require.NoError(t, err)
+			require.Empty(t, err)
 		})
 
-		params := provisioning.GetProvisioningSchemaParams(p.client, p.cattleConfig)
+		params := provisioning.GetProvisioningSchemaParams(p.Client, p.CattleConfig)
 		err := qase.UpdateSchemaParameters(tt.name, params)
 		if err != nil {
 			logrus.Warningf("Failed to upload schema parameters %s", err)
@@ -136,7 +114,9 @@ func (p *PostReleasePrimeUITestSuite) TestSCCRegistration() {
 	}
 }
 
-func (p *PostReleasePrimeUITestSuite) TestSystemDefaultRegistry() {
+func TestSystemDefaultRegistry(t *testing.T) {
+	p := Setup(t, "local")
+
 	tests := []struct {
 		name string
 	}{
@@ -144,21 +124,17 @@ func (p *PostReleasePrimeUITestSuite) TestSystemDefaultRegistry() {
 	}
 
 	for _, tt := range tests {
-		p.T().Run(tt.name, func(t *testing.T) {
-			logrus.Infof("Verifying system default registry is set to: %s", p.primeConfig.Registry)
-			registry, err := p.client.Management.Setting.ByID(systemRegistry)
-			require.NoError(p.T(), err)
-			require.Equal(p.T(), p.primeConfig.Registry, registry.Value)
+		t.Run(tt.name, func(t *testing.T) {
+			logrus.Infof("Verifying system default registry is set to: %s", p.PrimeConfig.Registry)
+			registry, err := p.Client.Management.Setting.ByID(systemRegistry)
+			require.NoError(t, err)
+			require.Equal(t, p.PrimeConfig.Registry, registry.Value)
 		})
 
-		params := provisioning.GetProvisioningSchemaParams(p.client, p.cattleConfig)
+		params := provisioning.GetProvisioningSchemaParams(p.Client, p.CattleConfig)
 		err := qase.UpdateSchemaParameters(tt.name, params)
 		if err != nil {
 			logrus.Warningf("Failed to upload schema parameters %s", err)
 		}
 	}
-}
-
-func TestPostReleasePrimeUITestSuite(t *testing.T) {
-	suite.Run(t, new(PostReleasePrimeUITestSuite))
 }

@@ -36,10 +36,10 @@ runs:
           -- -timeout=${{ inputs.timeout }} -tags=${{ inputs.tag }} -v -run "${{ inputs.test-suite }}"
         else
           gotestsum --format standard-verbose \
-          --packages=github.com/rancher/tests/validation/kdm/... \
+          --packages=github.com/rancher/tests/validation/${{ inputs.package }}... \
           --junitfile results.xml \
           --jsonfile results.json \
-          -- -timeout=2h -tags=${{ inputs.tag }} -v
+          -- -timeout=${{ inputs.timeout }} -tags=${{ inputs.tag }} -v
         fi
 
         test_exit_code=$?
